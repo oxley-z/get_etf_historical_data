@@ -3,34 +3,203 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>场外基金历史净值与分析看板</title>
+    <title>场外基金量化与费率规模看板</title>
     <style>
-        body { font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif; background-color: #f8f9fa; margin: 0; padding: 24px; color: #333; }
-        .header { text-align: center; margin-bottom: 24px; }
-        .header h2 { color: #1a73e8; margin: 0 0 8px 0; font-size: 24px; }
-        .header p { color: #5f6368; font-size: 14px; margin: 0; }
-        .table-container { overflow-x: auto; background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 16px; border: 1px solid #e0e0e0; }
-        table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: right; }
-        th, td { padding: 12px 16px; border-bottom: 1px solid #eee; }
-        th { background-color: #f1f3f4; color: #3c4043; font-weight: 600; text-align: right; user-select: none; cursor: pointer; transition: background-color 0.2s; }
+        body { 
+            font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif; 
+            background-color: #f8f9fa; 
+            margin: 0; 
+            padding: 30px 50px; 
+            color: #333; 
+        }
+        .header { text-align: center; margin-bottom: 12px; }
+        .header h2 { color: #1a73e8; margin: 0 0 4px 0; font-size: 20px; }
+        .header p { color: #5f6368; font-size: 13px; margin: 0; }
+        .table-container { 
+            width:100%; 
+            overflow-x:auto; 
+            box-sizing:border-box; 
+            background:#fff; 
+            border-radius:12px; 
+            box-shadow:0 4px 15px rgba(0,0,0,0.08); 
+            padding:20px; 
+            border:1px solid #e0e0e0; 
+        }
+        
+        table { 
+            width:100%; 
+            min-width:1500px; 
+            border-collapse:collapse; 
+            font-size:12px; 
+            text-align:right; 
+            table-layout:fixed; 
+        }
+        th, td { 
+            padding:6px 8px; 
+            border-bottom:1px solid #eee; 
+            line-height:1.4; 
+            overflow:hidden; 
+            text-overflow:ellipsis; 
+            box-sizing:border-box; 
+        }
+        
+        /* ----- 各列宽度与换行策略 ----- */
+        /* 第1列：代码 */
+        th:nth-child(1), td:nth-child(1) { 
+            width: 80px; 
+            text-align: left; 
+            white-space: nowrap; 
+        }
+        /* 第2列：基金名称（允许换行，两行显示） */
+        th:nth-child(2), td:nth-child(2) { 
+            width: 260px; 
+            min-width: 200px; 
+            text-align: left; 
+            white-space: normal; 
+            word-break: break-word; 
+            vertical-align: middle; 
+        }
+        /* 第3列：规模 */
+        th:nth-child(3), td:nth-child(3) { 
+            width: 120px; 
+            text-align: left; 
+            white-space: nowrap; 
+        }
+        /* 第4列：运作费（允许换行以适应“管/托/销”信息） */
+        th:nth-child(4), td:nth-child(4) { 
+            width: 160px; 
+            text-align: left; 
+            white-space: normal; 
+            word-break: break-word; 
+        }
+        /* 第5列：申购费率 */
+        th:nth-child(5), td:nth-child(5) { 
+            width: 80px; 
+            text-align: left; 
+            white-space: nowrap; 
+        }
+        /* 第6~8列：净值数据 */
+        th:nth-child(6), td:nth-child(6),
+        th:nth-child(7), td:nth-child(7),
+        th:nth-child(8), td:nth-child(8) { 
+            width: 80px; 
+            white-space: nowrap; 
+        }
+        /* 第9、10、11列：进度条（加宽） */
+        th:nth-last-child(3),
+        td:nth-last-child(3),
+        th:nth-last-child(2),
+        td:nth-last-child(2),
+        th:nth-last-child(1),
+        td:nth-last-child(1) {
+            width: 250px;
+            min-width: 200px;
+            white-space: nowrap;
+        }
+
+        /* ------ 表头样式 ------ */
+        th { 
+            background-color: #f1f3f4; 
+            color: #3c4043; 
+            font-weight: 600; 
+            text-align: right; 
+            user-select: none; 
+            cursor: pointer; 
+            transition: background-color 0.2s; 
+            white-space: nowrap; 
+            position: relative; 
+        }
         th:hover { background-color: #e4e7eb; }
-        th:nth-child(1), th:nth-child(2), th:nth-child(3),
-        td:nth-child(1), td:nth-child(2), td:nth-child(3) { text-align: left; }
+        th:nth-child(1), th:nth-child(2), th:nth-child(3), th:nth-child(4), th:nth-child(5) { text-align: left; }
         tr:hover { background-color: #f8f9fa; }
-        .sort-icon { font-size: 12px; margin-left: 4px; color: #70757a; }
+        
+        /* 列宽拖拽手柄 */
+        .resizer {
+            position: absolute; 
+            right: 0; 
+            top: 0; 
+            bottom: 0; 
+            width: 6px;
+            cursor: col-resize; 
+            user-select: none; 
+            touch-action: none; 
+            z-index: 10;
+        }
+        .resizer:hover, th.resizing .resizer { background-color: #1a73e8; }
+
+        .sort-icon { font-size: 10px; margin-left: 2px; color: #70757a; }
         .code { font-family: "SFMono-Regular", Consolas, monospace; font-weight: bold; color: #1a73e8; }
-        .name { font-weight: 500; color: #202124; }
-        .badge { background: #e8f0fe; color: #1967d2; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
+        .name a { 
+            font-weight:500; 
+            color:#1a73e8; 
+            text-decoration:none; 
+            display:inline-block; 
+            max-width:100%; 
+            overflow:hidden; 
+            text-overflow:ellipsis; 
+            vertical-align:middle; 
+        }
+        .name a:hover { text-decoration: underline; color: #1557b0; }
+        .redemption-sub { 
+            font-size: 10px; 
+            color: #7f8c8d; 
+            font-weight: normal; 
+            margin-top: 2px; 
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .highlight-val { font-weight: 600; color: #e67e22; }
+        .fee-sub { font-size: 10px; color: #7f8c8d; }
+        
+        .progress-container {
+            background-color:#e5e7eb;
+            border-radius:6px;
+            overflow:hidden;
+            height:20px;
+            width:100%;
+            position:relative;
+        }
+        .progress-bar {
+            height:100%;
+            border-radius:6px;
+            min-width:42px;
+            display:flex;
+            align-items:center;
+            justify-content:flex-end;
+            padding-right:6px;
+            box-sizing:border-box;
+            transition:width .2s ease;
+        }
+        .progress-bar span {
+            color:#fff;
+            font-size:11px;
+            font-weight:600;
+            text-shadow:0 1px 1px rgba(0,0,0,.25);
+        }
+        .bar-red { background-color:#d93025; }
+        .bar-blue { background-color:#1a73e8; }
+        .bar-green { background-color:#188038; }
+
         .metric-red { color: #d93025; font-weight: 600; }
         .metric-green { color: #188038; font-weight: 600; }
-        .footer-note { margin-top: 20px; font-size: 13px; color: #70757a; line-height: 1.6; background: #fff; padding: 16px; border-radius: 8px; border: 1px solid #e0e0e0; }
-        .footer-note p { margin: 4px 0; }
+        .footer-note { 
+            margin-top: 10px; 
+            font-size: 12px; 
+            color: #70757a; 
+            line-height: 1.4; 
+            background: #fff; 
+            padding: 10px 12px; 
+            border-radius: 6px; 
+            border: 1px solid #e0e0e0; 
+        }
+        .footer-note p { margin: 2px 0; }
     </style>
 </head>
 <body>
 
     <div class="header">
-        <h2>场外基金核心量化指标对比看板</h2>
+        <h2>场外基金核心量化与全费率规模看板</h2>
         <p>统计时间区间：<strong>2026-05-17</strong> 至 <strong>2026-08-15</strong> （包含基金数：21 只）</p>
     </div>
 
@@ -38,269 +207,754 @@
         <table id="fundTable">
             <thead>
                 <tr>
-                    <th onclick="sortTable(0)">代码 <span class="sort-icon">⇅</span></th>
-                    <th onclick="sortTable(1)">基金名称 (动态源获取) <span class="sort-icon">⇅</span></th>
-                    <th onclick="sortTable(2)">来源 <span class="sort-icon">⇅</span></th>
-                    <th onclick="sortTable(3)">最高净值 <span class="sort-icon">⇅</span></th>
-                    <th onclick="sortTable(4)">最低净值 <span class="sort-icon">⇅</span></th>
-                    <th onclick="sortTable(5)">最新净值 <span class="sort-icon">⇅</span></th>
-                    <th onclick="sortTable(6)">最大回撤 <span class="sort-icon">⇅</span></th>
-                    <th onclick="sortTable(7)">修复程度 <span class="sort-icon">⇅</span></th>
-                    <th onclick="sortTable(8)">自低点反弹 <span class="sort-icon">⇅</span></th>
+                    <th data-col="0">代码 <span class="sort-icon">⇅</span></th>
+                    <th data-col="1">基金名称 / 赎回费率阶梯 <span class="sort-icon">⇅</span></th>
+                    <th data-col="2">最新规模 <span class="sort-icon">⇅</span></th>
+                    <th data-col="3">运作费(管/托/销) <span class="sort-icon">⇅</span></th>
+                    <th data-col="4">申购费率 <span class="sort-icon">⇅</span></th>
+                    <th data-col="5">最高净值 <span class="sort-icon">⇅</span></th>
+                    <th data-col="6">最低净值 <span class="sort-icon">⇅</span></th>
+                    <th data-col="7">最新净值 <span class="sort-icon">⇅</span></th>
+                    <th data-col="8">最大回撤 <span class="sort-icon">⇅</span></th>
+                    <th data-col="9">修复程度 <span class="sort-icon">⇅</span></th>
+                    <th data-col="10">自低点反弹 <span class="sort-icon">⇅</span></th>
                 </tr>
             </thead>
             <tbody>
                 
         <tr>
             <td class="code" data-val="002891">002891</td>
-            <td class="name" data-val="华夏移动互联混合人民币">华夏移动互联混合人民币</td>
-            <td data-val="天天基金"><span class="badge">天天基金</span></td>
+            <td class="name" data-val="华夏移动互联混合人民币">
+                <a href="https://fund.eastmoney.com/002891.html" target="_blank" title="点击查看天天基金概况">华夏移动互联混合人民币</a>
+                <div class="redemption-sub">赎回: 小于7天: 1.50% | 大于等于7天，小于30天: 0.75% | 大于等于30天，小于365天: 0.50% | 大于等于365天: 0.00%</div>
+            </td>
+            <td data-val="40.69" class="highlight-val">40.69 亿</td>
+            <td data-val="2.5999999999999996">2.60% <span class="fee-sub">(管:1.20%/托:0.20%/销:1.20%)</span></td>
+            <td data-val="1.50%">1.50%</td>
             <td data-val="2.766">2.7660</td>
             <td data-val="2.196">2.1960</td>
             <td data-val="2.756">2.7560</td>
-            <td class="metric-red" data-val="20.60737527114967">20.61%</td>
-            <td data-val="98.24561403508768">98.25%</td>
-            <td class="metric-green" data-val="25.500910746812366">25.50%</td>
+            <td class="metric-red" data-val="20.60737527114967">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-red" style="width: 20.60737527114967%;">
+                        <span>20.61%</span>
+                    </div>
+                </div>
+            </td>
+            <td data-val="98.24561403508768">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-blue" style="width: 98.24561403508768%;">
+                        <span>98.25%</span>
+                    </div>
+                </div>
+            </td>
+            <td class="metric-green" data-val="25.500910746812366">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-green" style="width: 25.500910746812366%;">
+                        <span>25.50%</span>
+                    </div>
+                </div>
+            </td>
         </tr>
         
         <tr>
             <td class="code" data-val="014002">014002</td>
-            <td class="name" data-val="浦银全球智能科技(QDII)C">浦银全球智能科技(QDII)C</td>
-            <td data-val="天天基金"><span class="badge">天天基金</span></td>
+            <td class="name" data-val="浦银全球智能科技(QDII)C">
+                <a href="https://fund.eastmoney.com/014002.html" target="_blank" title="点击查看天天基金概况">浦银全球智能科技(QDII)C</a>
+                <div class="redemption-sub">赎回: 小于7天: 1.50% | 大于等于7天，小于30天: 0.50% | 大于等于30天: 0.00%</div>
+            </td>
+            <td data-val="31.2" class="highlight-val">31.20 亿</td>
+            <td data-val="1.7999999999999998">1.80% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.40%)</span></td>
+            <td data-val="0.00% (C类免)">0.00% (C类免)</td>
             <td data-val="3.5605">3.5605</td>
             <td data-val="2.8274">2.8274</td>
             <td data-val="3.4698">3.4698</td>
-            <td class="metric-red" data-val="20.589804802696257">20.59%</td>
-            <td data-val="87.6278815986905">87.63%</td>
-            <td class="metric-green" data-val="22.720520619650575">22.72%</td>
+            <td class="metric-red" data-val="20.589804802696257">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-red" style="width: 20.589804802696257%;">
+                        <span>20.59%</span>
+                    </div>
+                </div>
+            </td>
+            <td data-val="87.6278815986905">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-blue" style="width: 87.6278815986905%;">
+                        <span>87.63%</span>
+                    </div>
+                </div>
+            </td>
+            <td class="metric-green" data-val="22.720520619650575">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-green" style="width: 22.720520619650575%;">
+                        <span>22.72%</span>
+                    </div>
+                </div>
+            </td>
         </tr>
         
         <tr>
             <td class="code" data-val="012922">012922</td>
-            <td class="name" data-val="易方达全球成长精选混合(QDII)人民币C">易方达全球成长精选混合(QDII)人民币C</td>
-            <td data-val="天天基金"><span class="badge">天天基金</span></td>
+            <td class="name" data-val="易方达全球成长精选混合(QDII)人民币C">
+                <a href="https://fund.eastmoney.com/012922.html" target="_blank" title="点击查看天天基金概况">易方达全球成长精选混合(QDII)人民币C</a>
+                <div class="redemption-sub">赎回: 小于等于6天: 1.50% | 大于等于7天，小于等于29天: 0.50% | 大于等于30天: 0.00%</div>
+            </td>
+            <td data-val="119.64" class="highlight-val">119.64 亿</td>
+            <td data-val="1.7999999999999998">1.80% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.40%)</span></td>
+            <td data-val="0.00% (C类免)">0.00% (C类免)</td>
             <td data-val="4.0861">4.0861</td>
             <td data-val="3.4621">3.4621</td>
             <td data-val="3.8712">3.8712</td>
-            <td class="metric-red" data-val="15.271285577934954">15.27%</td>
-            <td data-val="65.56089743589743">65.56%</td>
-            <td class="metric-green" data-val="11.81652754108778">11.82%</td>
+            <td class="metric-red" data-val="15.271285577934954">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-red" style="width: 15.271285577934954%;">
+                        <span>15.27%</span>
+                    </div>
+                </div>
+            </td>
+            <td data-val="65.56089743589743">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-blue" style="width: 65.56089743589743%;">
+                        <span>65.56%</span>
+                    </div>
+                </div>
+            </td>
+            <td class="metric-green" data-val="11.81652754108778">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-green" style="width: 11.81652754108778%;">
+                        <span>11.82%</span>
+                    </div>
+                </div>
+            </td>
         </tr>
         
         <tr>
             <td class="code" data-val="021662">021662</td>
-            <td class="name" data-val="国富亚洲机会股票(QDII)C">国富亚洲机会股票(QDII)C</td>
-            <td data-val="天天基金"><span class="badge">天天基金</span></td>
+            <td class="name" data-val="国富亚洲机会股票(QDII)C">
+                <a href="https://fund.eastmoney.com/021662.html" target="_blank" title="点击查看天天基金概况">国富亚洲机会股票(QDII)C</a>
+                <div class="redemption-sub">赎回: 小于7天: 1.50% | 大于等于7天，小于30天: 0.50% | 大于等于30天: 0.00%</div>
+            </td>
+            <td data-val="23.23" class="highlight-val">23.23 亿</td>
+            <td data-val="1.7999999999999998">1.80% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.40%)</span></td>
+            <td data-val="0.00% (C类免)">0.00% (C类免)</td>
             <td data-val="2.841">2.8410</td>
             <td data-val="2.5006">2.5006</td>
             <td data-val="2.8677">2.8677</td>
-            <td class="metric-red" data-val="11.981696585709265">11.98%</td>
-            <td data-val="107.84371327849587">107.84%</td>
-            <td class="metric-green" data-val="14.680476685595464">14.68%</td>
+            <td class="metric-red" data-val="11.981696585709265">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-red" style="width: 11.981696585709265%;">
+                        <span>11.98%</span>
+                    </div>
+                </div>
+            </td>
+            <td data-val="107.84371327849587">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-blue" style="width: 100%;">
+                        <span>107.84%</span>
+                    </div>
+                </div>
+            </td>
+            <td class="metric-green" data-val="14.680476685595464">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-green" style="width: 14.680476685595464%;">
+                        <span>14.68%</span>
+                    </div>
+                </div>
+            </td>
         </tr>
         
         <tr>
             <td class="code" data-val="539002">539002</td>
-            <td class="name" data-val="建信新兴市场混合(QDII)A">建信新兴市场混合(QDII)A</td>
-            <td data-val="天天基金"><span class="badge">天天基金</span></td>
+            <td class="name" data-val="建信新兴市场混合(QDII)A">
+                <a href="https://fund.eastmoney.com/539002.html" target="_blank" title="点击查看天天基金概况">建信新兴市场混合(QDII)A</a>
+                <div class="redemption-sub">赎回: 小于7天: 1.50% | 大于等于7天，小于365天: 0.50% | 大于等于365天，小于730天: 0.30% | 大于等于730天: 0.00%</div>
+            </td>
+            <td data-val="20.57" class="highlight-val">20.57 亿</td>
+            <td data-val="1.4">1.40% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.00%)</span></td>
+            <td data-val="1.60%">1.60%</td>
             <td data-val="2.448">2.4480</td>
             <td data-val="1.967">1.9670</td>
             <td data-val="2.417">2.4170</td>
-            <td class="metric-red" data-val="19.64869281045751">19.65%</td>
-            <td data-val="93.55509355509352">93.56%</td>
-            <td class="metric-green" data-val="22.877478393492616">22.88%</td>
+            <td class="metric-red" data-val="19.64869281045751">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-red" style="width: 19.64869281045751%;">
+                        <span>19.65%</span>
+                    </div>
+                </div>
+            </td>
+            <td data-val="93.55509355509352">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-blue" style="width: 93.55509355509352%;">
+                        <span>93.56%</span>
+                    </div>
+                </div>
+            </td>
+            <td class="metric-green" data-val="22.877478393492616">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-green" style="width: 22.877478393492616%;">
+                        <span>22.88%</span>
+                    </div>
+                </div>
+            </td>
         </tr>
         
         <tr>
             <td class="code" data-val="021842">021842</td>
-            <td class="name" data-val="国富全球科技互联混合(QDII)人民币C">国富全球科技互联混合(QDII)人民币C</td>
-            <td data-val="天天基金"><span class="badge">天天基金</span></td>
+            <td class="name" data-val="国富全球科技互联混合(QDII)人民币C">
+                <a href="https://fund.eastmoney.com/021842.html" target="_blank" title="点击查看天天基金概况">国富全球科技互联混合(QDII)人民币C</a>
+                <div class="redemption-sub">赎回: 小于7天: 1.50% | 大于等于7天，小于30天: 0.50% | 大于等于30天: 0.00%</div>
+            </td>
+            <td data-val="27.8" class="highlight-val">27.80 亿</td>
+            <td data-val="1.7999999999999998">1.80% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.40%)</span></td>
+            <td data-val="0.00% (C类免)">0.00% (C类免)</td>
             <td data-val="7.0901">7.0901</td>
             <td data-val="5.9503">5.9503</td>
             <td data-val="6.9844">6.9844</td>
-            <td class="metric-red" data-val="16.07593686971974">16.08%</td>
-            <td data-val="90.7264432356554">90.73%</td>
-            <td class="metric-green" data-val="17.378955682906735">17.38%</td>
+            <td class="metric-red" data-val="16.07593686971974">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-red" style="width: 16.07593686971974%;">
+                        <span>16.08%</span>
+                    </div>
+                </div>
+            </td>
+            <td data-val="90.7264432356554">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-blue" style="width: 90.7264432356554%;">
+                        <span>90.73%</span>
+                    </div>
+                </div>
+            </td>
+            <td class="metric-green" data-val="17.378955682906735">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-green" style="width: 17.378955682906735%;">
+                        <span>17.38%</span>
+                    </div>
+                </div>
+            </td>
         </tr>
         
         <tr>
             <td class="code" data-val="018036">018036</td>
-            <td class="name" data-val="长城全球新能源车股票发起式(QDII)C">长城全球新能源车股票发起式(QDII)C</td>
-            <td data-val="天天基金"><span class="badge">天天基金</span></td>
+            <td class="name" data-val="长城全球新能源车股票发起式(QDII)C">
+                <a href="https://fund.eastmoney.com/018036.html" target="_blank" title="点击查看天天基金概况">长城全球新能源车股票发起式(QDII)C</a>
+                <div class="redemption-sub">赎回: 小于7天: 1.50% | 大于等于7天，小于30天: 0.50% | 大于等于30天: 0.00%</div>
+            </td>
+            <td data-val="32.11" class="highlight-val">32.11 亿</td>
+            <td data-val="2.0">2.00% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.60%)</span></td>
+            <td data-val="0.00%">0.00%</td>
             <td data-val="2.6772">2.6772</td>
             <td data-val="2.3328">2.3328</td>
             <td data-val="2.7019">2.7019</td>
-            <td class="metric-red" data-val="12.86418646346929">12.86%</td>
-            <td data-val="107.17189314750296">107.17%</td>
-            <td class="metric-green" data-val="15.822187928669408">15.82%</td>
+            <td class="metric-red" data-val="12.86418646346929">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-red" style="width: 12.86418646346929%;">
+                        <span>12.86%</span>
+                    </div>
+                </div>
+            </td>
+            <td data-val="107.17189314750296">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-blue" style="width: 100%;">
+                        <span>107.17%</span>
+                    </div>
+                </div>
+            </td>
+            <td class="metric-green" data-val="15.822187928669408">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-green" style="width: 15.822187928669408%;">
+                        <span>15.82%</span>
+                    </div>
+                </div>
+            </td>
         </tr>
         
         <tr>
             <td class="code" data-val="008254">008254</td>
-            <td class="name" data-val="华宝致远混合(QDII)C">华宝致远混合(QDII)C</td>
-            <td data-val="天天基金"><span class="badge">天天基金</span></td>
+            <td class="name" data-val="华宝致远混合(QDII)C">
+                <a href="https://fund.eastmoney.com/008254.html" target="_blank" title="点击查看天天基金概况">华宝致远混合(QDII)C</a>
+                <div class="redemption-sub">赎回: 小于7天: 1.50% | 大于等于7天，小于30天: 0.50% | 大于等于30天: 0.00%</div>
+            </td>
+            <td data-val="28.04" class="highlight-val">28.04 亿</td>
+            <td data-val="1.7999999999999998">1.80% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.40%)</span></td>
+            <td data-val="0.00%">0.00%</td>
             <td data-val="1.8089">1.8089</td>
             <td data-val="1.5661">1.5661</td>
             <td data-val="1.7459">1.7459</td>
-            <td class="metric-red" data-val="13.42252197468074">13.42%</td>
-            <td data-val="74.05271828665569">74.05%</td>
-            <td class="metric-green" data-val="11.48074835578826">11.48%</td>
+            <td class="metric-red" data-val="13.42252197468074">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-red" style="width: 13.42252197468074%;">
+                        <span>13.42%</span>
+                    </div>
+                </div>
+            </td>
+            <td data-val="74.05271828665569">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-blue" style="width: 74.05271828665569%;">
+                        <span>74.05%</span>
+                    </div>
+                </div>
+            </td>
+            <td class="metric-green" data-val="11.48074835578826">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-green" style="width: 11.48074835578826%;">
+                        <span>11.48%</span>
+                    </div>
+                </div>
+            </td>
         </tr>
         
         <tr>
             <td class="code" data-val="017731">017731</td>
-            <td class="name" data-val="嘉实全球产业升级股票发起式(QDII)C">嘉实全球产业升级股票发起式(QDII)C</td>
-            <td data-val="天天基金"><span class="badge">天天基金</span></td>
+            <td class="name" data-val="嘉实全球产业升级股票发起式(QDII)C">
+                <a href="https://fund.eastmoney.com/017731.html" target="_blank" title="点击查看天天基金概况">嘉实全球产业升级股票发起式(QDII)C</a>
+                <div class="redemption-sub">赎回: 小于7天: 1.50% | 大于等于7天，小于30天: 0.50% | 大于等于30天: 0.00%</div>
+            </td>
+            <td data-val="37.9" class="highlight-val">37.90 亿</td>
+            <td data-val="2.0">2.00% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.60%)</span></td>
+            <td data-val="0.00%">0.00%</td>
             <td data-val="4.2193">4.2193</td>
             <td data-val="3.6211">3.6211</td>
             <td data-val="4.0905">4.0905</td>
-            <td class="metric-red" data-val="14.177707202616535">14.18%</td>
-            <td data-val="78.46873955198927">78.47%</td>
-            <td class="metric-green" data-val="12.962911822374398">12.96%</td>
+            <td class="metric-red" data-val="14.177707202616535">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-red" style="width: 14.177707202616535%;">
+                        <span>14.18%</span>
+                    </div>
+                </div>
+            </td>
+            <td data-val="78.46873955198927">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-blue" style="width: 78.46873955198927%;">
+                        <span>78.47%</span>
+                    </div>
+                </div>
+            </td>
+            <td class="metric-green" data-val="12.962911822374398">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-green" style="width: 12.962911822374398%;">
+                        <span>12.96%</span>
+                    </div>
+                </div>
+            </td>
         </tr>
         
         <tr>
             <td class="code" data-val="016665">016665</td>
-            <td class="name" data-val="天弘全球高端制造混合(QDII)C">天弘全球高端制造混合(QDII)C</td>
-            <td data-val="天天基金"><span class="badge">天天基金</span></td>
+            <td class="name" data-val="天弘全球高端制造混合(QDII)C">
+                <a href="https://fund.eastmoney.com/016665.html" target="_blank" title="点击查看天天基金概况">天弘全球高端制造混合(QDII)C</a>
+                <div class="redemption-sub">赎回: 小于7天: 1.50% | 大于等于7天，小于30天: 0.50% | 大于等于30天: 0.00%</div>
+            </td>
+            <td data-val="41.44" class="highlight-val">41.44 亿</td>
+            <td data-val="1.7">1.70% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.30%)</span></td>
+            <td data-val="0.00%">0.00%</td>
             <td data-val="2.9214">2.9214</td>
             <td data-val="2.3432">2.3432</td>
             <td data-val="2.8505">2.8505</td>
-            <td class="metric-red" data-val="19.7918806051893">19.79%</td>
-            <td data-val="87.7378069872016">87.74%</td>
-            <td class="metric-green" data-val="21.6498805052919">21.65%</td>
+            <td class="metric-red" data-val="19.7918806051893">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-red" style="width: 19.7918806051893%;">
+                        <span>19.79%</span>
+                    </div>
+                </div>
+            </td>
+            <td data-val="87.7378069872016">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-blue" style="width: 87.7378069872016%;">
+                        <span>87.74%</span>
+                    </div>
+                </div>
+            </td>
+            <td class="metric-green" data-val="21.6498805052919">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-green" style="width: 21.6498805052919%;">
+                        <span>21.65%</span>
+                    </div>
+                </div>
+            </td>
         </tr>
         
         <tr>
             <td class="code" data-val="018230">018230</td>
-            <td class="name" data-val="易方达全球优质企业混合(QDII)C(人民币份额)">易方达全球优质企业混合(QDII)C(人民币份额)</td>
-            <td data-val="天天基金"><span class="badge">天天基金</span></td>
+            <td class="name" data-val="易方达全球优质企业混合(QDII)C(人民币份额)">
+                <a href="https://fund.eastmoney.com/018230.html" target="_blank" title="点击查看天天基金概况">易方达全球优质企业混合(QDII)C(人民币份额)</a>
+                <div class="redemption-sub">赎回: 小于等于6天: 1.50% | 大于等于7天，小于等于29天: 0.50% | 大于等于30天: 0.00%</div>
+            </td>
+            <td data-val="51.99" class="highlight-val">51.99 亿</td>
+            <td data-val="1.9">1.90% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.50%)</span></td>
+            <td data-val="0.00%">0.00%</td>
             <td data-val="2.1498">2.1498</td>
             <td data-val="1.9626">1.9626</td>
             <td data-val="2.0575">2.0575</td>
-            <td class="metric-red" data-val="8.707786770862407">8.71%</td>
-            <td data-val="50.69444444444454">50.69%</td>
-            <td class="metric-green" data-val="4.835422398858668">4.84%</td>
+            <td class="metric-red" data-val="8.707786770862407">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-red" style="width: 8.707786770862407%;">
+                        <span>8.71%</span>
+                    </div>
+                </div>
+            </td>
+            <td data-val="50.69444444444454">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-blue" style="width: 50.69444444444454%;">
+                        <span>50.69%</span>
+                    </div>
+                </div>
+            </td>
+            <td class="metric-green" data-val="4.835422398858668">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-green" style="width: 4.835422398858668%;">
+                        <span>4.84%</span>
+                    </div>
+                </div>
+            </td>
         </tr>
         
         <tr>
             <td class="code" data-val="021277">021277</td>
-            <td class="name" data-val="广发全球精选股票(QDII)人民币C">广发全球精选股票(QDII)人民币C</td>
-            <td data-val="天天基金"><span class="badge">天天基金</span></td>
+            <td class="name" data-val="广发全球精选股票(QDII)人民币C">
+                <a href="https://fund.eastmoney.com/021277.html" target="_blank" title="点击查看天天基金概况">广发全球精选股票(QDII)人民币C</a>
+                <div class="redemption-sub">赎回: 小于7天: 1.50% | 大于等于7天，小于30天: 0.50% | 大于等于30天: 0.00%</div>
+            </td>
+            <td data-val="67.93" class="highlight-val">67.93 亿</td>
+            <td data-val="2.0">2.00% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.60%)</span></td>
+            <td data-val="0.00% (C类免)">0.00% (C类免)</td>
             <td data-val="6.3538">6.3538</td>
             <td data-val="5.6228">5.6228</td>
             <td data-val="6.3989">6.3989</td>
-            <td class="metric-red" data-val="11.504926185904496">11.50%</td>
-            <td data-val="106.16963064295493">106.17%</td>
-            <td class="metric-green" data-val="13.802731735078616">13.80%</td>
+            <td class="metric-red" data-val="11.504926185904496">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-red" style="width: 11.504926185904496%;">
+                        <span>11.50%</span>
+                    </div>
+                </div>
+            </td>
+            <td data-val="106.16963064295493">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-blue" style="width: 100%;">
+                        <span>106.17%</span>
+                    </div>
+                </div>
+            </td>
+            <td class="metric-green" data-val="13.802731735078616">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-green" style="width: 13.802731735078616%;">
+                        <span>13.80%</span>
+                    </div>
+                </div>
+            </td>
         </tr>
         
         <tr>
             <td class="code" data-val="005698">005698</td>
-            <td class="name" data-val="华夏全球科技先锋混合(QDII)A(人民币)">华夏全球科技先锋混合(QDII)A(人民币)</td>
-            <td data-val="天天基金"><span class="badge">天天基金</span></td>
+            <td class="name" data-val="华夏全球科技先锋混合(QDII)A(人民币)">
+                <a href="https://fund.eastmoney.com/005698.html" target="_blank" title="点击查看天天基金概况">华夏全球科技先锋混合(QDII)A(人民币)</a>
+                <div class="redemption-sub">赎回: 小于7天: 1.50% | 大于等于7天，小于30天: 0.75% | 大于等于30天，小于365天: 0.50% | 大于等于365天: 0.00%</div>
+            </td>
+            <td data-val="97.51" class="highlight-val">97.51 亿</td>
+            <td data-val="1.4">1.40% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.00%)</span></td>
+            <td data-val="1.50%">1.50%</td>
             <td data-val="2.9654">2.9654</td>
             <td data-val="2.4661">2.4661</td>
             <td data-val="2.7686">2.7686</td>
-            <td class="metric-red" data-val="16.83752613475416">16.84%</td>
-            <td data-val="60.58481874624481">60.58%</td>
-            <td class="metric-green" data-val="12.266331454523344">12.27%</td>
+            <td class="metric-red" data-val="16.83752613475416">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-red" style="width: 16.83752613475416%;">
+                        <span>16.84%</span>
+                    </div>
+                </div>
+            </td>
+            <td data-val="60.58481874624481">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-blue" style="width: 60.58481874624481%;">
+                        <span>60.58%</span>
+                    </div>
+                </div>
+            </td>
+            <td class="metric-green" data-val="12.266331454523344">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-green" style="width: 12.266331454523344%;">
+                        <span>12.27%</span>
+                    </div>
+                </div>
+            </td>
         </tr>
         
         <tr>
             <td class="code" data-val="501312">501312</td>
-            <td class="name" data-val="华宝海外科技股票(QDII-LOF)A">华宝海外科技股票(QDII-LOF)A</td>
-            <td data-val="天天基金"><span class="badge">天天基金</span></td>
+            <td class="name" data-val="华宝海外科技股票(QDII-LOF)A">
+                <a href="https://fund.eastmoney.com/501312.html" target="_blank" title="点击查看天天基金概况">华宝海外科技股票(QDII-LOF)A</a>
+                <div class="redemption-sub">赎回: 小于7天: 1.50% | 大于等于7天，小于30天: 0.50% | 大于等于30天，小于180天: 0.25% | 大于等于180天: 0.00%</div>
+            </td>
+            <td data-val="18.62" class="highlight-val">18.62 亿</td>
+            <td data-val="1.2">1.20% <span class="fee-sub">(管:1.00%/托:0.20%/销:0.00%)</span></td>
+            <td data-val="1.20%">1.20%</td>
             <td data-val="2.2594">2.2594</td>
             <td data-val="2.0919">2.0919</td>
             <td data-val="2.4143">2.4143</td>
-            <td class="metric-red" data-val="7.413472603346021">7.41%</td>
-            <td data-val="192.47761194029854">192.48%</td>
-            <td class="metric-green" data-val="15.411826569147665">15.41%</td>
+            <td class="metric-red" data-val="7.413472603346021">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-red" style="width: 7.413472603346021%;">
+                        <span>7.41%</span>
+                    </div>
+                </div>
+            </td>
+            <td data-val="192.47761194029854">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-blue" style="width: 100%;">
+                        <span>192.48%</span>
+                    </div>
+                </div>
+            </td>
+            <td class="metric-green" data-val="15.411826569147665">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-green" style="width: 15.411826569147665%;">
+                        <span>15.41%</span>
+                    </div>
+                </div>
+            </td>
         </tr>
         
         <tr>
             <td class="code" data-val="017654">017654</td>
-            <td class="name" data-val="创金合信全球芯片产业股票发起(QDII)C">创金合信全球芯片产业股票发起(QDII)C</td>
-            <td data-val="天天基金"><span class="badge">天天基金</span></td>
+            <td class="name" data-val="创金合信全球芯片产业股票发起(QDII)C">
+                <a href="https://fund.eastmoney.com/017654.html" target="_blank" title="点击查看天天基金概况">创金合信全球芯片产业股票发起(QDII)C</a>
+                <div class="redemption-sub">赎回: 小于7天: 1.50% | 大于等于7天，小于30天: 0.50% | 大于等于30天: 0.00%</div>
+            </td>
+            <td data-val="15.14" class="highlight-val">15.14 亿</td>
+            <td data-val="1.9">1.90% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.50%)</span></td>
+            <td data-val="0.00%">0.00%</td>
             <td data-val="2.2794">2.2794</td>
             <td data-val="1.9448">1.9448</td>
             <td data-val="2.2839">2.2839</td>
-            <td class="metric-red" data-val="14.679301570588743">14.68%</td>
-            <td data-val="101.34488942020327">101.34%</td>
-            <td class="metric-green" data-val="17.436240230357875">17.44%</td>
+            <td class="metric-red" data-val="14.679301570588743">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-red" style="width: 14.679301570588743%;">
+                        <span>14.68%</span>
+                    </div>
+                </div>
+            </td>
+            <td data-val="101.34488942020327">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-blue" style="width: 100%;">
+                        <span>101.34%</span>
+                    </div>
+                </div>
+            </td>
+            <td class="metric-green" data-val="17.436240230357875">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-green" style="width: 17.436240230357875%;">
+                        <span>17.44%</span>
+                    </div>
+                </div>
+            </td>
         </tr>
         
         <tr>
             <td class="code" data-val="022184">022184</td>
-            <td class="name" data-val="富国全球科技互联网股票(QDII)C">富国全球科技互联网股票(QDII)C</td>
-            <td data-val="天天基金"><span class="badge">天天基金</span></td>
+            <td class="name" data-val="富国全球科技互联网股票(QDII)C">
+                <a href="https://fund.eastmoney.com/022184.html" target="_blank" title="点击查看天天基金概况">富国全球科技互联网股票(QDII)C</a>
+                <div class="redemption-sub">赎回: 小于7天: 1.50% | 大于等于7天，小于30天: 0.50% | 大于等于30天: 0.00%</div>
+            </td>
+            <td data-val="116.4" class="highlight-val">116.40 亿</td>
+            <td data-val="1.7999999999999998">1.80% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.40%)</span></td>
+            <td data-val="0.00%">0.00%</td>
             <td data-val="5.5749">5.5749</td>
             <td data-val="4.9547">4.9547</td>
             <td data-val="5.3594">5.3594</td>
-            <td class="metric-red" data-val="11.12486322624622">11.12%</td>
-            <td data-val="65.2531441470493">65.25%</td>
-            <td class="metric-green" data-val="8.168002099017096">8.17%</td>
+            <td class="metric-red" data-val="11.12486322624622">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-red" style="width: 11.12486322624622%;">
+                        <span>11.12%</span>
+                    </div>
+                </div>
+            </td>
+            <td data-val="65.2531441470493">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-blue" style="width: 65.2531441470493%;">
+                        <span>65.25%</span>
+                    </div>
+                </div>
+            </td>
+            <td class="metric-green" data-val="8.168002099017096">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-green" style="width: 8.168002099017096%;">
+                        <span>8.17%</span>
+                    </div>
+                </div>
+            </td>
         </tr>
         
         <tr>
             <td class="code" data-val="017437">017437</td>
-            <td class="name" data-val="华宝纳斯达克精选股票发起式(QDII)C">华宝纳斯达克精选股票发起式(QDII)C</td>
-            <td data-val="天天基金"><span class="badge">天天基金</span></td>
+            <td class="name" data-val="华宝纳斯达克精选股票发起式(QDII)C">
+                <a href="https://fund.eastmoney.com/017437.html" target="_blank" title="点击查看天天基金概况">华宝纳斯达克精选股票发起式(QDII)C</a>
+                <div class="redemption-sub">赎回: 小于7天: 1.50% | 大于等于7天，小于30天: 0.50% | 大于等于30天: 0.00%</div>
+            </td>
+            <td data-val="56.2" class="highlight-val">56.20 亿</td>
+            <td data-val="1.7999999999999998">1.80% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.40%)</span></td>
+            <td data-val="0.00%">0.00%</td>
             <td data-val="2.2253">2.2253</td>
             <td data-val="2.0563">2.0563</td>
             <td data-val="2.3506">2.3506</td>
-            <td class="metric-red" data-val="7.594481642924551">7.59%</td>
-            <td data-val="174.14201183431965">174.14%</td>
-            <td class="metric-green" data-val="14.312113991149165">14.31%</td>
+            <td class="metric-red" data-val="7.594481642924551">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-red" style="width: 7.594481642924551%;">
+                        <span>7.59%</span>
+                    </div>
+                </div>
+            </td>
+            <td data-val="174.14201183431965">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-blue" style="width: 100%;">
+                        <span>174.14%</span>
+                    </div>
+                </div>
+            </td>
+            <td class="metric-green" data-val="14.312113991149165">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-green" style="width: 14.312113991149165%;">
+                        <span>14.31%</span>
+                    </div>
+                </div>
+            </td>
         </tr>
         
         <tr>
             <td class="code" data-val="017145">017145</td>
-            <td class="name" data-val="华宝海外新能源汽车股票发起式(QDII)C">华宝海外新能源汽车股票发起式(QDII)C</td>
-            <td data-val="天天基金"><span class="badge">天天基金</span></td>
+            <td class="name" data-val="华宝海外新能源汽车股票发起式(QDII)C">
+                <a href="https://fund.eastmoney.com/017145.html" target="_blank" title="点击查看天天基金概况">华宝海外新能源汽车股票发起式(QDII)C</a>
+                <div class="redemption-sub">赎回: 小于7天: 1.50% | 大于等于7天，小于30天: 0.50% | 大于等于30天: 0.00%</div>
+            </td>
+            <td data-val="2.27" class="highlight-val">2.27 亿</td>
+            <td data-val="1.7999999999999998">1.80% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.40%)</span></td>
+            <td data-val="0.00%">0.00%</td>
             <td data-val="1.5583">1.5583</td>
             <td data-val="1.4348">1.4348</td>
             <td data-val="1.5789">1.5789</td>
-            <td class="metric-red" data-val="7.925303215042029">7.93%</td>
-            <td data-val="116.6801619433198">116.68%</td>
-            <td class="metric-green" data-val="10.043211597435175">10.04%</td>
+            <td class="metric-red" data-val="7.925303215042029">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-red" style="width: 7.925303215042029%;">
+                        <span>7.93%</span>
+                    </div>
+                </div>
+            </td>
+            <td data-val="116.6801619433198">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-blue" style="width: 100%;">
+                        <span>116.68%</span>
+                    </div>
+                </div>
+            </td>
+            <td class="metric-green" data-val="10.043211597435175">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-green" style="width: 10.043211597435175%;">
+                        <span>10.04%</span>
+                    </div>
+                </div>
+            </td>
         </tr>
         
         <tr>
             <td class="code" data-val="016702">016702</td>
-            <td class="name" data-val="银华海外数字经济量化选股混合发起式(QDII)C">银华海外数字经济量化选股混合发起式(QDII)C</td>
-            <td data-val="天天基金"><span class="badge">天天基金</span></td>
+            <td class="name" data-val="银华海外数字经济量化选股混合发起式(QDII)C">
+                <a href="https://fund.eastmoney.com/016702.html" target="_blank" title="点击查看天天基金概况">银华海外数字经济量化选股混合发起式(QDII)C</a>
+                <div class="redemption-sub">赎回: 小于7天: 1.50% | 大于等于7天，小于30天: 0.50% | 大于等于30天: 0.00%</div>
+            </td>
+            <td data-val="43.92" class="highlight-val">43.92 亿</td>
+            <td data-val="1.7999999999999998">1.80% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.40%)</span></td>
+            <td data-val="0.00%">0.00%</td>
             <td data-val="2.0799">2.0799</td>
             <td data-val="1.8727">1.8727</td>
             <td data-val="2.1225">2.1225</td>
-            <td class="metric-red" data-val="9.96201740468291">9.96%</td>
-            <td data-val="120.55984555984567">120.56%</td>
-            <td class="metric-green" data-val="13.339029209163241">13.34%</td>
+            <td class="metric-red" data-val="9.96201740468291">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-red" style="width: 9.96201740468291%;">
+                        <span>9.96%</span>
+                    </div>
+                </div>
+            </td>
+            <td data-val="120.55984555984567">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-blue" style="width: 100%;">
+                        <span>120.56%</span>
+                    </div>
+                </div>
+            </td>
+            <td class="metric-green" data-val="13.339029209163241">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-green" style="width: 13.339029209163241%;">
+                        <span>13.34%</span>
+                    </div>
+                </div>
+            </td>
         </tr>
         
         <tr>
             <td class="code" data-val="016823">016823</td>
-            <td class="name" data-val="天弘全球新能源汽车股票(QDII-LOF)C">天弘全球新能源汽车股票(QDII-LOF)C</td>
-            <td data-val="天天基金"><span class="badge">天天基金</span></td>
+            <td class="name" data-val="天弘全球新能源汽车股票(QDII-LOF)C">
+                <a href="https://fund.eastmoney.com/016823.html" target="_blank" title="点击查看天天基金概况">天弘全球新能源汽车股票(QDII-LOF)C</a>
+                <div class="redemption-sub">赎回: 小于7天: 1.50% | 大于等于7天，小于30天: 0.50% | 大于等于30天: 0.00%</div>
+            </td>
+            <td data-val="14.81" class="highlight-val">14.81 亿</td>
+            <td data-val="1.65">1.65% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.25%)</span></td>
+            <td data-val="0.00%">0.00%</td>
             <td data-val="1.9491">1.9491</td>
             <td data-val="1.6037">1.6037</td>
             <td data-val="1.9181">1.9181</td>
-            <td class="metric-red" data-val="17.720999435636966">17.72%</td>
-            <td data-val="91.02489866821072">91.02%</td>
-            <td class="metric-green" data-val="19.604664214005115">19.60%</td>
+            <td class="metric-red" data-val="17.720999435636966">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-red" style="width: 17.720999435636966%;">
+                        <span>17.72%</span>
+                    </div>
+                </div>
+            </td>
+            <td data-val="91.02489866821072">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-blue" style="width: 91.02489866821072%;">
+                        <span>91.02%</span>
+                    </div>
+                </div>
+            </td>
+            <td class="metric-green" data-val="19.604664214005115">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-green" style="width: 19.604664214005115%;">
+                        <span>19.60%</span>
+                    </div>
+                </div>
+            </td>
         </tr>
         
         <tr>
             <td class="code" data-val="019156">019156</td>
-            <td class="name" data-val="易方达全球配置混合(QDII)C(人民币)">易方达全球配置混合(QDII)C(人民币)</td>
-            <td data-val="天天基金"><span class="badge">天天基金</span></td>
+            <td class="name" data-val="易方达全球配置混合(QDII)C(人民币)">
+                <a href="https://fund.eastmoney.com/019156.html" target="_blank" title="点击查看天天基金概况">易方达全球配置混合(QDII)C(人民币)</a>
+                <div class="redemption-sub">赎回: 小于等于6天: 1.50% | 大于等于7天，小于等于29天: 0.50% | 大于等于30天: 0.00%</div>
+            </td>
+            <td data-val="4.12" class="highlight-val">4.12 亿</td>
+            <td data-val="1.9">1.90% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.50%)</span></td>
+            <td data-val="0.00%">0.00%</td>
             <td data-val="1.7483">1.7483</td>
             <td data-val="1.5232">1.5232</td>
             <td data-val="1.6611">1.6611</td>
-            <td class="metric-red" data-val="12.87536463993593">12.88%</td>
-            <td data-val="61.26166148378498">61.26%</td>
-            <td class="metric-green" data-val="9.053308823529406">9.05%</td>
+            <td class="metric-red" data-val="12.87536463993593">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-red" style="width: 12.87536463993593%;">
+                        <span>12.88%</span>
+                    </div>
+                </div>
+            </td>
+            <td data-val="61.26166148378498">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-blue" style="width: 61.26166148378498%;">
+                        <span>61.26%</span>
+                    </div>
+                </div>
+            </td>
+            <td class="metric-green" data-val="9.053308823529406">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-green" style="width: 9.053308823529406%;">
+                        <span>9.05%</span>
+                    </div>
+                </div>
+            </td>
         </tr>
         
             </tbody>
@@ -308,13 +962,69 @@
     </div>
 
     <div class="footer-note">
-        <p><strong>使用提示：</strong> 点击表格头部（列标题）可针对该列进行 <strong>升序 / 降序</strong> 排序切换。</p>
-        <p><strong>指标说明：</strong></p>
-        <p>1. <strong>修复程度 (%)</strong>：(最新净值 - 最低净值) / (最高净值 - 最低净值) × 100%（接近或超过 100% 表示接近或突破前期高点）。</p>
-        <p>2. <strong>自低点反弹 (%)</strong>：(最新净值 - 最低净值) / 最低净值 × 100%（衡量底部的绝对反弹力度）。</p>
+        <p><strong>使用提示：</strong> 列宽可拖拽调整，点击表头排序。名称列与运作费列支持自动换行，避免文字覆盖。</p>
     </div>
 
     <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const table = document.getElementById("fundTable");
+            const headers = table.querySelectorAll("th");
+
+            headers.forEach((th, idx) => {
+                // 点击表头排序（忽略拖拽时）
+                th.addEventListener("click", function(e) {
+                    if (th.classList.contains("is-resizing") || window._isDragging) {
+                        return;
+                    }
+                    sortTable(idx);
+                });
+
+                // 添加列宽拖拽手柄
+                const resizer = document.createElement("div");
+                resizer.classList.add("resizer");
+                th.appendChild(resizer);
+
+                let x = 0;
+                let w = 0;
+
+                resizer.addEventListener("mousedown", function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window._isDragging = true;
+                    x = e.clientX;
+                    w = th.getBoundingClientRect().width;
+                    // 设置初始宽度，防止拖动时突变
+                    th.style.width = w + "px";
+                    th.classList.add("resizing");
+                    th.classList.add("is-resizing");
+
+                    function mouseMoveHandler(e) {
+                        const dx = e.clientX - x;
+                        const newWidth = Math.max(40, w + dx);
+                        th.style.width = newWidth + "px";
+                    }
+
+                    function mouseUpHandler(e) {
+                        th.classList.remove("resizing");
+                        document.removeEventListener("mousemove", mouseMoveHandler);
+                        document.removeEventListener("mouseup", mouseUpHandler);
+                        
+                        // 拖拽结束后，保留最终宽度
+                        const finalWidth = th.getBoundingClientRect().width;
+                        th.style.width = finalWidth + "px";
+                        
+                        setTimeout(() => {
+                            window._isDragging = false;
+                            th.classList.remove("is-resizing");
+                        }, 50);
+                    }
+
+                    document.addEventListener("mousemove", mouseMoveHandler);
+                    document.addEventListener("mouseup", mouseUpHandler);
+                });
+            });
+        });
+
         let currentSortCol = -1;
         let isAscending = true;
 
@@ -354,12 +1064,14 @@
             const headers = table.querySelectorAll("th");
             headers.forEach((th, idx) => {
                 const icon = th.querySelector(".sort-icon");
-                if (idx === colIndex) {
-                    icon.textContent = isAscending ? "▲" : "▼";
-                    th.style.color = "#1a73e8";
-                } else {
-                    icon.textContent = "⇅";
-                    th.style.color = "#3c4043";
+                if (icon) {
+                    if (idx === colIndex) {
+                        icon.textContent = isAscending ? "▲" : "▼";
+                        th.style.color = "#1a73e8";
+                    } else {
+                        icon.textContent = "⇅";
+                        th.style.color = "#3c4043";
+                    }
                 }
             });
         }

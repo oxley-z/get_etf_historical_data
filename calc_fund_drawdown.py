@@ -7,11 +7,10 @@ import argparse
 import webbrowser
 import urllib.request
 import urllib.parse
+import akshare as ak
 from datetime import datetime, timedelta
 
-# ==========================================
-# 1. 进程内强制清空代理环境变量（彻底杜绝 ProxyError）
-# ==========================================
+# 强制清空代理环境变量，避免 VPN 或代理劫持请求
 for env_var in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]:
     os.environ.pop(env_var, None)
 
@@ -22,29 +21,152 @@ DEFAULT_FUNDS = [
 ]
 
 def get_direct_opener():
-    """创建一个彻底绕过本地代理的 urllib opener"""
+    """构建绕过本地代理的底层网络连接池"""
     proxy_handler = urllib.request.ProxyHandler({})
     return urllib.request.build_opener(proxy_handler)
 
-def fetch_fund_name_from_source(opener, code):
-    """从天天基金官方 JS 数据源中动态解析基金全称"""
-    url = f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "Referer": f"https://fund.eastmoney.com/{code}.html"
+def fetch_fund_detail_meta(opener, code):
+    """全面抓取：名称, 规模, 管理费, 托管费, 销售服务费, 申购费, 多档持有期赎回费"""
+    meta = {
+        "name": f"基金_{code}",
+        "scale": "未知",
+        "scale_val": -1.0,
+        "fee_manage": "--",
+        "fee_custody": "--",
+        "fee_sales": "--",
+        "fee_purchase": "0.00%",     
+        "fee_redemption": "未知",    
+        "fee_total": "未知",
+        "fee_val": -1.0
     }
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Referer": f"https://fund.eastmoney.com/{code}.html",
+        "Accept-Language": "zh-CN,zh;q=0.9"
+    }
+
+    js_url = f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
     try:
-        req = urllib.request.Request(url, headers=headers)
+        req = urllib.request.Request(js_url, headers=headers)
         with opener.open(req, timeout=5) as resp:
             content = resp.read().decode('utf-8', errors='ignore')
-            match = re.search(r'var\s+fS_name\s*=\s*["\']([^"\']+)["\']', content)
-            if match:
-                return match.group(1)
+
+            match_name = re.search(r'var\s+fS_name\s*=\s*["\']([^"\']+)["\']', content)
+            if match_name:
+                meta["name"] = match_name.group(1)
+
+            # 规模获取方式替换为 get_fund_fee_info.py 中的 AkShare 雪球接口方式
+            # 原 pingzhongdata Data_fundSharesHTML 经常无法获取规模
+            try:
+                df_xq = ak.fund_individual_basic_info_xq(symbol=code)
+                if df_xq is not None and not df_xq.empty:
+                    cols = df_xq.columns.tolist()
+                    if len(cols) >= 2:
+                        info_dict = dict(zip(df_xq[cols[0]], df_xq[cols[1]]))
+
+                        for k in ["基金规模", "资产规模", "最新规模"]:
+                            if k in info_dict and info_dict[k]:
+                                scale_str = str(info_dict[k])
+                                scale_m = re.search(r'([\d\.]+)', scale_str)
+                                if scale_m:
+                                    val = float(scale_m.group(1))
+                                    meta["scale_val"] = val
+                                    meta["scale"] = f"{val:.2f} 亿"
+                                break
+            except Exception:
+                pass
+
+            match_rate = re.search(r'var\s+Data_rateInverstment\s*=\s*["\']([^"\']+)["\']', content)
+            if match_rate:
+                rate_text = match_rate.group(1)
+                m_match = re.search(r'管理费[：:]\s*([\d\.]+)%', rate_text)
+                c_match = re.search(r'托管费[：:]\s*([\d\.]+)%', rate_text)
+                s_match = re.search(r'销售服务费[：:]\s*([\d\.]+)%', rate_text)
+                
+                m_val = float(m_match.group(1)) if m_match else 0.0
+                c_val = float(c_match.group(1)) if c_match else 0.0
+                s_val = float(s_match.group(1)) if s_match else 0.0
+
+                if m_val > 0 or c_val > 0 or s_val > 0:
+                    meta["fee_manage"] = f"{m_val:.2f}%"
+                    meta["fee_custody"] = f"{c_val:.2f}%"
+                    meta["fee_sales"] = f"{s_val:.2f}%"
+                    tot = m_val + c_val + s_val
+                    meta["fee_val"] = tot
+                    meta["fee_total"] = f"{tot:.2f}%"
+            
+            buy_m = re.search(r'var\s+fund_sourceRate\s*=\s*"([^"]+)";', content)
+            if buy_m:
+                meta["fee_purchase"] = buy_m.group(1)
     except Exception:
         pass
-    return f"基金_{code}"
+
+    f10_url = f"https://fundf10.eastmoney.com/jjfl_{code}.html"
+    try:
+        req = urllib.request.Request(f10_url, headers=headers)
+        with opener.open(req, timeout=5) as resp:
+            html = resp.read().decode('utf-8', errors='ignore')
+
+            if meta["scale"] == "未知":
+                scale_m = re.search(r'基金规模.*?([\d\.]+)\s*亿元', html, re.S)
+                if scale_m:
+                    meta["scale_val"] = float(scale_m.group(1))
+                    meta["scale"] = f"{scale_m.group(1)} 亿"
+
+            if meta["fee_total"] == "未知":
+                m_m = re.search(r'管理费率.*?([\d\.]+)%', html, re.S)
+                c_m = re.search(r'托管费率.*?([\d\.]+)%', html, re.S)
+                s_m = re.search(r'销售服务费率.*?([\d\.]+)%', html, re.S)
+                
+                m_v = float(m_m.group(1)) if m_m else 0.0
+                c_v = float(c_m.group(1)) if c_m else 0.0
+                s_v = float(s_m.group(1)) if s_m else 0.0
+                
+                if m_v > 0 or c_v > 0 or s_v > 0:
+                    meta["fee_manage"] = f"{m_v:.2f}%"
+                    meta["fee_custody"] = f"{c_v:.2f}%"
+                    meta["fee_sales"] = f"{s_v:.2f}%"
+                    tot = m_v + c_v + s_v
+                    meta["fee_val"] = tot
+                    meta["fee_total"] = f"{tot:.2f}%"
+
+            purch_section = re.search(r'申购费率.*?(?:</table>|<div class="info">)', html, re.S)
+            if purch_section:
+                vals = re.findall(r'([\d\.]+)%', purch_section.group(0))
+                if vals:
+                    meta["fee_purchase"] = f"{float(vals[0]):.2f}%"
+
+            red_section = re.search(r'赎回费率.*?(?:</table>|</div>\s*</div>)', html, re.S)
+            if red_section:
+                red_html = red_section.group(0)
+                rows = re.findall(r'<tr[^>]*>(.*?)<\/tr>', red_html, re.S)
+                red_tiers = []
+                for row in rows:
+                    cols = re.findall(r'<td[^>]*>(.*?)<\/td>', row, re.S)
+                    if len(cols) >= 2:
+                        period_desc = re.sub(r'<[^>]+>', '', cols[0]).strip()
+                        rate_desc = re.sub(r'<[^>]+>', '', cols[1]).strip()
+                        if period_desc and rate_desc and '%' in rate_desc:
+                            red_tiers.append(f"{period_desc}: {rate_desc}")
+                
+                if red_tiers:
+                    meta["fee_redemption"] = " | ".join(red_tiers)
+                else:
+                    red_m = re.findall(r'([\d\.]+)%', red_html)
+                    if red_m:
+                        meta["fee_redemption"] = f"常规档: {red_m[0]}%"
+    except Exception:
+        pass
+
+    if code.endswith('C') or code.startswith('014') or code.startswith('012') or code.startswith('021'):
+        if meta["fee_purchase"] == "0.00%":
+            meta["fee_purchase"] = "0.00% (C类免)"
+
+    return meta
 
 def fetch_from_eastmoney(opener, code, start_date, end_date):
+    """获取历史净值数据"""
     base_url = "https://api.fund.eastmoney.com/f10/lsjz"
     params = {
         "callback": "jQuery11230_lsjz",
@@ -57,9 +179,8 @@ def fetch_from_eastmoney(opener, code, start_date, end_date):
     }
     url = f"{base_url}?{urllib.parse.urlencode(params)}"
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "Referer": f"https://fundf10.eastmoney.com/jjjz_{code}.html",
-        "Accept": "*/*"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": f"https://fundf10.eastmoney.com/jjjz_{code}.html"
     }
     try:
         req = urllib.request.Request(url, headers=headers)
@@ -79,43 +200,8 @@ def fetch_from_eastmoney(opener, code, start_date, end_date):
         pass
     return None
 
-def fetch_from_sina(opener, code, start_date, end_date):
-    url = f"https://finance.sina.com.cn/fund/api/jsonp.php/IO.XSRF.Fund.getFundNav/FundService.getNav?symbol={code}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "Referer": "https://finance.sina.com.cn/"
-    }
-    try:
-        req = urllib.request.Request(url, headers=headers)
-        with opener.open(req, timeout=5) as resp:
-            html = resp.read().decode('utf-8')
-            match = re.search(r'\((\{.*\})\)', html)
-            if match:
-                res_json = json.loads(match.group(1))
-                data_list = res_json.get("result", {}).get("data", {}).get("data", [])
-                clean_data = []
-                for item in data_list:
-                    fdate = item.get("date")
-                    if fdate and start_date <= fdate <= end_date and item.get("nav"):
-                        clean_data.append({"date": fdate, "nav": float(item["nav"])})
-                if clean_data:
-                    return clean_data
-    except Exception:
-        pass
-    return None
-
-def fetch_fund_data_multisource(opener, code, start_date, end_date):
-    data = fetch_from_eastmoney(opener, code, start_date, end_date)
-    if data:
-        return data, "天天基金"
-
-    data = fetch_from_sina(opener, code, start_date, end_date)
-    if data:
-        return data, "新浪财经"
-
-    return None, "全部失败"
-
 def analyze_fund_metrics(valid_data):
+    """计算核心量化指标：最大回撤、修复率、低点反弹幅度"""
     data = sorted(valid_data, key=lambda x: x["date"])
     if not data:
         return None
@@ -157,20 +243,49 @@ def analyze_fund_metrics(valid_data):
     }
 
 def generate_html_report(results, start_date, end_date, filename="fund_drawdown_dashboard.html"):
-    """生成带有交互式排序功能的 HTML 报表"""
+    """生成修复了调整列宽瞬间放大与排序 Bug 的 HTML 看板，并优化列宽与换行"""
     rows_html = ""
     for r in results:
+        fund_url = f"https://fund.eastmoney.com/{r['code']}.html"
+        
+        max_dd_pct = min(max(r['max_drawdown'], 0), 100)
+        rec_pct = min(max(r['recovery_rate'], 0), 100)
+        reb_pct = min(max(r['rebound_gain'], 0), 100)
+
         rows_html += f"""
         <tr>
             <td class="code" data-val="{r['code']}">{r['code']}</td>
-            <td class="name" data-val="{r['name']}">{r['name']}</td>
-            <td data-val="{r['source']}"><span class="badge">{r['source']}</span></td>
+            <td class="name" data-val="{r['name']}">
+                <a href="{fund_url}" target="_blank" title="点击查看天天基金概况">{r['name']}</a>
+                <div class="redemption-sub">赎回: {r['fee_redemption']}</div>
+            </td>
+            <td data-val="{r['scale_val']}" class="highlight-val">{r['scale']}</td>
+            <td data-val="{r['fee_val']}">{r['fee_total']} <span class="fee-sub">(管:{r['fee_manage']}/托:{r['fee_custody']}/销:{r['fee_sales']})</span></td>
+            <td data-val="{r['fee_purchase']}">{r['fee_purchase']}</td>
             <td data-val="{r['peak_nav']}">{r['peak_nav']:.4f}</td>
             <td data-val="{r['trough_nav']}">{r['trough_nav']:.4f}</td>
             <td data-val="{r['latest_nav']}">{r['latest_nav']:.4f}</td>
-            <td class="metric-red" data-val="{r['max_drawdown']}">{r['max_drawdown']:.2f}%</td>
-            <td data-val="{r['recovery_rate']}">{r['recovery_rate']:.2f}%</td>
-            <td class="metric-green" data-val="{r['rebound_gain']}">{r['rebound_gain']:.2f}%</td>
+            <td class="metric-red" data-val="{r['max_drawdown']}">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-red" style="width: {max_dd_pct}%;">
+                        <span>{r['max_drawdown']:.2f}%</span>
+                    </div>
+                </div>
+            </td>
+            <td data-val="{r['recovery_rate']}">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-blue" style="width: {rec_pct}%;">
+                        <span>{r['recovery_rate']:.2f}%</span>
+                    </div>
+                </div>
+            </td>
+            <td class="metric-green" data-val="{r['rebound_gain']}">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-green" style="width: {reb_pct}%;">
+                        <span>{r['rebound_gain']:.2f}%</span>
+                    </div>
+                </div>
+            </td>
         </tr>
         """
 
@@ -179,34 +294,203 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>场外基金历史净值与分析看板</title>
+    <title>场外基金量化与费率规模看板</title>
     <style>
-        body {{ font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif; background-color: #f8f9fa; margin: 0; padding: 24px; color: #333; }}
-        .header {{ text-align: center; margin-bottom: 24px; }}
-        .header h2 {{ color: #1a73e8; margin: 0 0 8px 0; font-size: 24px; }}
-        .header p {{ color: #5f6368; font-size: 14px; margin: 0; }}
-        .table-container {{ overflow-x: auto; background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 16px; border: 1px solid #e0e0e0; }}
-        table {{ width: 100%; border-collapse: collapse; font-size: 14px; text-align: right; }}
-        th, td {{ padding: 12px 16px; border-bottom: 1px solid #eee; }}
-        th {{ background-color: #f1f3f4; color: #3c4043; font-weight: 600; text-align: right; user-select: none; cursor: pointer; transition: background-color 0.2s; }}
+        body {{ 
+            font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif; 
+            background-color: #f8f9fa; 
+            margin: 0; 
+            padding: 30px 50px; 
+            color: #333; 
+        }}
+        .header {{ text-align: center; margin-bottom: 12px; }}
+        .header h2 {{ color: #1a73e8; margin: 0 0 4px 0; font-size: 20px; }}
+        .header p {{ color: #5f6368; font-size: 13px; margin: 0; }}
+        .table-container {{ 
+            width:100%; 
+            overflow-x:auto; 
+            box-sizing:border-box; 
+            background:#fff; 
+            border-radius:12px; 
+            box-shadow:0 4px 15px rgba(0,0,0,0.08); 
+            padding:20px; 
+            border:1px solid #e0e0e0; 
+        }}
+        
+        table {{ 
+            width:100%; 
+            min-width:1500px; 
+            border-collapse:collapse; 
+            font-size:12px; 
+            text-align:right; 
+            table-layout:fixed; 
+        }}
+        th, td {{ 
+            padding:6px 8px; 
+            border-bottom:1px solid #eee; 
+            line-height:1.4; 
+            overflow:hidden; 
+            text-overflow:ellipsis; 
+            box-sizing:border-box; 
+        }}
+        
+        /* ----- 各列宽度与换行策略 ----- */
+        /* 第1列：代码 */
+        th:nth-child(1), td:nth-child(1) {{ 
+            width: 80px; 
+            text-align: left; 
+            white-space: nowrap; 
+        }}
+        /* 第2列：基金名称（允许换行，两行显示） */
+        th:nth-child(2), td:nth-child(2) {{ 
+            width: 260px; 
+            min-width: 200px; 
+            text-align: left; 
+            white-space: normal; 
+            word-break: break-word; 
+            vertical-align: middle; 
+        }}
+        /* 第3列：规模 */
+        th:nth-child(3), td:nth-child(3) {{ 
+            width: 120px; 
+            text-align: left; 
+            white-space: nowrap; 
+        }}
+        /* 第4列：运作费（允许换行以适应“管/托/销”信息） */
+        th:nth-child(4), td:nth-child(4) {{ 
+            width: 160px; 
+            text-align: left; 
+            white-space: normal; 
+            word-break: break-word; 
+        }}
+        /* 第5列：申购费率 */
+        th:nth-child(5), td:nth-child(5) {{ 
+            width: 80px; 
+            text-align: left; 
+            white-space: nowrap; 
+        }}
+        /* 第6~8列：净值数据 */
+        th:nth-child(6), td:nth-child(6),
+        th:nth-child(7), td:nth-child(7),
+        th:nth-child(8), td:nth-child(8) {{ 
+            width: 80px; 
+            white-space: nowrap; 
+        }}
+        /* 第9、10、11列：进度条（加宽） */
+        th:nth-last-child(3),
+        td:nth-last-child(3),
+        th:nth-last-child(2),
+        td:nth-last-child(2),
+        th:nth-last-child(1),
+        td:nth-last-child(1) {{
+            width: 250px;
+            min-width: 200px;
+            white-space: nowrap;
+        }}
+
+        /* ------ 表头样式 ------ */
+        th {{ 
+            background-color: #f1f3f4; 
+            color: #3c4043; 
+            font-weight: 600; 
+            text-align: right; 
+            user-select: none; 
+            cursor: pointer; 
+            transition: background-color 0.2s; 
+            white-space: nowrap; 
+            position: relative; 
+        }}
         th:hover {{ background-color: #e4e7eb; }}
-        th:nth-child(1), th:nth-child(2), th:nth-child(3),
-        td:nth-child(1), td:nth-child(2), td:nth-child(3) {{ text-align: left; }}
+        th:nth-child(1), th:nth-child(2), th:nth-child(3), th:nth-child(4), th:nth-child(5) {{ text-align: left; }}
         tr:hover {{ background-color: #f8f9fa; }}
-        .sort-icon {{ font-size: 12px; margin-left: 4px; color: #70757a; }}
+        
+        /* 列宽拖拽手柄 */
+        .resizer {{
+            position: absolute; 
+            right: 0; 
+            top: 0; 
+            bottom: 0; 
+            width: 6px;
+            cursor: col-resize; 
+            user-select: none; 
+            touch-action: none; 
+            z-index: 10;
+        }}
+        .resizer:hover, th.resizing .resizer {{ background-color: #1a73e8; }}
+
+        .sort-icon {{ font-size: 10px; margin-left: 2px; color: #70757a; }}
         .code {{ font-family: "SFMono-Regular", Consolas, monospace; font-weight: bold; color: #1a73e8; }}
-        .name {{ font-weight: 500; color: #202124; }}
-        .badge {{ background: #e8f0fe; color: #1967d2; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }}
+        .name a {{ 
+            font-weight:500; 
+            color:#1a73e8; 
+            text-decoration:none; 
+            display:inline-block; 
+            max-width:100%; 
+            overflow:hidden; 
+            text-overflow:ellipsis; 
+            vertical-align:middle; 
+        }}
+        .name a:hover {{ text-decoration: underline; color: #1557b0; }}
+        .redemption-sub {{ 
+            font-size: 10px; 
+            color: #7f8c8d; 
+            font-weight: normal; 
+            margin-top: 2px; 
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+        .highlight-val {{ font-weight: 600; color: #e67e22; }}
+        .fee-sub {{ font-size: 10px; color: #7f8c8d; }}
+        
+        .progress-container {{
+            background-color:#e5e7eb;
+            border-radius:6px;
+            overflow:hidden;
+            height:20px;
+            width:100%;
+            position:relative;
+        }}
+        .progress-bar {{
+            height:100%;
+            border-radius:6px;
+            min-width:42px;
+            display:flex;
+            align-items:center;
+            justify-content:flex-end;
+            padding-right:6px;
+            box-sizing:border-box;
+            transition:width .2s ease;
+        }}
+        .progress-bar span {{
+            color:#fff;
+            font-size:11px;
+            font-weight:600;
+            text-shadow:0 1px 1px rgba(0,0,0,.25);
+        }}
+        .bar-red {{ background-color:#d93025; }}
+        .bar-blue {{ background-color:#1a73e8; }}
+        .bar-green {{ background-color:#188038; }}
+
         .metric-red {{ color: #d93025; font-weight: 600; }}
         .metric-green {{ color: #188038; font-weight: 600; }}
-        .footer-note {{ margin-top: 20px; font-size: 13px; color: #70757a; line-height: 1.6; background: #fff; padding: 16px; border-radius: 8px; border: 1px solid #e0e0e0; }}
-        .footer-note p {{ margin: 4px 0; }}
+        .footer-note {{ 
+            margin-top: 10px; 
+            font-size: 12px; 
+            color: #70757a; 
+            line-height: 1.4; 
+            background: #fff; 
+            padding: 10px 12px; 
+            border-radius: 6px; 
+            border: 1px solid #e0e0e0; 
+        }}
+        .footer-note p {{ margin: 2px 0; }}
     </style>
 </head>
 <body>
 
     <div class="header">
-        <h2>场外基金核心量化指标对比看板</h2>
+        <h2>场外基金核心量化与全费率规模看板</h2>
         <p>统计时间区间：<strong>{start_date}</strong> 至 <strong>{end_date}</strong> （包含基金数：{len(results)} 只）</p>
     </div>
 
@@ -214,15 +498,17 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         <table id="fundTable">
             <thead>
                 <tr>
-                    <th onclick="sortTable(0)">代码 <span class="sort-icon">⇅</span></th>
-                    <th onclick="sortTable(1)">基金名称 (动态源获取) <span class="sort-icon">⇅</span></th>
-                    <th onclick="sortTable(2)">来源 <span class="sort-icon">⇅</span></th>
-                    <th onclick="sortTable(3)">最高净值 <span class="sort-icon">⇅</span></th>
-                    <th onclick="sortTable(4)">最低净值 <span class="sort-icon">⇅</span></th>
-                    <th onclick="sortTable(5)">最新净值 <span class="sort-icon">⇅</span></th>
-                    <th onclick="sortTable(6)">最大回撤 <span class="sort-icon">⇅</span></th>
-                    <th onclick="sortTable(7)">修复程度 <span class="sort-icon">⇅</span></th>
-                    <th onclick="sortTable(8)">自低点反弹 <span class="sort-icon">⇅</span></th>
+                    <th data-col="0">代码 <span class="sort-icon">⇅</span></th>
+                    <th data-col="1">基金名称 / 赎回费率阶梯 <span class="sort-icon">⇅</span></th>
+                    <th data-col="2">最新规模 <span class="sort-icon">⇅</span></th>
+                    <th data-col="3">运作费(管/托/销) <span class="sort-icon">⇅</span></th>
+                    <th data-col="4">申购费率 <span class="sort-icon">⇅</span></th>
+                    <th data-col="5">最高净值 <span class="sort-icon">⇅</span></th>
+                    <th data-col="6">最低净值 <span class="sort-icon">⇅</span></th>
+                    <th data-col="7">最新净值 <span class="sort-icon">⇅</span></th>
+                    <th data-col="8">最大回撤 <span class="sort-icon">⇅</span></th>
+                    <th data-col="9">修复程度 <span class="sort-icon">⇅</span></th>
+                    <th data-col="10">自低点反弹 <span class="sort-icon">⇅</span></th>
                 </tr>
             </thead>
             <tbody>
@@ -232,13 +518,69 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
     </div>
 
     <div class="footer-note">
-        <p><strong>使用提示：</strong> 点击表格头部（列标题）可针对该列进行 <strong>升序 / 降序</strong> 排序切换。</p>
-        <p><strong>指标说明：</strong></p>
-        <p>1. <strong>修复程度 (%)</strong>：(最新净值 - 最低净值) / (最高净值 - 最低净值) × 100%（接近或超过 100% 表示接近或突破前期高点）。</p>
-        <p>2. <strong>自低点反弹 (%)</strong>：(最新净值 - 最低净值) / 最低净值 × 100%（衡量底部的绝对反弹力度）。</p>
+        <p><strong>使用提示：</strong> 列宽可拖拽调整，点击表头排序。名称列与运作费列支持自动换行，避免文字覆盖。</p>
     </div>
 
     <script>
+        document.addEventListener("DOMContentLoaded", function () {{
+            const table = document.getElementById("fundTable");
+            const headers = table.querySelectorAll("th");
+
+            headers.forEach((th, idx) => {{
+                // 点击表头排序（忽略拖拽时）
+                th.addEventListener("click", function(e) {{
+                    if (th.classList.contains("is-resizing") || window._isDragging) {{
+                        return;
+                    }}
+                    sortTable(idx);
+                }});
+
+                // 添加列宽拖拽手柄
+                const resizer = document.createElement("div");
+                resizer.classList.add("resizer");
+                th.appendChild(resizer);
+
+                let x = 0;
+                let w = 0;
+
+                resizer.addEventListener("mousedown", function (e) {{
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window._isDragging = true;
+                    x = e.clientX;
+                    w = th.getBoundingClientRect().width;
+                    // 设置初始宽度，防止拖动时突变
+                    th.style.width = w + "px";
+                    th.classList.add("resizing");
+                    th.classList.add("is-resizing");
+
+                    function mouseMoveHandler(e) {{
+                        const dx = e.clientX - x;
+                        const newWidth = Math.max(40, w + dx);
+                        th.style.width = newWidth + "px";
+                    }}
+
+                    function mouseUpHandler(e) {{
+                        th.classList.remove("resizing");
+                        document.removeEventListener("mousemove", mouseMoveHandler);
+                        document.removeEventListener("mouseup", mouseUpHandler);
+                        
+                        // 拖拽结束后，保留最终宽度
+                        const finalWidth = th.getBoundingClientRect().width;
+                        th.style.width = finalWidth + "px";
+                        
+                        setTimeout(() => {{
+                            window._isDragging = false;
+                            th.classList.remove("is-resizing");
+                        }}, 50);
+                    }}
+
+                    document.addEventListener("mousemove", mouseMoveHandler);
+                    document.addEventListener("mouseup", mouseUpHandler);
+                }});
+            }});
+        }});
+
         let currentSortCol = -1;
         let isAscending = true;
 
@@ -278,12 +620,14 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             const headers = table.querySelectorAll("th");
             headers.forEach((th, idx) => {{
                 const icon = th.querySelector(".sort-icon");
-                if (idx === colIndex) {{
-                    icon.textContent = isAscending ? "▲" : "▼";
-                    th.style.color = "#1a73e8";
-                }} else {{
-                    icon.textContent = "⇅";
-                    th.style.color = "#3c4043";
+                if (icon) {{
+                    if (idx === colIndex) {{
+                        icon.textContent = isAscending ? "▲" : "▼";
+                        th.style.color = "#1a73e8";
+                    }} else {{
+                        icon.textContent = "⇅";
+                        th.style.color = "#3c4043";
+                    }}
                 }}
             }});
         }}
@@ -300,50 +644,55 @@ def main():
     today_str = datetime.now().strftime("%Y-%m-%d")
     default_start = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
 
-    parser = argparse.ArgumentParser(description="多源动态分析并直接生成 HTML 页面")
+    parser = argparse.ArgumentParser()
     parser.add_argument("--start", type=str, default=default_start)
     parser.add_argument("--end", type=str, default=today_str)
     parser.add_argument("--funds", nargs="+", default=DEFAULT_FUNDS)
-    parser.add_argument("--out", type=str, default="fund_drawdown_dashboard.html", help="输出的HTML文件名")
+    parser.add_argument("--out", type=str, default="fund_drawdown_dashboard.html")
 
     args = parser.parse_args()
     opener = get_direct_opener()
 
-    print(f"\n======== 开始抓取数据并生成带排序功能的 HTML 看板 ========")
+    print(f"\n======== 开始抓取数据 (已解决特殊字符与语法错误) ========")
     print(f"统计区间: {args.start} 至 {args.end}")
-    print(f"处理进度:")
 
     results = []
     for idx, code in enumerate(args.funds, start=1):
-        fund_name = fetch_fund_name_from_source(opener, code)
-        raw_data, source_name = fetch_fund_data_multisource(opener, code, args.start, args.end)
+        meta = fetch_fund_detail_meta(opener, code)
+        raw_data = fetch_from_eastmoney(opener, code, args.start, args.end)
         
         if not raw_data:
-            print(f"[{idx}/{len(args.funds)}] {code} - {fund_name} ... ❌ 抓取失败")
+            print(f"[{idx}/{len(args.funds)}] {code} - {meta['name']} ... ❌ 历史净值抓取失败")
             continue
 
         res = analyze_fund_metrics(raw_data)
         if res:
             res.update({
                 "code": code,
-                "name": fund_name,
-                "source": source_name
+                "name": meta["name"],
+                "scale": meta["scale"],
+                "scale_val": meta["scale_val"],
+                "fee_manage": meta["fee_manage"],
+                "fee_custody": meta["fee_custody"],
+                "fee_sales": meta["fee_sales"],
+                "fee_total": meta["fee_total"],
+                "fee_val": meta["fee_val"],
+                "fee_purchase": meta["fee_purchase"],
+                "fee_redemption": meta["fee_redemption"],
+                "source": "天天基金"
             })
             results.append(res)
-            print(f"[{idx}/{len(args.funds)}] {code} - {fund_name} ... ✅ 完成 ({source_name})")
+            print(f"[{idx}/{len(args.funds)}] {code} - {meta['name']} ... ✅ 完成")
         
         time.sleep(random.uniform(0.05, 0.1))
 
     if results:
         abs_path = generate_html_report(results, args.start, args.end, filename=args.out)
-        print(f"\n🎉 网页生成成功！文件路径:")
-        print(f"👉 {abs_path}")
+        print(f"\n🎉 网页生成成功！文件路径: {abs_path}")
         try:
             webbrowser.open(f"file://{abs_path}")
         except Exception:
             pass
-    else:
-        print("\n❌ 未能成功获取任何有效的基金数据，无法生成HTML。")
 
 if __name__ == "__main__":
     main()
