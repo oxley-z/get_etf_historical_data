@@ -20,6 +20,8 @@
             --btn-text: #3c4043;
             --btn-active-bg: #1a73e8;
             --btn-active-text: #fff;
+            --input-bg: #fff;
+            --input-border: #ddd;
         }
         [data-theme="dark"] {
             --bg: #1a1a1a;
@@ -36,6 +38,8 @@
             --btn-text: #ccc;
             --btn-active-bg: #1a73e8;
             --btn-active-text: #fff;
+            --input-bg: #333;
+            --input-border: #555;
         }
         body { 
             font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif; 
@@ -74,7 +78,7 @@
             flex-wrap: wrap;
             justify-content: center;
             gap: 8px;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             flex-shrink: 0;
         }
         .group-btn {
@@ -97,9 +101,33 @@
             color: var(--btn-active-text);
             border-color: var(--btn-active-bg);
         }
+        .search-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 12px;
+            flex-shrink: 0;
+        }
+        .search-container input {
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: 1px solid var(--input-border);
+            background: var(--input-bg);
+            color: var(--text);
+            font-size: 14px;
+            width: 300px;
+            max-width: 80%;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .search-container input:focus {
+            border-color: #1a73e8;
+        }
+        .search-container input::placeholder {
+            color: var(--footer-text);
+        }
         .table-container { 
             width:100%; 
-            height: calc(100vh - 260px); 
+            height: calc(100vh - 280px); 
             overflow-y: auto; 
             overflow-x: scroll; 
             box-sizing:border-box; 
@@ -246,6 +274,9 @@
         .bar-green { background-color:#188038; }
         .metric-red { color: #d93025; font-weight: 600; }
         .metric-green { color: #188038; font-weight: 600; }
+        /* 涨幅颜色 */
+        .gain-positive { color: #d93025; font-weight: bold; }  /* 红色 */
+        .gain-negative { color: #188038; font-weight: bold; }  /* 绿色 */
         .footer-note { 
             margin-top: 10px; 
             font-size: 12px; 
@@ -271,6 +302,9 @@
     </div>
     <div class="group-tabs">
         <button class="group-btn" data-group="qdii">QDII</button><button class="group-btn" data-group="semiconductor">半导体材料设备</button><button class="group-btn" data-group="cpo">CPO</button><button class="group-btn" data-group="ai">人工智能</button><button class="group-btn" data-group="storage">存储芯片</button>
+    </div>
+    <div class="search-container">
+        <input type="text" id="searchInput" placeholder="🔍 搜索基金名称或代码 ...">
     </div>
     <div class="table-container">
         <table id="fundTable">
@@ -334,12 +368,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="3.8041431261770287">3.80%</td>
-            <td data-val="5.959246443675492">5.96%</td>
-            <td data-val="-1.147776183644189">-1.15%</td>
-            <td data-val="45.7429931253305">45.74%</td>
-            <td data-val="96.1565836298932">96.16%</td>
-            <td data-val="67.03030303030302">67.03%</td>
+            <td data-val="3.8041431261770287" class="gain-positive">3.80%</td>
+            <td data-val="5.959246443675492" class="gain-positive">5.96%</td>
+            <td data-val="-1.147776183644189" class="gain-negative">-1.15%</td>
+            <td data-val="45.7429931253305" class="gain-positive">45.74%</td>
+            <td data-val="96.1565836298932" class="gain-positive">96.16%</td>
+            <td data-val="67.03030303030302" class="gain-positive">67.03%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -377,12 +411,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="7.072764302906864">7.07%</td>
-            <td data-val="3.8831172719379747">3.88%</td>
-            <td data-val="-0.7323911426446172">-0.73%</td>
-            <td data-val="31.04464083389984">31.04%</td>
-            <td data-val="55.91103122893735">55.91%</td>
-            <td data-val="39.32142140132504">39.32%</td>
+            <td data-val="7.072764302906864" class="gain-positive">7.07%</td>
+            <td data-val="3.8831172719379747" class="gain-positive">3.88%</td>
+            <td data-val="-0.7323911426446172" class="gain-negative">-0.73%</td>
+            <td data-val="31.04464083389984" class="gain-positive">31.04%</td>
+            <td data-val="55.91103122893735" class="gain-positive">55.91%</td>
+            <td data-val="39.32142140132504" class="gain-positive">39.32%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -420,12 +454,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="7.077480743090159">7.08%</td>
-            <td data-val="3.913464075279216">3.91%</td>
-            <td data-val="-0.6362999299229122">-0.64%</td>
-            <td data-val="31.3132061492869">31.31%</td>
-            <td data-val="56.57935421175846">56.58%</td>
-            <td data-val="39.66903073286052">39.67%</td>
+            <td data-val="7.077480743090159" class="gain-positive">7.08%</td>
+            <td data-val="3.913464075279216" class="gain-positive">3.91%</td>
+            <td data-val="-0.6362999299229122" class="gain-negative">-0.64%</td>
+            <td data-val="31.3132061492869" class="gain-positive">31.31%</td>
+            <td data-val="56.57935421175846" class="gain-positive">56.58%</td>
+            <td data-val="39.66903073286052" class="gain-positive">39.67%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -463,12 +497,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="1.4173063320321644">1.42%</td>
-            <td data-val="-5.633425151744131">-5.63%</td>
-            <td data-val="-0.05421733405622797">-0.05%</td>
-            <td data-val="42.417776469722604">42.42%</td>
-            <td data-val="105.79448195204932">105.79%</td>
-            <td data-val="57.12952063968828">57.13%</td>
+            <td data-val="1.4173063320321644" class="gain-positive">1.42%</td>
+            <td data-val="-5.633425151744131" class="gain-negative">-5.63%</td>
+            <td data-val="-0.05421733405622797" class="gain-negative">-0.05%</td>
+            <td data-val="42.417776469722604" class="gain-positive">42.42%</td>
+            <td data-val="105.79448195204932" class="gain-positive">105.79%</td>
+            <td data-val="57.12952063968828" class="gain-positive">57.13%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -506,12 +540,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="1.4249037227214378">1.42%</td>
-            <td data-val="-5.574013433085545">-5.57%</td>
-            <td data-val="0.09881923681143157">0.10%</td>
-            <td data-val="42.80292076344707">42.80%</td>
-            <td data-val="106.85412085035084">106.85%</td>
-            <td data-val="57.660533982519844">57.66%</td>
+            <td data-val="1.4249037227214378" class="gain-positive">1.42%</td>
+            <td data-val="-5.574013433085545" class="gain-negative">-5.57%</td>
+            <td data-val="0.09881923681143157" class="gain-positive">0.10%</td>
+            <td data-val="42.80292076344707" class="gain-positive">42.80%</td>
+            <td data-val="106.85412085035084" class="gain-positive">106.85%</td>
+            <td data-val="57.660533982519844" class="gain-positive">57.66%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -549,12 +583,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="3.736796411517873">3.74%</td>
-            <td data-val="1.6914893617021365">1.69%</td>
-            <td data-val="-0.17057717746987722">-0.17%</td>
-            <td data-val="36.0711743772242">36.07%</td>
-            <td data-val="84.19294752392577">84.19%</td>
-            <td data-val="60.61047325679081">60.61%</td>
+            <td data-val="3.736796411517873" class="gain-positive">3.74%</td>
+            <td data-val="1.6914893617021365" class="gain-positive">1.69%</td>
+            <td data-val="-0.17057717746987722" class="gain-negative">-0.17%</td>
+            <td data-val="36.0711743772242" class="gain-positive">36.07%</td>
+            <td data-val="84.19294752392577" class="gain-positive">84.19%</td>
+            <td data-val="60.61047325679081" class="gain-positive">60.61%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -592,12 +626,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="3.744516957312505">3.74%</td>
-            <td data-val="1.7238967759983348">1.72%</td>
-            <td data-val="-0.06870255229981526">-0.07%</td>
-            <td data-val="36.43014585189703">36.43%</td>
-            <td data-val="85.0690247471213">85.07%</td>
-            <td data-val="61.09757448222395">61.10%</td>
+            <td data-val="3.744516957312505" class="gain-positive">3.74%</td>
+            <td data-val="1.7238967759983348" class="gain-positive">1.72%</td>
+            <td data-val="-0.06870255229981526" class="gain-negative">-0.07%</td>
+            <td data-val="36.43014585189703" class="gain-positive">36.43%</td>
+            <td data-val="85.0690247471213" class="gain-positive">85.07%</td>
+            <td data-val="61.09757448222395" class="gain-positive">61.10%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -635,12 +669,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="5.684302579798861">5.68%</td>
-            <td data-val="4.768097095795398">4.77%</td>
-            <td data-val="1.2144053601339966">1.21%</td>
-            <td data-val="44.29850746268655">44.30%</td>
-            <td data-val="96.34443541835903">96.34%</td>
-            <td data-val="69.25770308123249">69.26%</td>
+            <td data-val="5.684302579798861" class="gain-positive">5.68%</td>
+            <td data-val="4.768097095795398" class="gain-positive">4.77%</td>
+            <td data-val="1.2144053601339966" class="gain-positive">1.21%</td>
+            <td data-val="44.29850746268655" class="gain-positive">44.30%</td>
+            <td data-val="96.34443541835903" class="gain-positive">96.34%</td>
+            <td data-val="69.25770308123249" class="gain-positive">69.26%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -678,12 +712,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="5.688888888888899">5.69%</td>
-            <td data-val="4.7577092511013275">4.76%</td>
-            <td data-val="1.1054421768707634">1.11%</td>
-            <td data-val="44.03391883706844">44.03%</td>
-            <td data-val="95.5592105263158">95.56%</td>
-            <td data-val="68.89204545454548">68.89%</td>
+            <td data-val="5.688888888888899" class="gain-positive">5.69%</td>
+            <td data-val="4.7577092511013275" class="gain-positive">4.76%</td>
+            <td data-val="1.1054421768707634" class="gain-positive">1.11%</td>
+            <td data-val="44.03391883706844" class="gain-positive">44.03%</td>
+            <td data-val="95.5592105263158" class="gain-positive">95.56%</td>
+            <td data-val="68.89204545454548" class="gain-positive">68.89%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -721,12 +755,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="2.139483189774949">2.14%</td>
-            <td data-val="2.1185759192923426">2.12%</td>
-            <td data-val="-1.2177356622586788">-1.22%</td>
-            <td data-val="34.501617624403025">34.50%</td>
-            <td data-val="75.606567269253">75.61%</td>
-            <td data-val="58.58138637240877">58.58%</td>
+            <td data-val="2.139483189774949" class="gain-positive">2.14%</td>
+            <td data-val="2.1185759192923426" class="gain-positive">2.12%</td>
+            <td data-val="-1.2177356622586788" class="gain-negative">-1.22%</td>
+            <td data-val="34.501617624403025" class="gain-positive">34.50%</td>
+            <td data-val="75.606567269253" class="gain-positive">75.61%</td>
+            <td data-val="58.58138637240877" class="gain-positive">58.58%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -764,12 +798,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="2.1459040654653094">2.15%</td>
-            <td data-val="2.150350411352453">2.15%</td>
-            <td data-val="-1.1124689225064266">-1.11%</td>
-            <td data-val="34.80325514600287">34.80%</td>
-            <td data-val="76.38172069950393">76.38%</td>
-            <td data-val="59.008469791078475">59.01%</td>
+            <td data-val="2.1459040654653094" class="gain-positive">2.15%</td>
+            <td data-val="2.150350411352453" class="gain-positive">2.15%</td>
+            <td data-val="-1.1124689225064266" class="gain-negative">-1.11%</td>
+            <td data-val="34.80325514600287" class="gain-positive">34.80%</td>
+            <td data-val="76.38172069950393" class="gain-positive">76.38%</td>
+            <td data-val="59.008469791078475" class="gain-positive">59.01%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -807,12 +841,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="3.715788261487085">3.72%</td>
-            <td data-val="2.996226127396806">3.00%</td>
-            <td data-val="1.392224557190036">1.39%</td>
-            <td data-val="29.97402347508178">29.97%</td>
-            <td data-val="60.550240656010466">60.55%</td>
-            <td data-val="41.128231914337945">41.13%</td>
+            <td data-val="3.715788261487085" class="gain-positive">3.72%</td>
+            <td data-val="2.996226127396806" class="gain-positive">3.00%</td>
+            <td data-val="1.392224557190036" class="gain-positive">1.39%</td>
+            <td data-val="29.97402347508178" class="gain-positive">29.97%</td>
+            <td data-val="60.550240656010466" class="gain-positive">60.55%</td>
+            <td data-val="41.128231914337945" class="gain-positive">41.13%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -850,12 +884,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="3.725490196078418">3.73%</td>
-            <td data-val="3.0455141412249365">3.05%</td>
-            <td data-val="1.5430047988187479">1.54%</td>
-            <td data-val="30.43766892692872">30.44%</td>
-            <td data-val="61.64061581854507">61.64%</td>
-            <td data-val="41.75727905179079">41.76%</td>
+            <td data-val="3.725490196078418" class="gain-positive">3.73%</td>
+            <td data-val="3.0455141412249365" class="gain-positive">3.05%</td>
+            <td data-val="1.5430047988187479" class="gain-positive">1.54%</td>
+            <td data-val="30.43766892692872" class="gain-positive">30.44%</td>
+            <td data-val="61.64061581854507" class="gain-positive">61.64%</td>
+            <td data-val="41.75727905179079" class="gain-positive">41.76%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -893,12 +927,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="1.4704172962920037">1.47%</td>
-            <td data-val="-1.1773362766740236">-1.18%</td>
-            <td data-val="-6.386058981233244">-6.39%</td>
-            <td data-val="21.826809015421112">21.83%</td>
-            <td data-val="47.38308289718047">47.38%</td>
-            <td data-val="34.39304133630976">34.39%</td>
+            <td data-val="1.4704172962920037" class="gain-positive">1.47%</td>
+            <td data-val="-1.1773362766740236" class="gain-negative">-1.18%</td>
+            <td data-val="-6.386058981233244" class="gain-negative">-6.39%</td>
+            <td data-val="21.826809015421112" class="gain-positive">21.83%</td>
+            <td data-val="47.38308289718047" class="gain-positive">47.38%</td>
+            <td data-val="34.39304133630976" class="gain-positive">34.39%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -936,12 +970,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="1.476996208477166">1.48%</td>
-            <td data-val="-1.1411874965543967">-1.14%</td>
-            <td data-val="-6.296702722474789">-6.30%</td>
-            <td data-val="22.06943498978895">22.07%</td>
-            <td data-val="47.966003795692714">47.97%</td>
-            <td data-val="34.71564871159192">34.72%</td>
+            <td data-val="1.476996208477166" class="gain-positive">1.48%</td>
+            <td data-val="-1.1411874965543967" class="gain-negative">-1.14%</td>
+            <td data-val="-6.296702722474789" class="gain-negative">-6.30%</td>
+            <td data-val="22.06943498978895" class="gain-positive">22.07%</td>
+            <td data-val="47.966003795692714" class="gain-positive">47.97%</td>
+            <td data-val="34.71564871159192" class="gain-positive">34.72%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -979,12 +1013,12 @@
                 </div>
             </td>
             <td data-val="14">14 天</td>
-            <td data-val="0.5506255991740483">0.55%</td>
-            <td data-val="-2.6650803093396846">-2.67%</td>
-            <td data-val="6.640075082121055">6.64%</td>
-            <td data-val="47.50108178277799">47.50%</td>
-            <td data-val="101.97007850688782">101.97%</td>
-            <td data-val="60.80905767189526">60.81%</td>
+            <td data-val="0.5506255991740483" class="gain-positive">0.55%</td>
+            <td data-val="-2.6650803093396846" class="gain-negative">-2.67%</td>
+            <td data-val="6.640075082121055" class="gain-positive">6.64%</td>
+            <td data-val="47.50108178277799" class="gain-positive">47.50%</td>
+            <td data-val="101.97007850688782" class="gain-positive">101.97%</td>
+            <td data-val="60.80905767189526" class="gain-positive">60.81%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -1022,12 +1056,12 @@
                 </div>
             </td>
             <td data-val="14">14 天</td>
-            <td data-val="0.5585650656073193">0.56%</td>
-            <td data-val="-2.6228667350554846">-2.62%</td>
-            <td data-val="6.79638957784654">6.80%</td>
-            <td data-val="47.942051572683496">47.94%</td>
-            <td data-val="103.19630260277309">103.20%</td>
-            <td data-val="61.39964448566351">61.40%</td>
+            <td data-val="0.5585650656073193" class="gain-positive">0.56%</td>
+            <td data-val="-2.6228667350554846" class="gain-negative">-2.62%</td>
+            <td data-val="6.79638957784654" class="gain-positive">6.80%</td>
+            <td data-val="47.942051572683496" class="gain-positive">47.94%</td>
+            <td data-val="103.19630260277309" class="gain-positive">103.20%</td>
+            <td data-val="61.39964448566351" class="gain-positive">61.40%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -1065,12 +1099,12 @@
                 </div>
             </td>
             <td data-val="14">14 天</td>
-            <td data-val="2.6985156362588247">2.70%</td>
-            <td data-val="-3.2974861756623897">-3.30%</td>
-            <td data-val="-7.780653510190893">-7.78%</td>
-            <td data-val="34.280195967589975">34.28%</td>
-            <td data-val="100.62640765765765">100.63%</td>
-            <td data-val="54.38986080268644">54.39%</td>
+            <td data-val="2.6985156362588247" class="gain-positive">2.70%</td>
+            <td data-val="-3.2974861756623897" class="gain-negative">-3.30%</td>
+            <td data-val="-7.780653510190893" class="gain-negative">-7.78%</td>
+            <td data-val="34.280195967589975" class="gain-positive">34.28%</td>
+            <td data-val="100.62640765765765" class="gain-positive">100.63%</td>
+            <td data-val="54.38986080268644" class="gain-positive">54.39%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -1108,12 +1142,12 @@
                 </div>
             </td>
             <td data-val="14">14 天</td>
-            <td data-val="2.7005814990546106">2.70%</td>
-            <td data-val="-3.2758794476363318">-3.28%</td>
-            <td data-val="-7.713021734949033">-7.71%</td>
-            <td data-val="34.50450871373172">34.50%</td>
-            <td data-val="101.3006083490665">101.30%</td>
-            <td data-val="54.69933902950186">54.70%</td>
+            <td data-val="2.7005814990546106" class="gain-positive">2.70%</td>
+            <td data-val="-3.2758794476363318" class="gain-negative">-3.28%</td>
+            <td data-val="-7.713021734949033" class="gain-negative">-7.71%</td>
+            <td data-val="34.50450871373172" class="gain-positive">34.50%</td>
+            <td data-val="101.3006083490665" class="gain-positive">101.30%</td>
+            <td data-val="54.69933902950186" class="gain-positive">54.70%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -1151,12 +1185,12 @@
                 </div>
             </td>
             <td data-val="10">10 天</td>
-            <td data-val="-0.8911368015414256">-0.89%</td>
-            <td data-val="-6.676645348573496">-6.68%</td>
-            <td data-val="-2.723275495248445">-2.72%</td>
-            <td data-val="21.565731166912872">21.57%</td>
-            <td data-val="56.03670559684515">56.04%</td>
-            <td data-val="37.358969223579685">37.36%</td>
+            <td data-val="-0.8911368015414256" class="gain-negative">-0.89%</td>
+            <td data-val="-6.676645348573496" class="gain-negative">-6.68%</td>
+            <td data-val="-2.723275495248445" class="gain-negative">-2.72%</td>
+            <td data-val="21.565731166912872" class="gain-positive">21.57%</td>
+            <td data-val="56.03670559684515" class="gain-positive">56.04%</td>
+            <td data-val="37.358969223579685" class="gain-positive">37.36%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -1194,12 +1228,12 @@
                 </div>
             </td>
             <td data-val="10">10 天</td>
-            <td data-val="-0.8827717133365054">-0.88%</td>
-            <td data-val="-6.634477825464957">-6.63%</td>
-            <td data-val="-2.5978265939088585">-2.60%</td>
-            <td data-val="21.87919463087249">21.88%</td>
-            <td data-val="56.85744329277453">56.86%</td>
-            <td data-val="37.7845220030349">37.78%</td>
+            <td data-val="-0.8827717133365054" class="gain-negative">-0.88%</td>
+            <td data-val="-6.634477825464957" class="gain-negative">-6.63%</td>
+            <td data-val="-2.5978265939088585" class="gain-negative">-2.60%</td>
+            <td data-val="21.87919463087249" class="gain-positive">21.88%</td>
+            <td data-val="56.85744329277453" class="gain-positive">56.86%</td>
+            <td data-val="37.7845220030349" class="gain-positive">37.78%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -1237,12 +1271,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="1.9810027730851276">1.98%</td>
-            <td data-val="0.8828769174983098">0.88%</td>
-            <td data-val="3.154823316997679">3.15%</td>
-            <td data-val="27.934502269228467">27.93%</td>
-            <td data-val="47.419711560613734">47.42%</td>
-            <td data-val="38.901189545888705">38.90%</td>
+            <td data-val="1.9810027730851276" class="gain-positive">1.98%</td>
+            <td data-val="0.8828769174983098" class="gain-positive">0.88%</td>
+            <td data-val="3.154823316997679" class="gain-positive">3.15%</td>
+            <td data-val="27.934502269228467" class="gain-positive">27.93%</td>
+            <td data-val="47.419711560613734" class="gain-positive">47.42%</td>
+            <td data-val="38.901189545888705" class="gain-positive">38.90%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -1280,12 +1314,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="1.990127959254262">1.99%</td>
-            <td data-val="0.9302759715005715">0.93%</td>
-            <td data-val="3.3055219412776227">3.31%</td>
-            <td data-val="28.36594582830463">28.37%</td>
-            <td data-val="48.38871989570708">48.39%</td>
-            <td data-val="39.46389802454806">39.46%</td>
+            <td data-val="1.990127959254262" class="gain-positive">1.99%</td>
+            <td data-val="0.9302759715005715" class="gain-positive">0.93%</td>
+            <td data-val="3.3055219412776227" class="gain-positive">3.31%</td>
+            <td data-val="28.36594582830463" class="gain-positive">28.37%</td>
+            <td data-val="48.38871989570708" class="gain-positive">48.39%</td>
+            <td data-val="39.46389802454806" class="gain-positive">39.46%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -1323,12 +1357,12 @@
                 </div>
             </td>
             <td data-val="14">14 天</td>
-            <td data-val="1.2655449890270676">1.27%</td>
-            <td data-val="-8.324503311258269">-8.32%</td>
-            <td data-val="-17.320671325329982">-17.32%</td>
-            <td data-val="15.363140130838794">15.36%</td>
-            <td data-val="38.09856344772547">38.10%</td>
-            <td data-val="28.915999254982296">28.92%</td>
+            <td data-val="1.2655449890270676" class="gain-positive">1.27%</td>
+            <td data-val="-8.324503311258269" class="gain-negative">-8.32%</td>
+            <td data-val="-17.320671325329982" class="gain-negative">-17.32%</td>
+            <td data-val="15.363140130838794" class="gain-positive">15.36%</td>
+            <td data-val="38.09856344772547" class="gain-positive">38.10%</td>
+            <td data-val="28.915999254982296" class="gain-positive">28.92%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -1366,12 +1400,12 @@
                 </div>
             </td>
             <td data-val="14">14 天</td>
-            <td data-val="1.256020748425346">1.26%</td>
-            <td data-val="-8.368818105616093">-8.37%</td>
-            <td data-val="-17.442527867564873">-17.44%</td>
-            <td data-val="14.798790220952696">14.80%</td>
-            <td data-val="36.98060247606636">36.98%</td>
-            <td data-val="28.196828970822764">28.20%</td>
+            <td data-val="1.256020748425346" class="gain-positive">1.26%</td>
+            <td data-val="-8.368818105616093" class="gain-negative">-8.37%</td>
+            <td data-val="-17.442527867564873" class="gain-negative">-17.44%</td>
+            <td data-val="14.798790220952696" class="gain-positive">14.80%</td>
+            <td data-val="36.98060247606636" class="gain-positive">36.98%</td>
+            <td data-val="28.196828970822764" class="gain-positive">28.20%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -1409,12 +1443,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="2.20557107780881">2.21%</td>
-            <td data-val="7.867929586274691">7.87%</td>
-            <td data-val="9.42754838417259">9.43%</td>
-            <td data-val="22.29257420727382">22.29%</td>
-            <td data-val="29.794097091554207">29.79%</td>
-            <td data-val="20.88423793310634">20.88%</td>
+            <td data-val="2.20557107780881" class="gain-positive">2.21%</td>
+            <td data-val="7.867929586274691" class="gain-positive">7.87%</td>
+            <td data-val="9.42754838417259" class="gain-positive">9.43%</td>
+            <td data-val="22.29257420727382" class="gain-positive">22.29%</td>
+            <td data-val="29.794097091554207" class="gain-positive">29.79%</td>
+            <td data-val="20.88423793310634" class="gain-positive">20.88%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -1452,12 +1486,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="2.2037155669442754">2.20%</td>
-            <td data-val="7.845876520955386">7.85%</td>
-            <td data-val="9.348869088416723">9.35%</td>
-            <td data-val="22.115629943358673">22.12%</td>
-            <td data-val="29.40572108365327">29.41%</td>
-            <td data-val="20.66253214339737">20.66%</td>
+            <td data-val="2.2037155669442754" class="gain-positive">2.20%</td>
+            <td data-val="7.845876520955386" class="gain-positive">7.85%</td>
+            <td data-val="9.348869088416723" class="gain-positive">9.35%</td>
+            <td data-val="22.115629943358673" class="gain-positive">22.12%</td>
+            <td data-val="29.40572108365327" class="gain-positive">29.41%</td>
+            <td data-val="20.66253214339737" class="gain-positive">20.66%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -1495,12 +1529,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="1.6783901700649917">1.68%</td>
-            <td data-val="3.582928931017282">3.58%</td>
-            <td data-val="3.6064235166031633">3.61%</td>
-            <td data-val="19.05233527939949">19.05%</td>
-            <td data-val="55.674459818689925">55.67%</td>
-            <td data-val="28.78651178527123">28.79%</td>
+            <td data-val="1.6783901700649917" class="gain-positive">1.68%</td>
+            <td data-val="3.582928931017282" class="gain-positive">3.58%</td>
+            <td data-val="3.6064235166031633" class="gain-positive">3.61%</td>
+            <td data-val="19.05233527939949" class="gain-positive">19.05%</td>
+            <td data-val="55.674459818689925" class="gain-positive">55.67%</td>
+            <td data-val="28.78651178527123" class="gain-positive">28.79%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -1538,12 +1572,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="1.6874123422159881">1.69%</td>
-            <td data-val="3.622152746761964">3.62%</td>
-            <td data-val="3.733345256192422">3.73%</td>
-            <td data-val="19.58045562313164">19.58%</td>
-            <td data-val="56.54139396801836">56.54%</td>
-            <td data-val="29.347159502703903">29.35%</td>
+            <td data-val="1.6874123422159881" class="gain-positive">1.69%</td>
+            <td data-val="3.622152746761964" class="gain-positive">3.62%</td>
+            <td data-val="3.733345256192422" class="gain-positive">3.73%</td>
+            <td data-val="19.58045562313164" class="gain-positive">19.58%</td>
+            <td data-val="56.54139396801836" class="gain-positive">56.54%</td>
+            <td data-val="29.347159502703903" class="gain-positive">29.35%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -1581,12 +1615,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="3.3635486981677953">3.36%</td>
-            <td data-val="-2.4854439592430944">-2.49%</td>
-            <td data-val="3.888501201829886">3.89%</td>
-            <td data-val="38.539485588729484">38.54%</td>
-            <td data-val="62.66237707903364">62.66%</td>
-            <td data-val="45.60026080578119">45.60%</td>
+            <td data-val="3.3635486981677953" class="gain-positive">3.36%</td>
+            <td data-val="-2.4854439592430944" class="gain-negative">-2.49%</td>
+            <td data-val="3.888501201829886" class="gain-positive">3.89%</td>
+            <td data-val="38.539485588729484" class="gain-positive">38.54%</td>
+            <td data-val="62.66237707903364" class="gain-positive">62.66%</td>
+            <td data-val="45.60026080578119" class="gain-positive">45.60%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -1624,12 +1658,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="3.3745933355150415">3.37%</td>
-            <td data-val="-2.4133168568728602">-2.41%</td>
-            <td data-val="4.015340810041268">4.02%</td>
-            <td data-val="39.137193937038475">39.14%</td>
-            <td data-val="63.49520474958137">63.50%</td>
-            <td data-val="46.24581279446609">46.25%</td>
+            <td data-val="3.3745933355150415" class="gain-positive">3.37%</td>
+            <td data-val="-2.4133168568728602" class="gain-negative">-2.41%</td>
+            <td data-val="4.015340810041268" class="gain-positive">4.02%</td>
+            <td data-val="39.137193937038475" class="gain-positive">39.14%</td>
+            <td data-val="63.49520474958137" class="gain-positive">63.50%</td>
+            <td data-val="46.24581279446609" class="gain-positive">46.25%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -1667,12 +1701,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="2.686645406491639">2.69%</td>
-            <td data-val="6.4390508965767035">6.44%</td>
-            <td data-val="0.4015035024773628">0.40%</td>
-            <td data-val="16.504758128469476">16.50%</td>
-            <td data-val="12.205833213995888">12.21%</td>
-            <td data-val="7.240293809024134">7.24%</td>
+            <td data-val="2.686645406491639" class="gain-positive">2.69%</td>
+            <td data-val="6.4390508965767035" class="gain-positive">6.44%</td>
+            <td data-val="0.4015035024773628" class="gain-positive">0.40%</td>
+            <td data-val="16.504758128469476" class="gain-positive">16.50%</td>
+            <td data-val="12.205833213995888" class="gain-positive">12.21%</td>
+            <td data-val="7.240293809024134" class="gain-positive">7.24%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -1710,12 +1744,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="2.6909310448919754">2.69%</td>
-            <td data-val="6.474401967359711">6.47%</td>
-            <td data-val="0.5022368532117794">0.50%</td>
-            <td data-val="16.736114515417434">16.74%</td>
-            <td data-val="12.654934241650118">12.65%</td>
-            <td data-val="7.507900677200907">7.51%</td>
+            <td data-val="2.6909310448919754" class="gain-positive">2.69%</td>
+            <td data-val="6.474401967359711" class="gain-positive">6.47%</td>
+            <td data-val="0.5022368532117794" class="gain-positive">0.50%</td>
+            <td data-val="16.736114515417434" class="gain-positive">16.74%</td>
+            <td data-val="12.654934241650118" class="gain-positive">12.65%</td>
+            <td data-val="7.507900677200907" class="gain-positive">7.51%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -1753,12 +1787,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="2.114862242918125">2.11%</td>
-            <td data-val="2.6926829268292707">2.69%</td>
-            <td data-val="-3.8721461187214645">-3.87%</td>
-            <td data-val="-1.2570356472795474">-1.26%</td>
-            <td data-val="-3.164673413063479">-3.16%</td>
-            <td data-val="-7.504393673110721">-7.50%</td>
+            <td data-val="2.114862242918125" class="gain-positive">2.11%</td>
+            <td data-val="2.6926829268292707" class="gain-positive">2.69%</td>
+            <td data-val="-3.8721461187214645" class="gain-negative">-3.87%</td>
+            <td data-val="-1.2570356472795474" class="gain-negative">-1.26%</td>
+            <td data-val="-3.164673413063479" class="gain-negative">-3.16%</td>
+            <td data-val="-7.504393673110721" class="gain-negative">-7.50%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -1796,12 +1830,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="2.121270206376602">2.12%</td>
-            <td data-val="2.725110868307734">2.73%</td>
-            <td data-val="-3.7748344370860942">-3.77%</td>
-            <td data-val="-1.058561347034781">-1.06%</td>
-            <td data-val="-2.779805352798048">-2.78%</td>
-            <td data-val="-7.27504786215698">-7.28%</td>
+            <td data-val="2.121270206376602" class="gain-positive">2.12%</td>
+            <td data-val="2.725110868307734" class="gain-positive">2.73%</td>
+            <td data-val="-3.7748344370860942" class="gain-negative">-3.77%</td>
+            <td data-val="-1.058561347034781" class="gain-negative">-1.06%</td>
+            <td data-val="-2.779805352798048" class="gain-negative">-2.78%</td>
+            <td data-val="-7.27504786215698" class="gain-negative">-7.28%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -1839,12 +1873,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="0.9656550280658482">0.97%</td>
-            <td data-val="4.4845919070591655">4.48%</td>
-            <td data-val="4.212697009868904">4.21%</td>
-            <td data-val="27.9462294291398">27.95%</td>
-            <td data-val="29.38128619323377">29.38%</td>
-            <td data-val="20.843771350489646">20.84%</td>
+            <td data-val="0.9656550280658482" class="gain-positive">0.97%</td>
+            <td data-val="4.4845919070591655" class="gain-positive">4.48%</td>
+            <td data-val="4.212697009868904" class="gain-positive">4.21%</td>
+            <td data-val="27.9462294291398" class="gain-positive">27.95%</td>
+            <td data-val="29.38128619323377" class="gain-positive">29.38%</td>
+            <td data-val="20.843771350489646" class="gain-positive">20.84%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -1882,12 +1916,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="0.9697367188232109">0.97%</td>
-            <td data-val="4.514596062457588">4.51%</td>
-            <td data-val="4.3122640596263695">4.31%</td>
-            <td data-val="28.177222717811468">28.18%</td>
-            <td data-val="29.89995178399227">29.90%</td>
-            <td data-val="21.125098347757664">21.13%</td>
+            <td data-val="0.9697367188232109" class="gain-positive">0.97%</td>
+            <td data-val="4.514596062457588" class="gain-positive">4.51%</td>
+            <td data-val="4.3122640596263695" class="gain-positive">4.31%</td>
+            <td data-val="28.177222717811468" class="gain-positive">28.18%</td>
+            <td data-val="29.89995178399227" class="gain-positive">29.90%</td>
+            <td data-val="21.125098347757664" class="gain-positive">21.13%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -1925,12 +1959,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="2.5831639747566637">2.58%</td>
-            <td data-val="-0.1925278384847573">-0.19%</td>
-            <td data-val="-10.835812569728521">-10.84%</td>
-            <td data-val="14.766947884880022">14.77%</td>
-            <td data-val="46.12981868048147">46.13%</td>
-            <td data-val="21.931218612929882">21.93%</td>
+            <td data-val="2.5831639747566637" class="gain-positive">2.58%</td>
+            <td data-val="-0.1925278384847573" class="gain-negative">-0.19%</td>
+            <td data-val="-10.835812569728521" class="gain-negative">-10.84%</td>
+            <td data-val="14.766947884880022" class="gain-positive">14.77%</td>
+            <td data-val="46.12981868048147" class="gain-positive">46.13%</td>
+            <td data-val="21.931218612929882" class="gain-positive">21.93%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -1968,12 +2002,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="2.584198263079851">2.58%</td>
-            <td data-val="-0.17520354529527715">-0.18%</td>
-            <td data-val="-10.777450257921872">-10.78%</td>
-            <td data-val="15.158720722862927">15.16%</td>
-            <td data-val="46.99142575309203">46.99%</td>
-            <td data-val="22.398433057433497">22.40%</td>
+            <td data-val="2.584198263079851" class="gain-positive">2.58%</td>
+            <td data-val="-0.17520354529527715" class="gain-negative">-0.18%</td>
+            <td data-val="-10.777450257921872" class="gain-negative">-10.78%</td>
+            <td data-val="15.158720722862927" class="gain-positive">15.16%</td>
+            <td data-val="46.99142575309203" class="gain-positive">46.99%</td>
+            <td data-val="22.398433057433497" class="gain-positive">22.40%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -2011,12 +2045,12 @@
                 </div>
             </td>
             <td data-val="14">14 天</td>
-            <td data-val="-0.4196391103650776">-0.42%</td>
-            <td data-val="-4.3916196615632614">-4.39%</td>
-            <td data-val="-15.880893300248133">-15.88%</td>
-            <td data-val="13.88317564788153">13.88%</td>
-            <td data-val="37.14498018494054">37.14%</td>
-            <td data-val="30.599889928453482">30.60%</td>
+            <td data-val="-0.4196391103650776" class="gain-negative">-0.42%</td>
+            <td data-val="-4.3916196615632614" class="gain-negative">-4.39%</td>
+            <td data-val="-15.880893300248133" class="gain-negative">-15.88%</td>
+            <td data-val="13.88317564788153" class="gain-positive">13.88%</td>
+            <td data-val="37.14498018494054" class="gain-positive">37.14%</td>
+            <td data-val="30.599889928453482" class="gain-positive">30.60%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -2054,12 +2088,12 @@
                 </div>
             </td>
             <td data-val="14">14 天</td>
-            <td data-val="-0.41346721795629815">-0.41%</td>
-            <td data-val="-4.3512792874567445">-4.35%</td>
-            <td data-val="-15.775801778399433">-15.78%</td>
-            <td data-val="14.196694662693044">14.20%</td>
-            <td data-val="37.891551484419736">37.89%</td>
-            <td data-val="31.04305922586663">31.04%</td>
+            <td data-val="-0.41346721795629815" class="gain-negative">-0.41%</td>
+            <td data-val="-4.3512792874567445" class="gain-negative">-4.35%</td>
+            <td data-val="-15.775801778399433" class="gain-negative">-15.78%</td>
+            <td data-val="14.196694662693044" class="gain-positive">14.20%</td>
+            <td data-val="37.891551484419736" class="gain-positive">37.89%</td>
+            <td data-val="31.04305922586663" class="gain-positive">31.04%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -2097,12 +2131,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="0.6207966890843242">0.62%</td>
-            <td data-val="1.114468596679341">1.11%</td>
-            <td data-val="4.7952586206896575">4.80%</td>
-            <td data-val="39.02166629439356">39.02%</td>
-            <td data-val="93.14796425024826">93.15%</td>
-            <td data-val="59.05954510605675">59.06%</td>
+            <td data-val="0.6207966890843242" class="gain-positive">0.62%</td>
+            <td data-val="1.114468596679341" class="gain-positive">1.11%</td>
+            <td data-val="4.7952586206896575" class="gain-positive">4.80%</td>
+            <td data-val="39.02166629439356" class="gain-positive">39.02%</td>
+            <td data-val="93.14796425024826" class="gain-positive">93.15%</td>
+            <td data-val="59.05954510605675" class="gain-positive">59.06%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -2140,12 +2174,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="0.6281286866690161">0.63%</td>
-            <td data-val="1.1441207576194712">1.14%</td>
-            <td data-val="4.902775469503062">4.90%</td>
-            <td data-val="39.288551504987204">39.29%</td>
-            <td data-val="93.82177731376282">93.82%</td>
-            <td data-val="59.44225522885724">59.44%</td>
+            <td data-val="0.6281286866690161" class="gain-positive">0.63%</td>
+            <td data-val="1.1441207576194712" class="gain-positive">1.14%</td>
+            <td data-val="4.902775469503062" class="gain-positive">4.90%</td>
+            <td data-val="39.288551504987204" class="gain-positive">39.29%</td>
+            <td data-val="93.82177731376282" class="gain-positive">93.82%</td>
+            <td data-val="59.44225522885724" class="gain-positive">59.44%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -2183,12 +2217,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="1.4027593372972325">1.40%</td>
-            <td data-val="4.909221213569048">4.91%</td>
-            <td data-val="2.074495903306417">2.07%</td>
-            <td data-val="23.695514400394345">23.70%</td>
-            <td data-val="25.414693353006967">25.41%</td>
-            <td data-val="19.318027441923658">19.32%</td>
+            <td data-val="1.4027593372972325" class="gain-positive">1.40%</td>
+            <td data-val="4.909221213569048" class="gain-positive">4.91%</td>
+            <td data-val="2.074495903306417" class="gain-positive">2.07%</td>
+            <td data-val="23.695514400394345" class="gain-positive">23.70%</td>
+            <td data-val="25.414693353006967" class="gain-positive">25.41%</td>
+            <td data-val="19.318027441923658" class="gain-positive">19.32%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -2226,12 +2260,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="1.4129315991391334">1.41%</td>
-            <td data-val="4.9583575440635075">4.96%</td>
-            <td data-val="2.224066703137084">2.22%</td>
-            <td data-val="24.072717281802337">24.07%</td>
-            <td data-val="26.16702754301412">26.17%</td>
-            <td data-val="19.76749325907261">19.77%</td>
+            <td data-val="1.4129315991391334" class="gain-positive">1.41%</td>
+            <td data-val="4.9583575440635075" class="gain-positive">4.96%</td>
+            <td data-val="2.224066703137084" class="gain-positive">2.22%</td>
+            <td data-val="24.072717281802337" class="gain-positive">24.07%</td>
+            <td data-val="26.16702754301412" class="gain-positive">26.17%</td>
+            <td data-val="19.76749325907261" class="gain-positive">19.77%</td>
         </tr>
         
         <tr data-group="qdii">
@@ -2269,12 +2303,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="0.45347928068804055">0.45%</td>
-            <td data-val="4.20113544201135">4.20%</td>
-            <td data-val="1.388888888888884">1.39%</td>
-            <td data-val="15.85211902614969">15.85%</td>
-            <td data-val="19.272187151875244">19.27%</td>
-            <td data-val="12.602979842243656">12.60%</td>
+            <td data-val="0.45347928068804055" class="gain-positive">0.45%</td>
+            <td data-val="4.20113544201135" class="gain-positive">4.20%</td>
+            <td data-val="1.388888888888884" class="gain-positive">1.39%</td>
+            <td data-val="15.85211902614969" class="gain-positive">15.85%</td>
+            <td data-val="19.272187151875244" class="gain-positive">19.27%</td>
+            <td data-val="12.602979842243656" class="gain-positive">12.60%</td>
         </tr>
         
         <tr data-group="cpo">
@@ -2312,12 +2346,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="0.7749500628837724">0.77%</td>
-            <td data-val="-1.3756403062609834">-1.38%</td>
-            <td data-val="6.814216541530249">6.81%</td>
-            <td data-val="47.115047115047105">47.12%</td>
-            <td data-val="130.00970914770568">130.01%</td>
-            <td data-val="45.209604775737546">45.21%</td>
+            <td data-val="0.7749500628837724" class="gain-positive">0.77%</td>
+            <td data-val="-1.3756403062609834" class="gain-negative">-1.38%</td>
+            <td data-val="6.814216541530249" class="gain-positive">6.81%</td>
+            <td data-val="47.115047115047105" class="gain-positive">47.12%</td>
+            <td data-val="130.00970914770568" class="gain-positive">130.01%</td>
+            <td data-val="45.209604775737546" class="gain-positive">45.21%</td>
         </tr>
         
         <tr data-group="cpo">
@@ -2355,12 +2389,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="10.576846939583495">10.58%</td>
-            <td data-val="-1.333592397640171">-1.33%</td>
-            <td data-val="-1.5440204459328477">-1.54%</td>
-            <td data-val="40.69568283713665">40.70%</td>
-            <td data-val="120.76910916133113">120.77%</td>
-            <td data-val="52.695314635613144">52.70%</td>
+            <td data-val="10.576846939583495" class="gain-positive">10.58%</td>
+            <td data-val="-1.333592397640171" class="gain-negative">-1.33%</td>
+            <td data-val="-1.5440204459328477" class="gain-negative">-1.54%</td>
+            <td data-val="40.69568283713665" class="gain-positive">40.70%</td>
+            <td data-val="120.76910916133113" class="gain-positive">120.77%</td>
+            <td data-val="52.695314635613144" class="gain-positive">52.70%</td>
         </tr>
         
         <tr data-group="cpo">
@@ -2398,12 +2432,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="7.651234374018467">7.65%</td>
-            <td data-val="-5.205221816572636">-5.21%</td>
-            <td data-val="-8.133945642656759">-8.13%</td>
-            <td data-val="30.319391634980985">30.32%</td>
-            <td data-val="115.1628023771658">115.16%</td>
-            <td data-val="39.94719076655051">39.95%</td>
+            <td data-val="7.651234374018467" class="gain-positive">7.65%</td>
+            <td data-val="-5.205221816572636" class="gain-negative">-5.21%</td>
+            <td data-val="-8.133945642656759" class="gain-negative">-8.13%</td>
+            <td data-val="30.319391634980985" class="gain-positive">30.32%</td>
+            <td data-val="115.1628023771658" class="gain-positive">115.16%</td>
+            <td data-val="39.94719076655051" class="gain-positive">39.95%</td>
         </tr>
         
         <tr data-group="cpo">
@@ -2441,12 +2475,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="5.84486327486653">5.84%</td>
-            <td data-val="-4.433788270011052">-4.43%</td>
-            <td data-val="-0.9405827024546842">-0.94%</td>
-            <td data-val="56.091095312688275">56.09%</td>
-            <td data-val="113.21117024194875">113.21%</td>
-            <td data-val="72.20720521114903">72.21%</td>
+            <td data-val="5.84486327486653" class="gain-positive">5.84%</td>
+            <td data-val="-4.433788270011052" class="gain-negative">-4.43%</td>
+            <td data-val="-0.9405827024546842" class="gain-negative">-0.94%</td>
+            <td data-val="56.091095312688275" class="gain-positive">56.09%</td>
+            <td data-val="113.21117024194875" class="gain-positive">113.21%</td>
+            <td data-val="72.20720521114903" class="gain-positive">72.21%</td>
         </tr>
         
         <tr data-group="cpo">
@@ -2484,12 +2518,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="3.566497929130241">3.57%</td>
-            <td data-val="-2.744165946413135">-2.74%</td>
-            <td data-val="27.110985597288906">27.11%</td>
-            <td data-val="98.45679012345683">98.46%</td>
-            <td data-val="205.9823249490143">205.98%</td>
-            <td data-val="96.98030634573304">96.98%</td>
+            <td data-val="3.566497929130241" class="gain-positive">3.57%</td>
+            <td data-val="-2.744165946413135" class="gain-negative">-2.74%</td>
+            <td data-val="27.110985597288906" class="gain-positive">27.11%</td>
+            <td data-val="98.45679012345683" class="gain-positive">98.46%</td>
+            <td data-val="205.9823249490143" class="gain-positive">205.98%</td>
+            <td data-val="96.98030634573304" class="gain-positive">96.98%</td>
         </tr>
         
         <tr data-group="cpo">
@@ -2527,12 +2561,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="0.735756276111954">0.74%</td>
-            <td data-val="-6.138900372054568">-6.14%</td>
-            <td data-val="-11.802408390521812">-11.80%</td>
-            <td data-val="33.84093923466131">33.84%</td>
-            <td data-val="79.65185282869578">79.65%</td>
-            <td data-val="34.33586431318412">34.34%</td>
+            <td data-val="0.735756276111954" class="gain-positive">0.74%</td>
+            <td data-val="-6.138900372054568" class="gain-negative">-6.14%</td>
+            <td data-val="-11.802408390521812" class="gain-negative">-11.80%</td>
+            <td data-val="33.84093923466131" class="gain-positive">33.84%</td>
+            <td data-val="79.65185282869578" class="gain-positive">79.65%</td>
+            <td data-val="34.33586431318412" class="gain-positive">34.34%</td>
         </tr>
         
         <tr data-group="cpo">
@@ -2570,12 +2604,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="4.0274496568792895">4.03%</td>
-            <td data-val="-2.230915626982455">-2.23%</td>
-            <td data-val="7.9342846304240044">7.93%</td>
-            <td data-val="69.23499267935578">69.23%</td>
-            <td data-val="199.11046417596637">199.11%</td>
-            <td data-val="93.21945358616728">93.22%</td>
+            <td data-val="4.0274496568792895" class="gain-positive">4.03%</td>
+            <td data-val="-2.230915626982455" class="gain-negative">-2.23%</td>
+            <td data-val="7.9342846304240044" class="gain-positive">7.93%</td>
+            <td data-val="69.23499267935578" class="gain-positive">69.23%</td>
+            <td data-val="199.11046417596637" class="gain-positive">199.11%</td>
+            <td data-val="93.21945358616728" class="gain-positive">93.22%</td>
         </tr>
         
         <tr data-group="cpo">
@@ -2613,12 +2647,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="4.89243084840254">4.89%</td>
-            <td data-val="-8.22937185379734">-8.23%</td>
-            <td data-val="-4.754023883696778">-4.75%</td>
-            <td data-val="48.244860851558144">48.24%</td>
-            <td data-val="146.31587781134607">146.32%</td>
-            <td data-val="68.03686952539074">68.04%</td>
+            <td data-val="4.89243084840254" class="gain-positive">4.89%</td>
+            <td data-val="-8.22937185379734" class="gain-negative">-8.23%</td>
+            <td data-val="-4.754023883696778" class="gain-negative">-4.75%</td>
+            <td data-val="48.244860851558144" class="gain-positive">48.24%</td>
+            <td data-val="146.31587781134607" class="gain-positive">146.32%</td>
+            <td data-val="68.03686952539074" class="gain-positive">68.04%</td>
         </tr>
         
         <tr data-group="cpo">
@@ -2656,12 +2690,12 @@
                 </div>
             </td>
             <td data-val="15">15 天</td>
-            <td data-val="9.48640483383687">9.49%</td>
-            <td data-val="-6.233828957808674">-6.23%</td>
-            <td data-val="-6.039340408614791">-6.04%</td>
-            <td data-val="50.38176385968796">50.38%</td>
-            <td data-val="129.56081081081084">129.56%</td>
-            <td data-val="57.07350901525658">57.07%</td>
+            <td data-val="9.48640483383687" class="gain-positive">9.49%</td>
+            <td data-val="-6.233828957808674" class="gain-negative">-6.23%</td>
+            <td data-val="-6.039340408614791" class="gain-negative">-6.04%</td>
+            <td data-val="50.38176385968796" class="gain-positive">50.38%</td>
+            <td data-val="129.56081081081084" class="gain-positive">129.56%</td>
+            <td data-val="57.07350901525658" class="gain-positive">57.07%</td>
         </tr>
         
                 
@@ -2694,26 +2728,28 @@
             });
         })();
 
-        // 分组切换逻辑
+        // 分组 + 搜索 联动过滤
         document.addEventListener('DOMContentLoaded', function() {
             const buttons = document.querySelectorAll('.group-btn');
-            const allRows = document.querySelectorAll('#fundTable tbody tr');
+            const searchInput = document.getElementById('searchInput');
             const emptyRow = document.getElementById('empty-row');
+            const allRows = document.querySelectorAll('#fundTable tbody tr:not(#empty-row)');
 
-            // 默认激活 QDII
-            const defaultGroup = 'qdii';
-            buttons.forEach(btn => {
-                if (btn.dataset.group === defaultGroup) {
-                    btn.classList.add('active');
-                }
-            });
+            let currentGroup = 'qdii';
+            let searchKeyword = '';
 
-            function filterGroup(group) {
+            function applyFilters() {
                 let hasVisible = false;
+                const keyword = searchKeyword.trim().toLowerCase();
                 allRows.forEach(row => {
-                    if (row.id === 'empty-row') return;
                     const rowGroup = row.getAttribute('data-group');
-                    if (rowGroup === group) {
+                    const nameCell = row.querySelector('.name a');
+                    const name = nameCell ? nameCell.textContent.toLowerCase() : '';
+                    const codeCell = row.querySelector('.code');
+                    const code = codeCell ? codeCell.textContent.toLowerCase() : '';
+                    const matchGroup = (rowGroup === currentGroup);
+                    const matchSearch = keyword === '' || name.includes(keyword) || code.includes(keyword);
+                    if (matchGroup && matchSearch) {
                         row.style.display = '';
                         hasVisible = true;
                     } else {
@@ -2724,22 +2760,34 @@
                     emptyRow.style.display = 'none';
                 } else {
                     emptyRow.style.display = '';
+                    const msg = searchKeyword.trim() ? '未找到匹配基金' : '该分类暂无基金，敬请期待';
+                    emptyRow.querySelector('td').textContent = msg;
                 }
             }
 
-            filterGroup(defaultGroup);
-
+            // 分组按钮点击
             buttons.forEach(btn => {
                 btn.addEventListener('click', function() {
                     buttons.forEach(b => b.classList.remove('active'));
                     this.classList.add('active');
-                    const group = this.dataset.group;
-                    filterGroup(group);
+                    currentGroup = this.dataset.group;
+                    applyFilters();
                 });
             });
+
+            // 搜索输入
+            searchInput.addEventListener('input', function() {
+                searchKeyword = this.value;
+                applyFilters();
+            });
+
+            // 初始默认激活 QDII
+            const defaultBtn = document.querySelector('.group-btn[data-group="qdii"]');
+            if (defaultBtn) defaultBtn.classList.add('active');
+            applyFilters();
         });
 
-        // 排序和列宽拖拽逻辑
+        // 排序和列宽拖拽逻辑（保持不变）
         document.addEventListener("DOMContentLoaded", function () {
             const table = document.getElementById("fundTable");
             const headers = table.querySelectorAll("th");

@@ -462,8 +462,19 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                 return '-'
             return f"{val:.2f}%"
 
-        # 判断分组：若代码在 CPO_CODES 中则归入 CPO，否则归入 QDII
+        # 判断分组
         group = "cpo" if r['code'] in CPO_CODES else "qdii"
+
+        # 为涨幅列添加颜色类
+        def gain_class(val):
+            if val is None:
+                return ''
+            if val > 0:
+                return 'gain-positive'
+            elif val < 0:
+                return 'gain-negative'
+            else:
+                return ''
 
         rows_html += f"""
         <tr data-group="{group}">
@@ -501,16 +512,16 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                 </div>
             </td>
             <td data-val="{r['recovery_days']}">{r['recovery_days']} 天</td>
-            <td data-val="{r['week_gain'] if r['week_gain'] is not None else -9999}">{format_gain(r['week_gain'])}</td>
-            <td data-val="{r['month_gain'] if r['month_gain'] is not None else -9999}">{format_gain(r['month_gain'])}</td>
-            <td data-val="{r['quarter_gain'] if r['quarter_gain'] is not None else -9999}">{format_gain(r['quarter_gain'])}</td>
-            <td data-val="{r['half_year_gain'] if r['half_year_gain'] is not None else -9999}">{format_gain(r['half_year_gain'])}</td>
-            <td data-val="{r['year_gain'] if r['year_gain'] is not None else -9999}">{format_gain(r['year_gain'])}</td>
-            <td data-val="{r['ytd_gain'] if r['ytd_gain'] is not None else -9999}">{format_gain(r['ytd_gain'])}</td>
+            <td data-val="{r['week_gain'] if r['week_gain'] is not None else -9999}" class="{gain_class(r['week_gain'])}">{format_gain(r['week_gain'])}</td>
+            <td data-val="{r['month_gain'] if r['month_gain'] is not None else -9999}" class="{gain_class(r['month_gain'])}">{format_gain(r['month_gain'])}</td>
+            <td data-val="{r['quarter_gain'] if r['quarter_gain'] is not None else -9999}" class="{gain_class(r['quarter_gain'])}">{format_gain(r['quarter_gain'])}</td>
+            <td data-val="{r['half_year_gain'] if r['half_year_gain'] is not None else -9999}" class="{gain_class(r['half_year_gain'])}">{format_gain(r['half_year_gain'])}</td>
+            <td data-val="{r['year_gain'] if r['year_gain'] is not None else -9999}" class="{gain_class(r['year_gain'])}">{format_gain(r['year_gain'])}</td>
+            <td data-val="{r['ytd_gain'] if r['ytd_gain'] is not None else -9999}" class="{gain_class(r['ytd_gain'])}">{format_gain(r['ytd_gain'])}</td>
         </tr>
         """
 
-    # 空组提示行（默认隐藏）
+    # 空组提示行（默认隐藏，动态修改文字）
     empty_row = f"""
         <tr id="empty-row" style="display:none;">
             <td colspan="{col_count}" style="text-align:center; padding:30px; color: var(--footer-text);">
@@ -553,6 +564,8 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             --btn-text: #3c4043;
             --btn-active-bg: #1a73e8;
             --btn-active-text: #fff;
+            --input-bg: #fff;
+            --input-border: #ddd;
         }}
         [data-theme="dark"] {{
             --bg: #1a1a1a;
@@ -569,6 +582,8 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             --btn-text: #ccc;
             --btn-active-bg: #1a73e8;
             --btn-active-text: #fff;
+            --input-bg: #333;
+            --input-border: #555;
         }}
         body {{ 
             font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif; 
@@ -607,7 +622,7 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             flex-wrap: wrap;
             justify-content: center;
             gap: 8px;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             flex-shrink: 0;
         }}
         .group-btn {{
@@ -630,9 +645,33 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             color: var(--btn-active-text);
             border-color: var(--btn-active-bg);
         }}
+        .search-container {{
+            display: flex;
+            justify-content: center;
+            margin-bottom: 12px;
+            flex-shrink: 0;
+        }}
+        .search-container input {{
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: 1px solid var(--input-border);
+            background: var(--input-bg);
+            color: var(--text);
+            font-size: 14px;
+            width: 300px;
+            max-width: 80%;
+            outline: none;
+            transition: border-color 0.2s;
+        }}
+        .search-container input:focus {{
+            border-color: #1a73e8;
+        }}
+        .search-container input::placeholder {{
+            color: var(--footer-text);
+        }}
         .table-container {{ 
             width:100%; 
-            height: calc(100vh - 260px); 
+            height: calc(100vh - 280px); 
             overflow-y: auto; 
             overflow-x: scroll; 
             box-sizing:border-box; 
@@ -779,6 +818,9 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         .bar-green {{ background-color:#188038; }}
         .metric-red {{ color: #d93025; font-weight: 600; }}
         .metric-green {{ color: #188038; font-weight: 600; }}
+        /* 涨幅颜色 */
+        .gain-positive {{ color: #d93025; font-weight: bold; }}  /* 红色 */
+        .gain-negative {{ color: #188038; font-weight: bold; }}  /* 绿色 */
         .footer-note {{ 
             margin-top: 10px; 
             font-size: 12px; 
@@ -804,6 +846,9 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
     </div>
     <div class="group-tabs">
         {buttons_html}
+    </div>
+    <div class="search-container">
+        <input type="text" id="searchInput" placeholder="🔍 搜索基金名称或代码 ...">
     </div>
     <div class="table-container">
         <table id="fundTable">
@@ -856,26 +901,28 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             }});
         }})();
 
-        // 分组切换逻辑
+        // 分组 + 搜索 联动过滤
         document.addEventListener('DOMContentLoaded', function() {{
             const buttons = document.querySelectorAll('.group-btn');
-            const allRows = document.querySelectorAll('#fundTable tbody tr');
+            const searchInput = document.getElementById('searchInput');
             const emptyRow = document.getElementById('empty-row');
+            const allRows = document.querySelectorAll('#fundTable tbody tr:not(#empty-row)');
 
-            // 默认激活 QDII
-            const defaultGroup = 'qdii';
-            buttons.forEach(btn => {{
-                if (btn.dataset.group === defaultGroup) {{
-                    btn.classList.add('active');
-                }}
-            }});
+            let currentGroup = 'qdii';
+            let searchKeyword = '';
 
-            function filterGroup(group) {{
+            function applyFilters() {{
                 let hasVisible = false;
+                const keyword = searchKeyword.trim().toLowerCase();
                 allRows.forEach(row => {{
-                    if (row.id === 'empty-row') return;
                     const rowGroup = row.getAttribute('data-group');
-                    if (rowGroup === group) {{
+                    const nameCell = row.querySelector('.name a');
+                    const name = nameCell ? nameCell.textContent.toLowerCase() : '';
+                    const codeCell = row.querySelector('.code');
+                    const code = codeCell ? codeCell.textContent.toLowerCase() : '';
+                    const matchGroup = (rowGroup === currentGroup);
+                    const matchSearch = keyword === '' || name.includes(keyword) || code.includes(keyword);
+                    if (matchGroup && matchSearch) {{
                         row.style.display = '';
                         hasVisible = true;
                     }} else {{
@@ -886,22 +933,34 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                     emptyRow.style.display = 'none';
                 }} else {{
                     emptyRow.style.display = '';
+                    const msg = searchKeyword.trim() ? '未找到匹配基金' : '该分类暂无基金，敬请期待';
+                    emptyRow.querySelector('td').textContent = msg;
                 }}
             }}
 
-            filterGroup(defaultGroup);
-
+            // 分组按钮点击
             buttons.forEach(btn => {{
                 btn.addEventListener('click', function() {{
                     buttons.forEach(b => b.classList.remove('active'));
                     this.classList.add('active');
-                    const group = this.dataset.group;
-                    filterGroup(group);
+                    currentGroup = this.dataset.group;
+                    applyFilters();
                 }});
             }});
+
+            // 搜索输入
+            searchInput.addEventListener('input', function() {{
+                searchKeyword = this.value;
+                applyFilters();
+            }});
+
+            // 初始默认激活 QDII
+            const defaultBtn = document.querySelector('.group-btn[data-group="qdii"]');
+            if (defaultBtn) defaultBtn.classList.add('active');
+            applyFilters();
         }});
 
-        // 排序和列宽拖拽逻辑
+        // 排序和列宽拖拽逻辑（保持不变）
         document.addEventListener("DOMContentLoaded", function () {{
             const table = document.getElementById("fundTable");
             const headers = table.querySelectorAll("th");
