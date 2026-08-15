@@ -157,20 +157,20 @@ def analyze_fund_metrics(valid_data):
     }
 
 def generate_html_report(results, start_date, end_date, filename="fund_drawdown_dashboard.html"):
-    """生成 HTML 报表"""
+    """生成带有交互式排序功能的 HTML 报表"""
     rows_html = ""
     for r in results:
         rows_html += f"""
         <tr>
-            <td class="code">{r['code']}</td>
-            <td class="name">{r['name']}</td>
-            <td><span class="badge">{r['source']}</span></td>
-            <td>{r['peak_nav']:.4f}</td>
-            <td>{r['trough_nav']:.4f}</td>
-            <td>{r['latest_nav']:.4f}</td>
-            <td class="metric-red">{r['max_drawdown']:.2f}%</td>
-            <td>{r['recovery_rate']:.2f}%</td>
-            <td class="metric-green">{r['rebound_gain']:.2f}%</td>
+            <td class="code" data-val="{r['code']}">{r['code']}</td>
+            <td class="name" data-val="{r['name']}">{r['name']}</td>
+            <td data-val="{r['source']}"><span class="badge">{r['source']}</span></td>
+            <td data-val="{r['peak_nav']}">{r['peak_nav']:.4f}</td>
+            <td data-val="{r['trough_nav']}">{r['trough_nav']:.4f}</td>
+            <td data-val="{r['latest_nav']}">{r['latest_nav']:.4f}</td>
+            <td class="metric-red" data-val="{r['max_drawdown']}">{r['max_drawdown']:.2f}%</td>
+            <td data-val="{r['recovery_rate']}">{r['recovery_rate']:.2f}%</td>
+            <td class="metric-green" data-val="{r['rebound_gain']}">{r['rebound_gain']:.2f}%</td>
         </tr>
         """
 
@@ -188,10 +188,12 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         .table-container {{ overflow-x: auto; background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 16px; border: 1px solid #e0e0e0; }}
         table {{ width: 100%; border-collapse: collapse; font-size: 14px; text-align: right; }}
         th, td {{ padding: 12px 16px; border-bottom: 1px solid #eee; }}
-        th {{ background-color: #f1f3f4; color: #3c4043; font-weight: 600; text-align: right; user-select: none; }}
+        th {{ background-color: #f1f3f4; color: #3c4043; font-weight: 600; text-align: right; user-select: none; cursor: pointer; transition: background-color 0.2s; }}
+        th:hover {{ background-color: #e4e7eb; }}
         th:nth-child(1), th:nth-child(2), th:nth-child(3),
         td:nth-child(1), td:nth-child(2), td:nth-child(3) {{ text-align: left; }}
         tr:hover {{ background-color: #f8f9fa; }}
+        .sort-icon {{ font-size: 12px; margin-left: 4px; color: #70757a; }}
         .code {{ font-family: "SFMono-Regular", Consolas, monospace; font-weight: bold; color: #1a73e8; }}
         .name {{ font-weight: 500; color: #202124; }}
         .badge {{ background: #e8f0fe; color: #1967d2; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }}
@@ -209,18 +211,18 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
     </div>
 
     <div class="table-container">
-        <table>
+        <table id="fundTable">
             <thead>
                 <tr>
-                    <th>代码</th>
-                    <th>基金名称 (动态源获取)</th>
-                    <th>来源</th>
-                    <th>最高净值</th>
-                    <th>最低净值</th>
-                    <th>最新净值</th>
-                    <th>最大回撤</th>
-                    <th>修复程度</th>
-                    <th>自低点反弹</th>
+                    <th onclick="sortTable(0)">代码 <span class="sort-icon">⇅</span></th>
+                    <th onclick="sortTable(1)">基金名称 (动态源获取) <span class="sort-icon">⇅</span></th>
+                    <th onclick="sortTable(2)">来源 <span class="sort-icon">⇅</span></th>
+                    <th onclick="sortTable(3)">最高净值 <span class="sort-icon">⇅</span></th>
+                    <th onclick="sortTable(4)">最低净值 <span class="sort-icon">⇅</span></th>
+                    <th onclick="sortTable(5)">最新净值 <span class="sort-icon">⇅</span></th>
+                    <th onclick="sortTable(6)">最大回撤 <span class="sort-icon">⇅</span></th>
+                    <th onclick="sortTable(7)">修复程度 <span class="sort-icon">⇅</span></th>
+                    <th onclick="sortTable(8)">自低点反弹 <span class="sort-icon">⇅</span></th>
                 </tr>
             </thead>
             <tbody>
@@ -230,11 +232,62 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
     </div>
 
     <div class="footer-note">
+        <p><strong>使用提示：</strong> 点击表格头部（列标题）可针对该列进行 <strong>升序 / 降序</strong> 排序切换。</p>
         <p><strong>指标说明：</strong></p>
         <p>1. <strong>修复程度 (%)</strong>：(最新净值 - 最低净值) / (最高净值 - 最低净值) × 100%（接近或超过 100% 表示接近或突破前期高点）。</p>
         <p>2. <strong>自低点反弹 (%)</strong>：(最新净值 - 最低净值) / 最低净值 × 100%（衡量底部的绝对反弹力度）。</p>
     </div>
 
+    <script>
+        let currentSortCol = -1;
+        let isAscending = true;
+
+        function sortTable(colIndex) {{
+            const table = document.getElementById("fundTable");
+            const tbody = table.querySelector("tbody");
+            const rows = Array.from(tbody.querySelectorAll("tr"));
+
+            if (currentSortCol === colIndex) {{
+                isAscending = !isAscending;
+            }} else {{
+                currentSortCol = colIndex;
+                isAscending = true;
+            }}
+
+            rows.sort((a, b) => {{
+                const cellA = a.children[colIndex];
+                const cellB = b.children[colIndex];
+                
+                let valA = cellA.getAttribute("data-val");
+                let valB = cellB.getAttribute("data-val");
+
+                const numA = parseFloat(valA);
+                const numB = parseFloat(valB);
+
+                if (!isNaN(numA) && !isNaN(numB)) {{
+                    return isAscending ? numA - numB : numB - numA;
+                }}
+
+                return isAscending 
+                    ? valA.localeCompare(valB, 'zh-Hans-CN', {{ sensitivity: 'accent' }})
+                    : valB.localeCompare(valA, 'zh-Hans-CN', {{ sensitivity: 'accent' }});
+            }});
+
+            rows.forEach(row => tbody.appendChild(row));
+
+            const headers = table.querySelectorAll("th");
+            headers.forEach((th, idx) => {{
+                const icon = th.querySelector(".sort-icon");
+                if (idx === colIndex) {{
+                    icon.textContent = isAscending ? "▲" : "▼";
+                    th.style.color = "#1a73e8";
+                }} else {{
+                    icon.textContent = "⇅";
+                    th.style.color = "#3c4043";
+                }}
+            }});
+        }}
+    </script>
 </body>
 </html>
 """
@@ -256,7 +309,7 @@ def main():
     args = parser.parse_args()
     opener = get_direct_opener()
 
-    print(f"\n======== 开始抓取数据并生成 HTML 看板 ========")
+    print(f"\n======== 开始抓取数据并生成带排序功能的 HTML 看板 ========")
     print(f"统计区间: {args.start} 至 {args.end}")
     print(f"处理进度:")
 
@@ -285,7 +338,6 @@ def main():
         abs_path = generate_html_report(results, args.start, args.end, filename=args.out)
         print(f"\n🎉 网页生成成功！文件路径:")
         print(f"👉 {abs_path}")
-        # 尝试自动在浏览器中打开生成的页面
         try:
             webbrowser.open(f"file://{abs_path}")
         except Exception:
