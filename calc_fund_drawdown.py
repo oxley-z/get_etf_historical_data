@@ -8,22 +8,22 @@ import webbrowser
 import urllib.request
 import urllib.parse
 import akshare as ak
+import pandas as pd
 from datetime import datetime, timedelta
 
 # 强制清空代理环境变量
 for env_var in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]:
     os.environ.pop(env_var, None)
 
-# 原有基金 + CPO 新增基金
 DEFAULT_FUNDS = [
     "002891", "014002", "006555", "012922", "012920", "021662", "457001", "539002",
-    "018147", "021842", "006373", "018036", "501226", "008254", "008253", "017731",
-    "017730", "016665", "016664", "018230", "018229", "021277", "270023", "005698",
-    "024239", "501312", "017204", "017654", "017653", "022184", "100055", "017437",
-    "017436", "017145", "017144", "016702", "016701", "016823", "164212", "019156",
-    "019155",
-    "016668", "501225", "015202", "001668", "000043",
-    # === CPO 组新增 ===
+    # "018147", "021842", "006373", "018036", "501226", "008254", "008253", "017731",
+    # "017730", "016665", "016664", "018230", "018229", "021277", "270023", "005698",
+    # "024239", "501312", "017204", "017654", "017653", "022184", "100055", "017437",
+    # "017436", "017145", "017144", "016702", "016701", "016823", "164212", "019156",
+    # "019155",
+    # "016668", "501225", "015202", "001668", "000043",
+    # CPO 组
     "022365", "540010", "002112", "011892", "021528",
     "009645", "011370", "011452", "016371"
 ]
@@ -35,8 +35,76 @@ def get_direct_opener():
     proxy_handler = urllib.request.ProxyHandler({})
     return urllib.request.build_opener(proxy_handler)
 
+def fetch_holdings(opener, code):
+    """获取基金前十大持仓股，缓存到文件"""
+    cache_file = os.path.join(CACHE_DIR, f"{code}_holdings.json")
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            pass
+    try:
+        # 尝试获取最新一期持仓（默认年报，可尝试 "2025" 或 "2024"）
+        df = None
+        # 先尝试最近的年份
+        for year in ["2025", "2024", "2023"]:
+            try:
+                df = ak.fund_portfolio_hold_em(symbol=code, date=year)
+                if df is not None and not df.empty:
+                    break
+            except Exception:
+                continue
+        if df is None or df.empty:
+            return []
+        
+        # 查找占净值比例列
+        ratio_col = None
+        for col in df.columns:
+            if '占净值比例' in col or '比例' in col:
+                ratio_col = col
+                break
+        if ratio_col is None:
+            # 若找不到，尝试第一列数值型
+            for col in df.columns:
+                if df[col].dtype in ['float64', 'int64'] and '代码' not in col:
+                    ratio_col = col
+                    break
+        if ratio_col:
+            df = df.sort_values(by=ratio_col, ascending=False)
+        top10 = df.head(10)
+        holdings = []
+        # 查找股票名称列
+        name_col = None
+        for col in df.columns:
+            if '股票名称' in col or '名称' in col or '证券简称' in col:
+                name_col = col
+                break
+        if name_col is None:
+            # 取第一个字符串列
+            for col in df.columns:
+                if df[col].dtype == 'object':
+                    name_col = col
+                    break
+        if name_col is None:
+            name_col = df.columns[0]
+        for _, row in top10.iterrows():
+            name = str(row[name_col]) if pd.notna(row[name_col]) else ''
+            ratio = 0.0
+            if ratio_col:
+                ratio = float(row[ratio_col]) if pd.notna(row[ratio_col]) else 0.0
+            if name and name not in ['nan', 'None', '']:
+                holdings.append({'name': name, 'ratio': ratio})
+        if holdings:
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(holdings, f, ensure_ascii=False, indent=2)
+        return holdings
+    except Exception as e:
+        print(f"获取持仓失败 {code}: {e}")
+    return []
+
 def fetch_fund_detail_meta(opener, code):
-    """全面抓取：名称、规模、运作费率（管/托/销）、申购费率（优惠后）、赎回费率、交易状态、限额"""
+    """全面抓取：名称、规模、运作费率（管/托/销）、申购费率（优惠后）、赎回费率、交易状态、限额、持仓"""
     meta = {
         "name": f"基金_{code}",
         "scale": "未知",
@@ -50,7 +118,8 @@ def fetch_fund_detail_meta(opener, code):
         "buy_limit": "无限额",
         "buy_limit_val": -1,
         "fee_total": "未知",
-        "fee_val": -1.0
+        "fee_val": -1.0,
+        "holdings": []
     }
 
     headers = {
@@ -255,6 +324,9 @@ def fetch_fund_detail_meta(opener, code):
     else:
         meta["fee_total"] = "0.00%"
 
+    # 6. 获取前十大持仓
+    meta["holdings"] = fetch_holdings(opener, code)
+
     return meta
 
 def fetch_from_eastmoney(opener, code, start_date, end_date):
@@ -426,13 +498,13 @@ def analyze_fund_metrics(valid_data, end_date, cutoff_date):
     }
 
 def generate_html_report(results, start_date, end_date, filename="fund_drawdown_dashboard.html"):
-    # CPO 基金代码集合（用于分组）
+    # CPO 基金代码集合
     CPO_CODES = {
         "022365", "540010", "002112", "011892", "021528",
         "009645", "011370", "011452", "016371"
     }
 
-    col_count = 19  # 列数，用于空行合并
+    col_count = 19
 
     rows_html = ""
     for r in results:
@@ -462,10 +534,6 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                 return '-'
             return f"{val:.2f}%"
 
-        # 判断分组
-        group = "cpo" if r['code'] in CPO_CODES else "qdii"
-
-        # 为涨幅列添加颜色类
         def gain_class(val):
             if val is None:
                 return ''
@@ -476,8 +544,14 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             else:
                 return ''
 
+        group = "cpo" if r['code'] in CPO_CODES else "qdii"
+
+        # 持仓数据
+        holdings = r.get('holdings', [])
+        has_holdings = bool(holdings)
+
         rows_html += f"""
-        <tr data-group="{group}">
+        <tr data-group="{group}" class="fund-row" data-has-holdings="{str(has_holdings).lower()}" data-code="{r['code']}">
             <td class="code" data-val="{r['code']}">{r['code']}</td>
             <td class="name" data-val="{r['name']}">
                 <a href="{fund_url}" target="_blank" title="点击查看天天基金概况">{r['name']}</a>
@@ -521,7 +595,28 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         </tr>
         """
 
-    # 空组提示行（默认隐藏，动态修改文字）
+        # 生成持仓展开行，添加 data-code 用于定位
+        if has_holdings:
+            holdings_html = ""
+            for h in holdings:
+                name = h.get('name', '')
+                ratio = h.get('ratio', 0.0)
+                holdings_html += f'<div>{name} &nbsp; {ratio:.2f}%</div>'
+            rows_html += f"""
+        <tr class="holding-row" style="display:none;" data-code="{r['code']}">
+            <td colspan="{col_count}" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+                <div style="display: flex; flex-wrap: wrap; gap: 6px 20px;">
+                    {holdings_html}
+                </div>
+            </td>
+        </tr>
+        """
+        else:
+            rows_html += f"""
+        <tr class="holding-row" style="display:none;" data-code="{r['code']}"></tr>
+        """
+
+    # 空组提示行
     empty_row = f"""
         <tr id="empty-row" style="display:none;">
             <td colspan="{col_count}" style="text-align:center; padding:30px; color: var(--footer-text);">
@@ -818,9 +913,14 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         .bar-green {{ background-color:#188038; }}
         .metric-red {{ color: #d93025; font-weight: 600; }}
         .metric-green {{ color: #188038; font-weight: 600; }}
-        /* 涨幅颜色 */
-        .gain-positive {{ color: #d93025; font-weight: bold; }}  /* 红色 */
-        .gain-negative {{ color: #188038; font-weight: bold; }}  /* 绿色 */
+        .gain-positive {{ color: #d93025; font-weight: bold; }}
+        .gain-negative {{ color: #188038; font-weight: bold; }}
+        .fund-row {{ cursor: pointer; }}
+        .fund-row .name a {{ pointer-events: auto; cursor: pointer; }}
+        .holding-row td {{
+            background-color: var(--hover-bg) !important;
+            border-top: 1px dashed var(--border);
+        }}
         .footer-note {{ 
             margin-top: 10px; 
             font-size: 12px; 
@@ -883,7 +983,7 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
     </div>
     <div class="footer-note">
         <p><strong>使用提示：</strong> 列宽可拖拽调整，点击表头排序。涨幅数据基于可获取的历史净值，若区间内无对应日期数据则显示“-”。<br>
-        <span style="color: #1a73e8;">👉 横向滚动条位于表格底部（始终可见），纵向滚动查看全部基金。修复时间从2026-04-01后的最低点开始计算。</span></p>
+        <span style="color: #1a73e8;">👉 点击基金行可展开/收起前十大持仓股（仅在有持仓数据时）。</span></p>
     </div>
     <script>
         (function() {{
@@ -915,6 +1015,7 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                 let hasVisible = false;
                 const keyword = searchKeyword.trim().toLowerCase();
                 allRows.forEach(row => {{
+                    if (row.classList.contains('holding-row')) return;
                     const rowGroup = row.getAttribute('data-group');
                     const nameCell = row.querySelector('.name a');
                     const name = nameCell ? nameCell.textContent.toLowerCase() : '';
@@ -927,6 +1028,10 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                         hasVisible = true;
                     }} else {{
                         row.style.display = 'none';
+                        const nextRow = row.nextElementSibling;
+                        if (nextRow && nextRow.classList.contains('holding-row')) {{
+                            nextRow.style.display = 'none';
+                        }}
                     }}
                 }});
                 if (hasVisible) {{
@@ -938,7 +1043,6 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                 }}
             }}
 
-            // 分组按钮点击
             buttons.forEach(btn => {{
                 btn.addEventListener('click', function() {{
                     buttons.forEach(b => b.classList.remove('active'));
@@ -948,19 +1052,38 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                 }});
             }});
 
-            // 搜索输入
             searchInput.addEventListener('input', function() {{
                 searchKeyword = this.value;
                 applyFilters();
             }});
 
-            // 初始默认激活 QDII
             const defaultBtn = document.querySelector('.group-btn[data-group="qdii"]');
             if (defaultBtn) defaultBtn.classList.add('active');
             applyFilters();
         }});
 
-        // 排序和列宽拖拽逻辑（保持不变）
+        // 点击基金行展开/关闭持仓（使用 data-code 精确定位）
+        document.addEventListener('DOMContentLoaded', function() {{
+            const table = document.getElementById('fundTable');
+            table.addEventListener('click', function(e) {{
+                const target = e.target.closest('tr.fund-row');
+                if (!target) return;
+                if (e.target.tagName === 'A') return;
+                const hasHoldings = target.dataset.hasHoldings === 'true';
+                if (!hasHoldings) return;
+                const code = target.dataset.code;
+                const holdingRow = document.querySelector(`.holding-row[data-code="${{code}}"]`);
+                if (holdingRow) {{
+                    if (holdingRow.style.display === 'none') {{
+                        holdingRow.style.display = '';
+                    }} else {{
+                        holdingRow.style.display = 'none';
+                    }}
+                }}
+            }});
+        }});
+
+        // 排序和列宽拖拽逻辑
         document.addEventListener("DOMContentLoaded", function () {{
             const table = document.getElementById("fundTable");
             const headers = table.querySelectorAll("th");
@@ -1003,24 +1126,41 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                 }});
             }});
         }});
+
         let currentSortCol = -1;
         let isAscending = true;
+
         function sortTable(colIndex) {{
+            // 排序前关闭所有持仓行
+            document.querySelectorAll('.holding-row').forEach(row => {{
+                row.style.display = 'none';
+            }});
+
             const table = document.getElementById("fundTable");
             const tbody = table.querySelector("tbody");
-            const rows = Array.from(tbody.querySelectorAll("tr"));
-            const dataRows = rows.filter(row => row.id !== 'empty-row');
+            const allRows = Array.from(tbody.querySelectorAll("tr"));
+            const dataRows = allRows.filter(row => row.id !== 'empty-row' && !row.classList.contains('holding-row'));
+            const holdingRows = allRows.filter(row => row.classList.contains('holding-row'));
+
+            // 建立主行 code -> 持仓行的映射
+            const holdingMap = {{}};
+            holdingRows.forEach(row => {{
+                const code = row.getAttribute('data-code');
+                if (code) holdingMap[code] = row;
+            }});
+
             if (currentSortCol === colIndex) {{
                 isAscending = !isAscending;
             }} else {{
                 currentSortCol = colIndex;
                 isAscending = true;
             }}
+
             dataRows.sort((a, b) => {{
                 const cellA = a.children[colIndex];
                 const cellB = b.children[colIndex];
-                let valA = cellA.getAttribute("data-val");
-                let valB = cellB.getAttribute("data-val");
+                let valA = cellA.getAttribute('data-val');
+                let valB = cellB.getAttribute('data-val');
                 const numA = parseFloat(valA);
                 const numB = parseFloat(valB);
                 if (!isNaN(numA) && !isNaN(numB)) {{
@@ -1030,10 +1170,24 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                     ? valA.localeCompare(valB, 'zh-Hans-CN', {{ sensitivity: 'accent' }})
                     : valB.localeCompare(valA, 'zh-Hans-CN', {{ sensitivity: 'accent' }});
             }});
-            dataRows.forEach(row => tbody.appendChild(row));
-            const empty = document.getElementById('empty-row');
-            if (empty) tbody.appendChild(empty);
 
+            // 重新构建 tbody：按顺序插入主行，然后插入对应的持仓行
+            const fragment = document.createDocumentFragment();
+            dataRows.forEach(row => {{
+                fragment.appendChild(row);
+                const code = row.getAttribute('data-code');
+                const hRow = holdingMap[code];
+                if (hRow) {{
+                    fragment.appendChild(hRow);
+                }}
+            }});
+            const empty = document.getElementById('empty-row');
+            if (empty) fragment.appendChild(empty);
+            // 清空 tbody 并添加新排序后的内容
+            tbody.innerHTML = '';
+            tbody.appendChild(fragment);
+
+            // 更新表头排序指示
             const headers = table.querySelectorAll("th");
             headers.forEach((th, idx) => {{
                 const icon = th.querySelector(".sort-icon");
@@ -1071,7 +1225,7 @@ def main():
     args = parser.parse_args()
     opener = get_direct_opener()
 
-    print(f"\n======== 开始抓取数据 (缓存启用，暗色模式支持，分类切换) ========")
+    print(f"\n======== 开始抓取数据 (含持仓，缓存启用) ========")
     print(f"涨幅统计区间: {args.start} 至 {args.end}")
     print(f"回撤计算区间: {cutoff_date} 至 {args.end}")
     print(f"基金总数: {len(args.funds)}")
@@ -1100,6 +1254,7 @@ def main():
                 "buy_status": meta.get("buy_status", "--"),
                 "buy_limit": meta.get("buy_limit", "无限额"),
                 "buy_limit_val": meta.get("buy_limit_val", -1),
+                "holdings": meta.get("holdings", []),
                 "source": "天天基金"
             })
             results.append(res)
