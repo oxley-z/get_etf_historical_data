@@ -24,6 +24,9 @@ DEFAULT_FUNDS = [
     "016668", "501225", "015202", "001668", "000043"
 ]
 
+CACHE_DIR = "cache"
+os.makedirs(CACHE_DIR, exist_ok=True)
+
 def get_direct_opener():
     proxy_handler = urllib.request.ProxyHandler({})
     return urllib.request.build_opener(proxy_handler)
@@ -52,7 +55,7 @@ def fetch_fund_detail_meta(opener, code):
         "Accept-Language": "zh-CN,zh;q=0.9"
     }
 
-    # 1. 获取基金主页 HTML（用于解析费率、交易状态等）
+    # 1. 获取基金主页 HTML
     main_url = f"https://fund.eastmoney.com/{code}.html"
     main_html = None
     try:
@@ -63,12 +66,10 @@ def fetch_fund_detail_meta(opener, code):
         pass
 
     if main_html:
-        # 基金名称（优先从主页<title>获取）
         name_match = re.search(r'<title>(.*?)基金', main_html)
         if name_match:
             meta["name"] = name_match.group(1).strip() + "基金"
 
-        # ---- 运作费率从主页精确匹配 ----
         manage_match = re.search(r'管理费率?[：:]\s*([\d.]+)%', main_html)
         if manage_match:
             meta["fee_manage"] = manage_match.group(1)
@@ -81,7 +82,6 @@ def fetch_fund_detail_meta(opener, code):
         if sales_match:
             meta["fee_sales"] = sales_match.group(1)
 
-        # 申购费率（优惠后，取最小值）
         rate_section = re.search(r'申购费率[：:](.*?)(?=<div|$)', main_html, re.S)
         if rate_section:
             rates = re.findall(r'([\d.]+%)', rate_section.group(1))
@@ -89,7 +89,6 @@ def fetch_fund_detail_meta(opener, code):
                 min_rate_str = min(rates, key=lambda x: float(x.strip('%')))
                 meta["fee_purchase"] = min_rate_str
 
-        # 交易状态和申购限额
         trade = re.search(r"交易状态：</span>(.*?)</div>", main_html, re.S)
         if trade:
             text = re.sub(r"<.*?>", "", trade.group(1))
@@ -108,7 +107,7 @@ def fetch_fund_detail_meta(opener, code):
                 meta["buy_limit"] = "无限额"
                 meta["buy_limit_val"] = -1
 
-    # 2. 从 pingzhongdata.js 补充名称、规模、费率等
+    # 2. 从 pingzhongdata.js 补充
     js_url = f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
     js_content = None
     try:
@@ -124,7 +123,6 @@ def fetch_fund_detail_meta(opener, code):
             if match_name:
                 meta["name"] = match_name.group(1)
 
-        # 规模（AkShare）
         try:
             df_xq = ak.fund_individual_basic_info_xq(symbol=code)
             if df_xq is not None and not df_xq.empty:
@@ -151,7 +149,6 @@ def fetch_fund_detail_meta(opener, code):
         except Exception:
             pass
 
-        # 如果管理/托管/销售费率有缺失，从 Data_rateInverstment 补充
         rate_match = re.search(r'var\s+Data_rateInverstment\s*=\s*["\']([^"\']+)["\']', js_content)
         if rate_match:
             rate_text = rate_match.group(1)
@@ -168,20 +165,18 @@ def fetch_fund_detail_meta(opener, code):
                 if s:
                     meta["fee_sales"] = s.group(1)
 
-        # 申购费率（若主页未取到优惠，则用标准费率）
         if meta["fee_purchase"] == "0.00%":
             buy_m = re.search(r'var\s+fund_sourceRate\s*=\s*"([^"]+)";', js_content)
             if buy_m:
                 meta["fee_purchase"] = buy_m.group(1)
 
-    # 3. 从 F10 页面补充缺失的费率和规模，并强制解析赎回费率
+    # 3. 从 F10 页面补充
     f10_url = f"https://fundf10.eastmoney.com/jjfl_{code}.html"
     try:
         req = urllib.request.Request(f10_url, headers=headers)
         with opener.open(req, timeout=5) as resp:
             f10_html = resp.read().decode('utf-8', errors='ignore')
 
-            # ----- 补充管理/托管/销售费率（若仍缺失） -----
             if meta["fee_manage"] is None:
                 mm = re.search(r'管理费率.*?([\d.]+)%', f10_html, re.S)
                 if mm:
@@ -195,7 +190,6 @@ def fetch_fund_detail_meta(opener, code):
                 if ss:
                     meta["fee_sales"] = ss.group(1)
 
-            # ----- 补充规模（若仍未知） -----
             if meta["scale"] == "未知":
                 scale_m = re.search(r'基金规模.*?([\d.]+)\s*亿元', f10_html, re.S)
                 if scale_m:
@@ -209,7 +203,6 @@ def fetch_fund_detail_meta(opener, code):
                         meta["scale_val"] = num
                         meta["scale"] = f"{num:.2f} 亿"
 
-            # ----- 强制解析赎回费率（参考 calc_fund_drawdown.py） -----
             red_section = re.search(r'赎回费率.*?(?:</table>|</div>\s*</div>)', f10_html, re.S)
             if red_section:
                 red_html = red_section.group(0)
@@ -231,7 +224,7 @@ def fetch_fund_detail_meta(opener, code):
     except Exception:
         pass
 
-    # 4. 处理缺失值：管理费和托管费若仍为None则设为"--"，销售服务费设为"0.00%"
+    # 4. 处理缺失值
     if meta["fee_manage"] is None:
         meta["fee_manage"] = "--"
     else:
@@ -261,7 +254,19 @@ def fetch_fund_detail_meta(opener, code):
     return meta
 
 def fetch_from_eastmoney(opener, code, start_date, end_date):
-    """获取历史净值数据（自动翻页，每页20条）"""
+    """获取历史净值数据（自动翻页，每页20条），带缓存"""
+    cache_file = os.path.join(CACHE_DIR, f"{code}.json")
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                cache = json.load(f)
+            cache_start = cache.get('start_date', '')
+            cache_end = cache.get('end_date', '')
+            if cache_start <= start_date and cache_end >= end_date:
+                return cache.get('data', [])
+        except Exception:
+            pass
+
     all_data = []
     page_index = 1
     page_size = 20
@@ -303,35 +308,67 @@ def fetch_from_eastmoney(opener, code, start_date, end_date):
         except Exception:
             break
 
+    if all_data:
+        cache = {
+            'start_date': start_date,
+            'end_date': end_date,
+            'data': all_data
+        }
+        try:
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(cache, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
     return all_data if all_data else None
 
-def analyze_fund_metrics(valid_data):
-    data = sorted(valid_data, key=lambda x: x["date"])
+def get_nav_at_date(data, target_date_str):
     if not data:
         return None
+    target = datetime.strptime(target_date_str, '%Y-%m-%d')
+    best = None
+    for item in data:
+        dt = datetime.strptime(item['date'], '%Y-%m-%d')
+        if dt <= target:
+            best = item['nav']
+        else:
+            break
+    return best
 
-    max_item = max(data, key=lambda x: x["nav"])
-    min_item = min(data, key=lambda x: x["nav"])
-    max_nav_val = max_item["nav"]
-    min_nav_val = min_item["nav"]
-    max_nav_date = max_item["date"]
-    min_nav_date = min_item["date"]
+def analyze_fund_metrics(valid_data, end_date, cutoff_date):
+    data_all = sorted(valid_data, key=lambda x: x["date"])
+    if not data_all:
+        return None
+
+    data_cutoff = [item for item in data_all if item["date"] >= cutoff_date]
+    if not data_cutoff:
+        data_cutoff = data_all
+
+    latest_nav = data_all[-1]["nav"]
+    latest_date = data_all[-1]["date"]
 
     max_drawdown = 0.0
-    peak_nav = data[0]["nav"]
-    trough_nav = data[0]["nav"]
-    temp_peak = data[0]["nav"]
-    for item in data:
+    peak_nav = data_cutoff[0]["nav"]
+    trough_nav = data_cutoff[0]["nav"]
+    peak_date = data_cutoff[0]["date"]
+    trough_date = data_cutoff[0]["date"]
+    temp_peak = data_cutoff[0]["nav"]
+    temp_peak_date = data_cutoff[0]["date"]
+
+    for item in data_cutoff:
         nav = item["nav"]
+        date = item["date"]
         if nav > temp_peak:
             temp_peak = nav
-        drawdown = (temp_peak - nav) / temp_peak
+            temp_peak_date = date
+        drawdown = (temp_peak - nav) / temp_peak if temp_peak > 0 else 0
         if drawdown > max_drawdown:
             max_drawdown = drawdown
             peak_nav = temp_peak
+            peak_date = temp_peak_date
             trough_nav = nav
+            trough_date = date
 
-    latest_nav = data[-1]["nav"]
     if max_drawdown == 0:
         recovery_rate = 100.0
     elif peak_nav == trough_nav:
@@ -339,19 +376,49 @@ def analyze_fund_metrics(valid_data):
     else:
         recovery_rate = ((latest_nav - trough_nav) / (peak_nav - trough_nav)) * 100.0
 
+    min_dt = datetime.strptime(trough_date, '%Y-%m-%d')
+    latest_dt = datetime.strptime(latest_date, '%Y-%m-%d')
+    recovery_days = (latest_dt - min_dt).days
+
     rebound_gain = ((latest_nav - trough_nav) / trough_nav) * 100.0 if trough_nav > 0 else 0.0
 
+    def calc_gain(days):
+        target_date = (datetime.strptime(end_date, '%Y-%m-%d') - timedelta(days=days)).strftime('%Y-%m-%d')
+        nav_before = get_nav_at_date(data_all, target_date)
+        if nav_before is not None and nav_before > 0:
+            return ((latest_nav / nav_before) - 1) * 100.0
+        return None
+
+    week_gain = calc_gain(7)
+    month_gain = calc_gain(30)
+    quarter_gain = calc_gain(90)
+    half_year_gain = calc_gain(180)
+    year_gain = calc_gain(365)
+
+    year_start = datetime.strptime(end_date, '%Y-%m-%d').replace(month=1, day=1).strftime('%Y-%m-%d')
+    nav_ytd = get_nav_at_date(data_all, year_start)
+    if nav_ytd is not None and nav_ytd > 0:
+        ytd_gain = ((latest_nav / nav_ytd) - 1) * 100.0
+    else:
+        ytd_gain = None
+
     return {
-        "max_nav": max_nav_val,
-        "max_nav_date": max_nav_date,
-        "min_nav": min_nav_val,
-        "min_nav_date": min_nav_date,
-        "peak_nav": peak_nav,
-        "trough_nav": trough_nav,
+        "max_nav": peak_nav,
+        "max_nav_date": peak_date,
+        "min_nav": trough_nav,
+        "min_nav_date": trough_date,
         "latest_nav": latest_nav,
+        "latest_date": latest_date,
         "max_drawdown": max_drawdown * 100.0,
         "recovery_rate": recovery_rate,
-        "rebound_gain": rebound_gain
+        "recovery_days": recovery_days,
+        "rebound_gain": rebound_gain,
+        "week_gain": week_gain,
+        "month_gain": month_gain,
+        "quarter_gain": quarter_gain,
+        "half_year_gain": half_year_gain,
+        "year_gain": year_gain,
+        "ytd_gain": ytd_gain
     }
 
 def generate_html_report(results, start_date, end_date, filename="fund_drawdown_dashboard.html"):
@@ -367,19 +434,21 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         max_nav_display = f"{r['max_nav']:.4f} ({r['max_nav_date']})"
         min_nav_display = f"{r['min_nav']:.4f} ({r['min_nav_date']})"
 
-        # 拆分赎回费率为多行，并对百分比进行高亮
         redemption_text = r.get('fee_redemption', '未知')
         if redemption_text and redemption_text != "未知":
             parts = redemption_text.split(" | ")
-            # 对每个 part 中的百分比加高亮
             highlighted_parts = []
             for part in parts:
-                # 将如 "1.50%" 替换为 '<span class="highlight-rate">1.50%</span>'
                 highlighted = re.sub(r'(\d+\.\d+%)', r'<span class="highlight-rate">\1</span>', part)
                 highlighted_parts.append(highlighted)
             redemption_lines = "<br>".join(highlighted_parts)
         else:
             redemption_lines = redemption_text or "未知"
+
+        def format_gain(val):
+            if val is None:
+                return '-'
+            return f"{val:.2f}%"
 
         rows_html += f"""
         <tr>
@@ -402,13 +471,6 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                     </div>
                 </div>
             </td>
-            <td data-val="{r['recovery_rate']}">
-                <div class="progress-container progress-text">
-                    <div class="progress-bar bar-blue" style="width: {rec_pct}%;">
-                        <span>{r['recovery_rate']:.2f}%</span>
-                    </div>
-                </div>
-            </td>
             <td class="metric-green" data-val="{r['rebound_gain']}">
                 <div class="progress-container progress-text">
                     <div class="progress-bar bar-green" style="width: {reb_pct}%;">
@@ -416,6 +478,20 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                     </div>
                 </div>
             </td>
+            <td data-val="{r['recovery_rate']}">
+                <div class="progress-container progress-text">
+                    <div class="progress-bar bar-blue" style="width: {rec_pct}%;">
+                        <span>{r['recovery_rate']:.2f}%</span>
+                    </div>
+                </div>
+            </td>
+            <td data-val="{r['recovery_days']}">{r['recovery_days']} 天</td>
+            <td data-val="{r['week_gain'] if r['week_gain'] is not None else -9999}">{format_gain(r['week_gain'])}</td>
+            <td data-val="{r['month_gain'] if r['month_gain'] is not None else -9999}">{format_gain(r['month_gain'])}</td>
+            <td data-val="{r['quarter_gain'] if r['quarter_gain'] is not None else -9999}">{format_gain(r['quarter_gain'])}</td>
+            <td data-val="{r['half_year_gain'] if r['half_year_gain'] is not None else -9999}">{format_gain(r['half_year_gain'])}</td>
+            <td data-val="{r['year_gain'] if r['year_gain'] is not None else -9999}">{format_gain(r['year_gain'])}</td>
+            <td data-val="{r['ytd_gain'] if r['ytd_gain'] is not None else -9999}">{format_gain(r['ytd_gain'])}</td>
         </tr>
         """
 
@@ -424,31 +500,97 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>场外基金量化与费率规模看板（含申购限额）</title>
+    <title>场外基金量化与费率规模看板（含多周期涨幅）</title>
     <style>
+        :root {{
+            --bg: #f8f9fa;
+            --text: #333;
+            --border: #e0e0e0;
+            --header-bg: #f1f3f4;
+            --header-text: #3c4043;
+            --hover-bg: #f8f9fa;
+            --table-bg: #fff;
+            --progress-track: #e5e7eb;
+            --footer-bg: #fff;
+            --footer-text: #70757a;
+        }}
+        [data-theme="dark"] {{
+            --bg: #1a1a1a;
+            --text: #e0e0e0;
+            --border: #444;
+            --header-bg: #2d2d2d;
+            --header-text: #ccc;
+            --hover-bg: #2a2a2a;
+            --table-bg: #252525;
+            --progress-track: #3a3a3a;
+            --footer-bg: #2d2d2d;
+            --footer-text: #aaa;
+        }}
         body {{ 
             font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif; 
-            background-color: #f8f9fa; 
+            background-color: var(--bg);
+            color: var(--text);
             margin: 0; 
-            padding: 30px 50px; 
-            color: #333; 
+            padding: 20px 30px; 
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            transition: background-color 0.3s, color 0.3s;
         }}
-        .header {{ text-align: center; margin-bottom: 12px; }}
+        .header {{ text-align: center; margin-bottom: 12px; flex-shrink: 0; }}
         .header h2 {{ color: #1a73e8; margin: 0 0 4px 0; font-size: 20px; }}
-        .header p {{ color: #5f6368; font-size: 13px; margin: 0; }}
+        .header p {{ color: var(--footer-text); font-size: 13px; margin: 0; }}
+        .theme-toggle {{
+            position: fixed;
+            top: 20px;
+            right: 30px;
+            background: var(--header-bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 6px 14px;
+            font-size: 16px;
+            cursor: pointer;
+            z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: background 0.2s;
+        }}
+        .theme-toggle:hover {{ opacity: 0.8; }}
         .table-container {{ 
             width:100%; 
-            overflow-x:auto; 
+            height: calc(100vh - 200px); 
+            overflow-y: auto; 
+            overflow-x: scroll; 
             box-sizing:border-box; 
-            background:#fff; 
+            background: var(--table-bg);
             border-radius:12px; 
             box-shadow:0 4px 15px rgba(0,0,0,0.08); 
             padding:20px; 
-            border:1px solid #e0e0e0; 
+            border:1px solid var(--border);
+            flex: 1 1 auto;
+            min-height: 0;
+            transition: background 0.3s, border-color 0.3s;
+        }}
+        .table-container::-webkit-scrollbar {{
+            height: 14px;
+            width: 10px;
+        }}
+        .table-container::-webkit-scrollbar-track {{
+            background: var(--progress-track);
+            border-radius: 6px;
+        }}
+        .table-container::-webkit-scrollbar-thumb {{
+            background: #888;
+            border-radius: 6px;
+        }}
+        .table-container::-webkit-scrollbar-thumb:hover {{
+            background: #666;
         }}
         table {{ 
             width:100%; 
-            min-width:1650px; 
+            min-width:2250px; 
             border-collapse:collapse; 
             font-size:12px; 
             text-align:right; 
@@ -456,45 +598,47 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         }}
         th, td {{ 
             padding:6px 8px; 
-            border-bottom:1px solid #eee; 
+            border-bottom:1px solid var(--border);
             line-height:1.4; 
             overflow:hidden; 
             text-overflow:ellipsis; 
             box-sizing:border-box; 
+            transition: border-color 0.3s;
         }}
-        th:nth-child(1), td:nth-child(1) {{ width: 80px; text-align: left; white-space: nowrap; }}
-        th:nth-child(2), td:nth-child(2) {{ width: 260px; min-width: 200px; text-align: left; white-space: normal; word-break: break-word; vertical-align: middle; }}
-        th:nth-child(3), td:nth-child(3) {{ width: 120px; text-align: left; white-space: nowrap; }}
-        th:nth-child(4), td:nth-child(4) {{ width: 160px; text-align: left; white-space: normal; word-break: break-word; }}
-        th:nth-child(5), td:nth-child(5) {{ width: 80px; text-align: left; white-space: nowrap; }}
-        th:nth-child(6), td:nth-child(6) {{ width: 120px; text-align: left; white-space: nowrap; }}
+        th:nth-child(1), td:nth-child(1) {{ width: 60px; text-align: left; white-space: nowrap; }}
+        th:nth-child(2), td:nth-child(2) {{ width: 240px; min-width: 180px; text-align: left; white-space: normal; word-break: break-word; vertical-align: middle; }}
+        th:nth-child(3), td:nth-child(3) {{ width: 80px; text-align: left; white-space: nowrap; }}
+        th:nth-child(4), td:nth-child(4) {{ width: 130px; text-align: left; white-space: normal; word-break: break-word; }}
+        th:nth-child(5), td:nth-child(5) {{ width: 70px; text-align: left; white-space: nowrap; }}
+        th:nth-child(6), td:nth-child(6) {{ width: 100px; text-align: left; white-space: nowrap; }}
         th:nth-child(7), td:nth-child(7),
-        th:nth-child(8), td:nth-child(8),
-        th:nth-child(9), td:nth-child(9) {{ width: 120px; white-space: nowrap; }}
-        th:nth-last-child(3),
-        td:nth-last-child(3),
-        th:nth-last-child(2),
-        td:nth-last-child(2),
-        th:nth-last-child(1),
-        td:nth-last-child(1) {{
-            width: 250px;
-            min-width: 200px;
-            white-space: nowrap;
-        }}
+        th:nth-child(8), td:nth-child(8) {{ width: 128px; white-space: nowrap; }}
+        th:nth-child(9), td:nth-child(9) {{ width: 85px; white-space: nowrap; }}
+        th:nth-child(10), td:nth-child(10) ,
+        th:nth-child(11), td:nth-child(11),
+        th:nth-child(12), td:nth-child(12) {{ width: 300px; white-space: nowrap; }}
+        th:nth-child(13), td:nth-child(13) {{ width: 80px; white-space: nowrap; }}
+        th:nth-child(14), td:nth-child(14),
+        th:nth-child(15), td:nth-child(15),
+        th:nth-child(16), td:nth-child(16),
+        th:nth-child(17), td:nth-child(17),
+        th:nth-child(18), td:nth-child(18),
+        th:nth-child(19), td:nth-child(19) {{ width: 80px; white-space: nowrap; }}
         th {{ 
-            background-color: #f1f3f4; 
-            color: #3c4043; 
+            background-color: var(--header-bg);
+            color: var(--header-text);
             font-weight: 600; 
             text-align: right; 
             user-select: none; 
             cursor: pointer; 
-            transition: background-color 0.2s; 
+            transition: background-color 0.2s, color 0.2s; 
             white-space: nowrap; 
             position: relative; 
         }}
         th:hover {{ background-color: #e4e7eb; }}
+        [data-theme="dark"] th:hover {{ background-color: #3d3d3d; }}
         th:nth-child(1), th:nth-child(2), th:nth-child(3), th:nth-child(4), th:nth-child(5), th:nth-child(6) {{ text-align: left; }}
-        tr:hover {{ background-color: #f8f9fa; }}
+        tr:hover {{ background-color: var(--hover-bg); }}
         .resizer {{
             position: absolute; 
             right: 0; 
@@ -507,7 +651,7 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             z-index: 10;
         }}
         .resizer:hover, th.resizing .resizer {{ background-color: #1a73e8; }}
-        .sort-icon {{ font-size: 10px; margin-left: 2px; color: #70757a; }}
+        .sort-icon {{ font-size: 10px; margin-left: 2px; color: var(--footer-text); }}
         .code {{ font-family: "SFMono-Regular", Consolas, monospace; font-weight: bold; color: #1a73e8; }}
         .name a {{ 
             font-weight:500; 
@@ -522,7 +666,7 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         .name a:hover {{ text-decoration: underline; color: #1557b0; }}
         .redemption-sub {{ 
             font-size: 10px; 
-            color: #7f8c8d; 
+            color: var(--footer-text);
             font-weight: normal; 
             margin-top: 2px; 
         }}
@@ -531,14 +675,15 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             font-weight: bold;
         }}
         .highlight-val {{ font-weight: 600; color: #e67e22; }}
-        .fee-sub {{ font-size: 10px; color: #7f8c8d; }}
+        .fee-sub {{ font-size: 10px; color: var(--footer-text); }}
         .progress-container {{
-            background-color:#e5e7eb;
+            background-color: var(--progress-track);
             border-radius:6px;
             overflow:hidden;
             height:20px;
             width:100%;
             position:relative;
+            transition: background 0.3s;
         }}
         .progress-bar {{
             height:100%;
@@ -565,21 +710,25 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         .footer-note {{ 
             margin-top: 10px; 
             font-size: 12px; 
-            color: #70757a; 
+            color: var(--footer-text);
             line-height: 1.4; 
-            background: #fff; 
+            background: var(--footer-bg);
             padding: 10px 12px; 
             border-radius: 6px; 
-            border: 1px solid #e0e0e0; 
+            border: 1px solid var(--border);
+            flex-shrink: 0;
+            transition: background 0.3s, color 0.3s, border-color 0.3s;
         }}
         .footer-note p {{ margin: 2px 0; }}
     </style>
 </head>
 <body>
+    <button class="theme-toggle" id="themeToggle">🌓 切换主题</button>
     <div class="header">
-        <h2>场外基金核心量化与全费率规模看板（含申购限额）</h2>
+        <h2>场外基金核心量化与全费率规模看板（含多周期涨幅）</h2>
         <p>统计时间区间：<strong>{start_date}</strong> 至 <strong>{end_date}</strong> （包含基金数：{len(results)} 只）</p>
-        <p style="font-size:12px; color:#5f6368;">申购费率已取优惠后费率，销售服务费若未显示则默认为0.00%。赎回费率百分比已高亮。</p>
+        <p style="font-size:12px; color: var(--footer-text);">申购费率已取优惠后费率，销售服务费默认0.00%。赎回费率百分比已高亮。</p>
+        <p style="font-size:12px; color: var(--footer-text);">最高/最低净值显示为2026-04-01后最大回撤的峰值与谷值（谷值在峰值之后）。涨幅基于完整数据计算。</p>
     </div>
     <div class="table-container">
         <table id="fundTable">
@@ -595,8 +744,15 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                     <th data-col="7">最低净值 <span class="sort-icon">⇅</span></th>
                     <th data-col="8">最新净值 <span class="sort-icon">⇅</span></th>
                     <th data-col="9">最大回撤 <span class="sort-icon">⇅</span></th>
-                    <th data-col="10">修复程度 <span class="sort-icon">⇅</span></th>
-                    <th data-col="11">自低点反弹 <span class="sort-icon">⇅</span></th>
+                    <th data-col="10">自低点反弹 <span class="sort-icon">⇅</span></th>
+                    <th data-col="11">修复程度 <span class="sort-icon">⇅</span></th>
+                    <th data-col="12">修复时间 <span class="sort-icon">⇅</span></th>
+                    <th data-col="13">近一周 <span class="sort-icon">⇅</span></th>
+                    <th data-col="14">近一月 <span class="sort-icon">⇅</span></th>
+                    <th data-col="15">近3月 <span class="sort-icon">⇅</span></th>
+                    <th data-col="16">近半年 <span class="sort-icon">⇅</span></th>
+                    <th data-col="17">近一年 <span class="sort-icon">⇅</span></th>
+                    <th data-col="18">今年内 <span class="sort-icon">⇅</span></th>
                 </tr>
             </thead>
             <tbody>
@@ -605,9 +761,26 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         </table>
     </div>
     <div class="footer-note">
-        <p><strong>使用提示：</strong> 列宽可拖拽调整，点击表头排序。赎回费率百分比已高亮（红色加粗）。</p>
+        <p><strong>使用提示：</strong> 列宽可拖拽调整，点击表头排序。涨幅数据基于可获取的历史净值，若区间内无对应日期数据则显示“-”。<br>
+        <span style="color: #1a73e8;">👉 横向滚动条位于表格底部（始终可见），纵向滚动查看全部基金。修复时间从2026-04-01后的最低点开始计算。</span></p>
     </div>
     <script>
+        (function() {{
+            const toggle = document.getElementById('themeToggle');
+            const currentTheme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', currentTheme);
+            toggle.textContent = currentTheme === 'dark' ? '☀️ 亮色' : '🌓 暗色';
+
+            toggle.addEventListener('click', function() {{
+                const current = document.documentElement.getAttribute('data-theme');
+                const next = current === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', next);
+                localStorage.setItem('theme', next);
+                toggle.textContent = next === 'dark' ? '☀️ 亮色' : '🌓 暗色';
+            }});
+        }})();
+
+        // 以下为原排序和列宽拖拽逻辑
         document.addEventListener("DOMContentLoaded", function () {{
             const table = document.getElementById("fundTable");
             const headers = table.querySelectorAll("th");
@@ -686,7 +859,7 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                         th.style.color = "#1a73e8";
                     }} else {{
                         icon.textContent = "⇅";
-                        th.style.color = "#3c4043";
+                        th.style.color = "";
                     }}
                 }}
             }});
@@ -701,10 +874,12 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
 
 def main():
     today_str = datetime.now().strftime("%Y-%m-%d")
-    default_start = "2026-04-01"
+    default_start = "2025-01-01"
+    cutoff_date = "2026-04-01"
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--start", type=str, default=default_start)
+    parser.add_argument("--start", type=str, default=default_start,
+                        help="涨幅数据起始日期（默认2025-01-01）")
     parser.add_argument("--end", type=str, default=today_str)
     parser.add_argument("--funds", nargs="+", default=DEFAULT_FUNDS)
     parser.add_argument("--out", type=str, default="fund_drawdown_dashboard.html")
@@ -712,8 +887,9 @@ def main():
     args = parser.parse_args()
     opener = get_direct_opener()
 
-    print(f"\n======== 开始抓取数据 (赎回费率百分比高亮) ========")
-    print(f"统计区间: {args.start} 至 {args.end}")
+    print(f"\n======== 开始抓取数据 (缓存启用，暗色模式支持) ========")
+    print(f"涨幅统计区间: {args.start} 至 {args.end}")
+    print(f"回撤计算区间: {cutoff_date} 至 {args.end}")
     print(f"基金总数: {len(args.funds)}")
 
     results = []
@@ -723,7 +899,7 @@ def main():
         if not raw_data:
             print(f"[{idx}/{len(args.funds)}] {code} - {meta['name']} ... ❌ 历史净值抓取失败")
             continue
-        res = analyze_fund_metrics(raw_data)
+        res = analyze_fund_metrics(raw_data, args.end, cutoff_date)
         if res:
             res.update({
                 "code": code,
