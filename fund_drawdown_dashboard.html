@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>场外基金量化与费率规模看板</title>
+    <title>场外基金量化与费率规模看板（含申购限额）</title>
     <style>
         body { 
             font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif; 
@@ -28,7 +28,7 @@
         
         table { 
             width:100%; 
-            min-width:1500px; 
+            min-width:1650px; 
             border-collapse:collapse; 
             font-size:12px; 
             text-align:right; 
@@ -44,48 +44,15 @@
         }
         
         /* ----- 各列宽度与换行策略 ----- */
-        /* 第1列：代码 */
-        th:nth-child(1), td:nth-child(1) { 
-            width: 80px; 
-            text-align: left; 
-            white-space: nowrap; 
-        }
-        /* 第2列：基金名称（允许换行，两行显示） */
-        th:nth-child(2), td:nth-child(2) { 
-            width: 260px; 
-            min-width: 200px; 
-            text-align: left; 
-            white-space: normal; 
-            word-break: break-word; 
-            vertical-align: middle; 
-        }
-        /* 第3列：规模 */
-        th:nth-child(3), td:nth-child(3) { 
-            width: 120px; 
-            text-align: left; 
-            white-space: nowrap; 
-        }
-        /* 第4列：运作费（允许换行以适应“管/托/销”信息） */
-        th:nth-child(4), td:nth-child(4) { 
-            width: 160px; 
-            text-align: left; 
-            white-space: normal; 
-            word-break: break-word; 
-        }
-        /* 第5列：申购费率 */
-        th:nth-child(5), td:nth-child(5) { 
-            width: 80px; 
-            text-align: left; 
-            white-space: nowrap; 
-        }
-        /* 第6~8列：净值数据 */
-        th:nth-child(6), td:nth-child(6),
+        th:nth-child(1), td:nth-child(1) { width: 80px; text-align: left; white-space: nowrap; }
+        th:nth-child(2), td:nth-child(2) { width: 260px; min-width: 200px; text-align: left; white-space: normal; word-break: break-word; vertical-align: middle; }
+        th:nth-child(3), td:nth-child(3) { width: 120px; text-align: left; white-space: nowrap; }
+        th:nth-child(4), td:nth-child(4) { width: 160px; text-align: left; white-space: normal; word-break: break-word; }
+        th:nth-child(5), td:nth-child(5) { width: 80px; text-align: left; white-space: nowrap; }
+        th:nth-child(6), td:nth-child(6) { width: 120px; text-align: left; white-space: nowrap; }  /* 申购限额列 */
         th:nth-child(7), td:nth-child(7),
-        th:nth-child(8), td:nth-child(8) { 
-            width: 80px; 
-            white-space: nowrap; 
-        }
-        /* 第9、10、11列：进度条（加宽） */
+        th:nth-child(8), td:nth-child(8),
+        th:nth-child(9), td:nth-child(9) { width: 80px; white-space: nowrap; }
         th:nth-last-child(3),
         td:nth-last-child(3),
         th:nth-last-child(2),
@@ -97,7 +64,6 @@
             white-space: nowrap;
         }
 
-        /* ------ 表头样式 ------ */
         th { 
             background-color: #f1f3f4; 
             color: #3c4043; 
@@ -110,10 +76,9 @@
             position: relative; 
         }
         th:hover { background-color: #e4e7eb; }
-        th:nth-child(1), th:nth-child(2), th:nth-child(3), th:nth-child(4), th:nth-child(5) { text-align: left; }
+        th:nth-child(1), th:nth-child(2), th:nth-child(3), th:nth-child(4), th:nth-child(5), th:nth-child(6) { text-align: left; }
         tr:hover { background-color: #f8f9fa; }
         
-        /* 列宽拖拽手柄 */
         .resizer {
             position: absolute; 
             right: 0; 
@@ -199,7 +164,7 @@
 <body>
 
     <div class="header">
-        <h2>场外基金核心量化与全费率规模看板</h2>
+        <h2>场外基金核心量化与全费率规模看板（含申购限额）</h2>
         <p>统计时间区间：<strong>2026-05-17</strong> 至 <strong>2026-08-15</strong> （包含基金数：21 只）</p>
     </div>
 
@@ -212,12 +177,13 @@
                     <th data-col="2">最新规模 <span class="sort-icon">⇅</span></th>
                     <th data-col="3">运作费(管/托/销) <span class="sort-icon">⇅</span></th>
                     <th data-col="4">申购费率 <span class="sort-icon">⇅</span></th>
-                    <th data-col="5">最高净值 <span class="sort-icon">⇅</span></th>
-                    <th data-col="6">最低净值 <span class="sort-icon">⇅</span></th>
-                    <th data-col="7">最新净值 <span class="sort-icon">⇅</span></th>
-                    <th data-col="8">最大回撤 <span class="sort-icon">⇅</span></th>
-                    <th data-col="9">修复程度 <span class="sort-icon">⇅</span></th>
-                    <th data-col="10">自低点反弹 <span class="sort-icon">⇅</span></th>
+                    <th data-col="5">申购状态/限额 <span class="sort-icon">⇅</span></th>
+                    <th data-col="6">最高净值 <span class="sort-icon">⇅</span></th>
+                    <th data-col="7">最低净值 <span class="sort-icon">⇅</span></th>
+                    <th data-col="8">最新净值 <span class="sort-icon">⇅</span></th>
+                    <th data-col="9">最大回撤 <span class="sort-icon">⇅</span></th>
+                    <th data-col="10">修复程度 <span class="sort-icon">⇅</span></th>
+                    <th data-col="11">自低点反弹 <span class="sort-icon">⇅</span></th>
                 </tr>
             </thead>
             <tbody>
@@ -231,6 +197,7 @@
             <td data-val="40.69" class="highlight-val">40.69 亿</td>
             <td data-val="2.5999999999999996">2.60% <span class="fee-sub">(管:1.20%/托:0.20%/销:1.20%)</span></td>
             <td data-val="1.50%">1.50%</td>
+            <td data-val="1500.0">限大额<div class="fee-sub">1500.00元</div></td>
             <td data-val="2.766">2.7660</td>
             <td data-val="2.196">2.1960</td>
             <td data-val="2.756">2.7560</td>
@@ -266,6 +233,7 @@
             <td data-val="31.2" class="highlight-val">31.20 亿</td>
             <td data-val="1.7999999999999998">1.80% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.40%)</span></td>
             <td data-val="0.00% (C类免)">0.00% (C类免)</td>
+            <td data-val="3000.0">限大额<div class="fee-sub">3000.00元</div></td>
             <td data-val="3.5605">3.5605</td>
             <td data-val="2.8274">2.8274</td>
             <td data-val="3.4698">3.4698</td>
@@ -301,6 +269,7 @@
             <td data-val="119.64" class="highlight-val">119.64 亿</td>
             <td data-val="1.7999999999999998">1.80% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.40%)</span></td>
             <td data-val="0.00% (C类免)">0.00% (C类免)</td>
+            <td data-val="10.0">暂停申购<div class="fee-sub">10.00元</div></td>
             <td data-val="4.0861">4.0861</td>
             <td data-val="3.4621">3.4621</td>
             <td data-val="3.8712">3.8712</td>
@@ -336,6 +305,7 @@
             <td data-val="23.23" class="highlight-val">23.23 亿</td>
             <td data-val="1.7999999999999998">1.80% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.40%)</span></td>
             <td data-val="0.00% (C类免)">0.00% (C类免)</td>
+            <td data-val="1000.0">限大额<div class="fee-sub">1000.00元</div></td>
             <td data-val="2.841">2.8410</td>
             <td data-val="2.5006">2.5006</td>
             <td data-val="2.8677">2.8677</td>
@@ -371,6 +341,7 @@
             <td data-val="20.57" class="highlight-val">20.57 亿</td>
             <td data-val="1.4">1.40% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.00%)</span></td>
             <td data-val="1.60%">1.60%</td>
+            <td data-val="5000.0">限大额<div class="fee-sub">5000.00元</div></td>
             <td data-val="2.448">2.4480</td>
             <td data-val="1.967">1.9670</td>
             <td data-val="2.417">2.4170</td>
@@ -406,6 +377,7 @@
             <td data-val="27.8" class="highlight-val">27.80 亿</td>
             <td data-val="1.7999999999999998">1.80% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.40%)</span></td>
             <td data-val="0.00% (C类免)">0.00% (C类免)</td>
+            <td data-val="200.0">限大额<div class="fee-sub">200.00元</div></td>
             <td data-val="7.0901">7.0901</td>
             <td data-val="5.9503">5.9503</td>
             <td data-val="6.9844">6.9844</td>
@@ -441,6 +413,7 @@
             <td data-val="32.11" class="highlight-val">32.11 亿</td>
             <td data-val="2.0">2.00% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.60%)</span></td>
             <td data-val="0.00%">0.00%</td>
+            <td data-val="500.0">限大额<div class="fee-sub">500.00元</div></td>
             <td data-val="2.6772">2.6772</td>
             <td data-val="2.3328">2.3328</td>
             <td data-val="2.7019">2.7019</td>
@@ -476,6 +449,7 @@
             <td data-val="28.04" class="highlight-val">28.04 亿</td>
             <td data-val="1.7999999999999998">1.80% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.40%)</span></td>
             <td data-val="0.00%">0.00%</td>
+            <td data-val="1000.0">限大额<div class="fee-sub">1000.00元</div></td>
             <td data-val="1.8089">1.8089</td>
             <td data-val="1.5661">1.5661</td>
             <td data-val="1.7459">1.7459</td>
@@ -511,6 +485,7 @@
             <td data-val="37.9" class="highlight-val">37.90 亿</td>
             <td data-val="2.0">2.00% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.60%)</span></td>
             <td data-val="0.00%">0.00%</td>
+            <td data-val="1000.0">限大额<div class="fee-sub">1000.00元</div></td>
             <td data-val="4.2193">4.2193</td>
             <td data-val="3.6211">3.6211</td>
             <td data-val="4.0905">4.0905</td>
@@ -546,6 +521,7 @@
             <td data-val="41.44" class="highlight-val">41.44 亿</td>
             <td data-val="1.7">1.70% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.30%)</span></td>
             <td data-val="0.00%">0.00%</td>
+            <td data-val="100.0">限大额<div class="fee-sub">100.00元</div></td>
             <td data-val="2.9214">2.9214</td>
             <td data-val="2.3432">2.3432</td>
             <td data-val="2.8505">2.8505</td>
@@ -581,6 +557,7 @@
             <td data-val="51.99" class="highlight-val">51.99 亿</td>
             <td data-val="1.9">1.90% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.50%)</span></td>
             <td data-val="0.00%">0.00%</td>
+            <td data-val="10000.0">限大额<div class="fee-sub">1.00万元</div></td>
             <td data-val="2.1498">2.1498</td>
             <td data-val="1.9626">1.9626</td>
             <td data-val="2.0575">2.0575</td>
@@ -616,6 +593,7 @@
             <td data-val="67.93" class="highlight-val">67.93 亿</td>
             <td data-val="2.0">2.00% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.60%)</span></td>
             <td data-val="0.00% (C类免)">0.00% (C类免)</td>
+            <td data-val="2000.0">限大额<div class="fee-sub">2000.00元</div></td>
             <td data-val="6.3538">6.3538</td>
             <td data-val="5.6228">5.6228</td>
             <td data-val="6.3989">6.3989</td>
@@ -651,6 +629,7 @@
             <td data-val="97.51" class="highlight-val">97.51 亿</td>
             <td data-val="1.4">1.40% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.00%)</span></td>
             <td data-val="1.50%">1.50%</td>
+            <td data-val="5000.0">限大额<div class="fee-sub">5000.00元</div></td>
             <td data-val="2.9654">2.9654</td>
             <td data-val="2.4661">2.4661</td>
             <td data-val="2.7686">2.7686</td>
@@ -686,6 +665,7 @@
             <td data-val="18.62" class="highlight-val">18.62 亿</td>
             <td data-val="1.2">1.20% <span class="fee-sub">(管:1.00%/托:0.20%/销:0.00%)</span></td>
             <td data-val="1.20%">1.20%</td>
+            <td data-val="20.0">限大额<div class="fee-sub">20.00元</div></td>
             <td data-val="2.2594">2.2594</td>
             <td data-val="2.0919">2.0919</td>
             <td data-val="2.4143">2.4143</td>
@@ -721,6 +701,7 @@
             <td data-val="15.14" class="highlight-val">15.14 亿</td>
             <td data-val="1.9">1.90% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.50%)</span></td>
             <td data-val="0.00%">0.00%</td>
+            <td data-val="5000.0">限大额<div class="fee-sub">5000.00元</div></td>
             <td data-val="2.2794">2.2794</td>
             <td data-val="1.9448">1.9448</td>
             <td data-val="2.2839">2.2839</td>
@@ -756,6 +737,7 @@
             <td data-val="116.4" class="highlight-val">116.40 亿</td>
             <td data-val="1.7999999999999998">1.80% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.40%)</span></td>
             <td data-val="0.00%">0.00%</td>
+            <td data-val="1000.0">限大额<div class="fee-sub">1000.00元</div></td>
             <td data-val="5.5749">5.5749</td>
             <td data-val="4.9547">4.9547</td>
             <td data-val="5.3594">5.3594</td>
@@ -791,6 +773,7 @@
             <td data-val="56.2" class="highlight-val">56.20 亿</td>
             <td data-val="1.7999999999999998">1.80% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.40%)</span></td>
             <td data-val="0.00%">0.00%</td>
+            <td data-val="1000.0">限大额<div class="fee-sub">1000.00元</div></td>
             <td data-val="2.2253">2.2253</td>
             <td data-val="2.0563">2.0563</td>
             <td data-val="2.3506">2.3506</td>
@@ -826,6 +809,7 @@
             <td data-val="2.27" class="highlight-val">2.27 亿</td>
             <td data-val="1.7999999999999998">1.80% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.40%)</span></td>
             <td data-val="0.00%">0.00%</td>
+            <td data-val="10000.0">限大额<div class="fee-sub">1.00万元</div></td>
             <td data-val="1.5583">1.5583</td>
             <td data-val="1.4348">1.4348</td>
             <td data-val="1.5789">1.5789</td>
@@ -861,6 +845,7 @@
             <td data-val="43.92" class="highlight-val">43.92 亿</td>
             <td data-val="1.7999999999999998">1.80% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.40%)</span></td>
             <td data-val="0.00%">0.00%</td>
+            <td data-val="1000.0">限大额<div class="fee-sub">1000.00元</div></td>
             <td data-val="2.0799">2.0799</td>
             <td data-val="1.8727">1.8727</td>
             <td data-val="2.1225">2.1225</td>
@@ -896,6 +881,7 @@
             <td data-val="14.81" class="highlight-val">14.81 亿</td>
             <td data-val="1.65">1.65% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.25%)</span></td>
             <td data-val="0.00%">0.00%</td>
+            <td data-val="100.0">限大额<div class="fee-sub">100.00元</div></td>
             <td data-val="1.9491">1.9491</td>
             <td data-val="1.6037">1.6037</td>
             <td data-val="1.9181">1.9181</td>
@@ -931,6 +917,7 @@
             <td data-val="4.12" class="highlight-val">4.12 亿</td>
             <td data-val="1.9">1.90% <span class="fee-sub">(管:1.20%/托:0.20%/销:0.50%)</span></td>
             <td data-val="0.00%">0.00%</td>
+            <td data-val="100.0">限大额<div class="fee-sub">100.00元</div></td>
             <td data-val="1.7483">1.7483</td>
             <td data-val="1.5232">1.5232</td>
             <td data-val="1.6611">1.6611</td>
@@ -962,7 +949,7 @@
     </div>
 
     <div class="footer-note">
-        <p><strong>使用提示：</strong> 列宽可拖拽调整，点击表头排序。名称列与运作费列支持自动换行，避免文字覆盖。</p>
+        <p><strong>使用提示：</strong> 列宽可拖拽调整，点击表头排序。名称列与运作费列支持自动换行，避免文字覆盖。申购限额按数值大小排序（元为单位）。</p>
     </div>
 
     <script>
@@ -971,7 +958,6 @@
             const headers = table.querySelectorAll("th");
 
             headers.forEach((th, idx) => {
-                // 点击表头排序（忽略拖拽时）
                 th.addEventListener("click", function(e) {
                     if (th.classList.contains("is-resizing") || window._isDragging) {
                         return;
@@ -979,7 +965,6 @@
                     sortTable(idx);
                 });
 
-                // 添加列宽拖拽手柄
                 const resizer = document.createElement("div");
                 resizer.classList.add("resizer");
                 th.appendChild(resizer);
@@ -993,7 +978,6 @@
                     window._isDragging = true;
                     x = e.clientX;
                     w = th.getBoundingClientRect().width;
-                    // 设置初始宽度，防止拖动时突变
                     th.style.width = w + "px";
                     th.classList.add("resizing");
                     th.classList.add("is-resizing");
@@ -1008,11 +992,8 @@
                         th.classList.remove("resizing");
                         document.removeEventListener("mousemove", mouseMoveHandler);
                         document.removeEventListener("mouseup", mouseUpHandler);
-                        
-                        // 拖拽结束后，保留最终宽度
                         const finalWidth = th.getBoundingClientRect().width;
                         th.style.width = finalWidth + "px";
-                        
                         setTimeout(() => {
                             window._isDragging = false;
                             th.classList.remove("is-resizing");

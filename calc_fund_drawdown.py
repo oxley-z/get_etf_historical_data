@@ -26,7 +26,7 @@ def get_direct_opener():
     return urllib.request.build_opener(proxy_handler)
 
 def fetch_fund_detail_meta(opener, code):
-    """全面抓取：名称, 规模, 管理费, 托管费, 销售服务费, 申购费, 多档持有期赎回费"""
+    """全面抓取：名称, 规模, 管理费, 托管费, 销售服务费, 申购费, 多档持有期赎回费, 交易状态, 申购限额"""
     meta = {
         "name": f"基金_{code}",
         "scale": "未知",
@@ -35,7 +35,10 @@ def fetch_fund_detail_meta(opener, code):
         "fee_custody": "--",
         "fee_sales": "--",
         "fee_purchase": "0.00%",     
-        "fee_redemption": "未知",    
+        "fee_redemption": "未知",
+        "buy_status": "--",
+        "buy_limit": "无限额",          # 显示用字符串
+        "buy_limit_val": -1,           # 排序用数值（单位：元）
         "fee_total": "未知",
         "fee_val": -1.0
     }
@@ -56,8 +59,7 @@ def fetch_fund_detail_meta(opener, code):
             if match_name:
                 meta["name"] = match_name.group(1)
 
-            # 规模获取方式替换为 get_fund_fee_info.py 中的 AkShare 雪球接口方式
-            # 原 pingzhongdata Data_fundSharesHTML 经常无法获取规模
+            # 规模获取方式替换为 AkShare 雪球接口
             try:
                 df_xq = ak.fund_individual_basic_info_xq(symbol=code)
                 if df_xq is not None and not df_xq.empty:
@@ -163,6 +165,37 @@ def fetch_fund_detail_meta(opener, code):
         if meta["fee_purchase"] == "0.00%":
             meta["fee_purchase"] = "0.00% (C类免)"
 
+    # 获取交易状态和申购限额（修复：支持“万元”和“元”，并提取数值用于排序）
+    trade_url = f"https://fund.eastmoney.com/{code}.html"
+    try:
+        req = urllib.request.Request(trade_url, headers=headers)
+        with opener.open(req, timeout=5) as resp:
+            trade_html = resp.read().decode("utf-8", errors="ignore")
+
+        trade = re.search(r"交易状态：</span>(.*?)</div>", trade_html, re.S)
+        if trade:
+            text = re.sub(r"<.*?>", "", trade.group(1))
+            text = text.replace("&nbsp;", "").strip()
+
+            status = re.search(r"^(.*?)\s*\(", text)
+            if status:
+                meta["buy_status"] = status.group(1).strip()
+
+            # 修复：提取数字和单位，计算元数值
+            limit_match = re.search(r"单日累计购买上限([\d.]+)(万?)元", text)
+            if limit_match:
+                num = float(limit_match.group(1))
+                if limit_match.group(2) == "万":
+                    num *= 10000
+                meta["buy_limit"] = f"{limit_match.group(1)}{limit_match.group(2)}元"  # 保留原始格式
+                meta["buy_limit_val"] = num
+            else:
+                # 无上限或未匹配，保持默认
+                meta["buy_limit"] = "无限额"
+                meta["buy_limit_val"] = -1
+    except Exception:
+        pass
+
     return meta
 
 def fetch_from_eastmoney(opener, code, start_date, end_date):
@@ -243,7 +276,7 @@ def analyze_fund_metrics(valid_data):
     }
 
 def generate_html_report(results, start_date, end_date, filename="fund_drawdown_dashboard.html"):
-    """生成修复了调整列宽瞬间放大与排序 Bug 的 HTML 看板，并优化列宽与换行"""
+    """生成包含申购限额列的 HTML 看板，限额按数值排序"""
     rows_html = ""
     for r in results:
         fund_url = f"https://fund.eastmoney.com/{r['code']}.html"
@@ -251,6 +284,10 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         max_dd_pct = min(max(r['max_drawdown'], 0), 100)
         rec_pct = min(max(r['recovery_rate'], 0), 100)
         reb_pct = min(max(r['rebound_gain'], 0), 100)
+
+        # 获取限额显示字符串和数值
+        limit_display = r.get('buy_limit', '无限额')
+        limit_val = r.get('buy_limit_val', -1)
 
         rows_html += f"""
         <tr>
@@ -262,6 +299,7 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             <td data-val="{r['scale_val']}" class="highlight-val">{r['scale']}</td>
             <td data-val="{r['fee_val']}">{r['fee_total']} <span class="fee-sub">(管:{r['fee_manage']}/托:{r['fee_custody']}/销:{r['fee_sales']})</span></td>
             <td data-val="{r['fee_purchase']}">{r['fee_purchase']}</td>
+            <td data-val="{limit_val}">{r.get('buy_status', '--')}<div class="fee-sub">{limit_display}</div></td>
             <td data-val="{r['peak_nav']}">{r['peak_nav']:.4f}</td>
             <td data-val="{r['trough_nav']}">{r['trough_nav']:.4f}</td>
             <td data-val="{r['latest_nav']}">{r['latest_nav']:.4f}</td>
@@ -294,7 +332,7 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>场外基金量化与费率规模看板</title>
+    <title>场外基金量化与费率规模看板（含申购限额）</title>
     <style>
         body {{ 
             font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif; 
@@ -319,7 +357,7 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         
         table {{ 
             width:100%; 
-            min-width:1500px; 
+            min-width:1650px; 
             border-collapse:collapse; 
             font-size:12px; 
             text-align:right; 
@@ -335,48 +373,15 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         }}
         
         /* ----- 各列宽度与换行策略 ----- */
-        /* 第1列：代码 */
-        th:nth-child(1), td:nth-child(1) {{ 
-            width: 80px; 
-            text-align: left; 
-            white-space: nowrap; 
-        }}
-        /* 第2列：基金名称（允许换行，两行显示） */
-        th:nth-child(2), td:nth-child(2) {{ 
-            width: 260px; 
-            min-width: 200px; 
-            text-align: left; 
-            white-space: normal; 
-            word-break: break-word; 
-            vertical-align: middle; 
-        }}
-        /* 第3列：规模 */
-        th:nth-child(3), td:nth-child(3) {{ 
-            width: 120px; 
-            text-align: left; 
-            white-space: nowrap; 
-        }}
-        /* 第4列：运作费（允许换行以适应“管/托/销”信息） */
-        th:nth-child(4), td:nth-child(4) {{ 
-            width: 160px; 
-            text-align: left; 
-            white-space: normal; 
-            word-break: break-word; 
-        }}
-        /* 第5列：申购费率 */
-        th:nth-child(5), td:nth-child(5) {{ 
-            width: 80px; 
-            text-align: left; 
-            white-space: nowrap; 
-        }}
-        /* 第6~8列：净值数据 */
-        th:nth-child(6), td:nth-child(6),
+        th:nth-child(1), td:nth-child(1) {{ width: 80px; text-align: left; white-space: nowrap; }}
+        th:nth-child(2), td:nth-child(2) {{ width: 260px; min-width: 200px; text-align: left; white-space: normal; word-break: break-word; vertical-align: middle; }}
+        th:nth-child(3), td:nth-child(3) {{ width: 120px; text-align: left; white-space: nowrap; }}
+        th:nth-child(4), td:nth-child(4) {{ width: 160px; text-align: left; white-space: normal; word-break: break-word; }}
+        th:nth-child(5), td:nth-child(5) {{ width: 80px; text-align: left; white-space: nowrap; }}
+        th:nth-child(6), td:nth-child(6) {{ width: 120px; text-align: left; white-space: nowrap; }}  /* 申购限额列 */
         th:nth-child(7), td:nth-child(7),
-        th:nth-child(8), td:nth-child(8) {{ 
-            width: 80px; 
-            white-space: nowrap; 
-        }}
-        /* 第9、10、11列：进度条（加宽） */
+        th:nth-child(8), td:nth-child(8),
+        th:nth-child(9), td:nth-child(9) {{ width: 80px; white-space: nowrap; }}
         th:nth-last-child(3),
         td:nth-last-child(3),
         th:nth-last-child(2),
@@ -388,7 +393,6 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             white-space: nowrap;
         }}
 
-        /* ------ 表头样式 ------ */
         th {{ 
             background-color: #f1f3f4; 
             color: #3c4043; 
@@ -401,10 +405,9 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             position: relative; 
         }}
         th:hover {{ background-color: #e4e7eb; }}
-        th:nth-child(1), th:nth-child(2), th:nth-child(3), th:nth-child(4), th:nth-child(5) {{ text-align: left; }}
+        th:nth-child(1), th:nth-child(2), th:nth-child(3), th:nth-child(4), th:nth-child(5), th:nth-child(6) {{ text-align: left; }}
         tr:hover {{ background-color: #f8f9fa; }}
         
-        /* 列宽拖拽手柄 */
         .resizer {{
             position: absolute; 
             right: 0; 
@@ -490,7 +493,7 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
 <body>
 
     <div class="header">
-        <h2>场外基金核心量化与全费率规模看板</h2>
+        <h2>场外基金核心量化与全费率规模看板（含申购限额）</h2>
         <p>统计时间区间：<strong>{start_date}</strong> 至 <strong>{end_date}</strong> （包含基金数：{len(results)} 只）</p>
     </div>
 
@@ -503,12 +506,13 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                     <th data-col="2">最新规模 <span class="sort-icon">⇅</span></th>
                     <th data-col="3">运作费(管/托/销) <span class="sort-icon">⇅</span></th>
                     <th data-col="4">申购费率 <span class="sort-icon">⇅</span></th>
-                    <th data-col="5">最高净值 <span class="sort-icon">⇅</span></th>
-                    <th data-col="6">最低净值 <span class="sort-icon">⇅</span></th>
-                    <th data-col="7">最新净值 <span class="sort-icon">⇅</span></th>
-                    <th data-col="8">最大回撤 <span class="sort-icon">⇅</span></th>
-                    <th data-col="9">修复程度 <span class="sort-icon">⇅</span></th>
-                    <th data-col="10">自低点反弹 <span class="sort-icon">⇅</span></th>
+                    <th data-col="5">申购状态/限额 <span class="sort-icon">⇅</span></th>
+                    <th data-col="6">最高净值 <span class="sort-icon">⇅</span></th>
+                    <th data-col="7">最低净值 <span class="sort-icon">⇅</span></th>
+                    <th data-col="8">最新净值 <span class="sort-icon">⇅</span></th>
+                    <th data-col="9">最大回撤 <span class="sort-icon">⇅</span></th>
+                    <th data-col="10">修复程度 <span class="sort-icon">⇅</span></th>
+                    <th data-col="11">自低点反弹 <span class="sort-icon">⇅</span></th>
                 </tr>
             </thead>
             <tbody>
@@ -518,7 +522,7 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
     </div>
 
     <div class="footer-note">
-        <p><strong>使用提示：</strong> 列宽可拖拽调整，点击表头排序。名称列与运作费列支持自动换行，避免文字覆盖。</p>
+        <p><strong>使用提示：</strong> 列宽可拖拽调整，点击表头排序。名称列与运作费列支持自动换行，避免文字覆盖。申购限额按数值大小排序（元为单位）。</p>
     </div>
 
     <script>
@@ -527,7 +531,6 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             const headers = table.querySelectorAll("th");
 
             headers.forEach((th, idx) => {{
-                // 点击表头排序（忽略拖拽时）
                 th.addEventListener("click", function(e) {{
                     if (th.classList.contains("is-resizing") || window._isDragging) {{
                         return;
@@ -535,7 +538,6 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                     sortTable(idx);
                 }});
 
-                // 添加列宽拖拽手柄
                 const resizer = document.createElement("div");
                 resizer.classList.add("resizer");
                 th.appendChild(resizer);
@@ -549,7 +551,6 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                     window._isDragging = true;
                     x = e.clientX;
                     w = th.getBoundingClientRect().width;
-                    // 设置初始宽度，防止拖动时突变
                     th.style.width = w + "px";
                     th.classList.add("resizing");
                     th.classList.add("is-resizing");
@@ -564,11 +565,8 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                         th.classList.remove("resizing");
                         document.removeEventListener("mousemove", mouseMoveHandler);
                         document.removeEventListener("mouseup", mouseUpHandler);
-                        
-                        // 拖拽结束后，保留最终宽度
                         const finalWidth = th.getBoundingClientRect().width;
                         th.style.width = finalWidth + "px";
-                        
                         setTimeout(() => {{
                             window._isDragging = false;
                             th.classList.remove("is-resizing");
@@ -653,7 +651,7 @@ def main():
     args = parser.parse_args()
     opener = get_direct_opener()
 
-    print(f"\n======== 开始抓取数据 (已解决特殊字符与语法错误) ========")
+    print(f"\n======== 开始抓取数据 (含申购限额，已修复单位识别与排序) ========")
     print(f"统计区间: {args.start} 至 {args.end}")
 
     results = []
@@ -679,6 +677,9 @@ def main():
                 "fee_val": meta["fee_val"],
                 "fee_purchase": meta["fee_purchase"],
                 "fee_redemption": meta["fee_redemption"],
+                "buy_status": meta.get("buy_status", "--"),
+                "buy_limit": meta.get("buy_limit", "无限额"),
+                "buy_limit_val": meta.get("buy_limit_val", -1),
                 "source": "天天基金"
             })
             results.append(res)
