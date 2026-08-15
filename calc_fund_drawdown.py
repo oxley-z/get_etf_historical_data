@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 for env_var in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]:
     os.environ.pop(env_var, None)
 
+# 原有基金 + CPO 新增基金
 DEFAULT_FUNDS = [
     "002891", "014002", "006555", "012922", "012920", "021662", "457001", "539002",
     "018147", "021842", "006373", "018036", "501226", "008254", "008253", "017731",
@@ -21,7 +22,10 @@ DEFAULT_FUNDS = [
     "024239", "501312", "017204", "017654", "017653", "022184", "100055", "017437",
     "017436", "017145", "017144", "016702", "016701", "016823", "164212", "019156",
     "019155",
-    "016668", "501225", "015202", "001668", "000043"
+    "016668", "501225", "015202", "001668", "000043",
+    # === CPO 组新增 ===
+    "022365", "540010", "002112", "011892", "021528",
+    "009645", "011370", "011452", "016371"
 ]
 
 CACHE_DIR = "cache"
@@ -422,6 +426,14 @@ def analyze_fund_metrics(valid_data, end_date, cutoff_date):
     }
 
 def generate_html_report(results, start_date, end_date, filename="fund_drawdown_dashboard.html"):
+    # CPO 基金代码集合（用于分组）
+    CPO_CODES = {
+        "022365", "540010", "002112", "011892", "021528",
+        "009645", "011370", "011452", "016371"
+    }
+
+    col_count = 19  # 列数，用于空行合并
+
     rows_html = ""
     for r in results:
         fund_url = f"https://fund.eastmoney.com/{r['code']}.html"
@@ -450,8 +462,11 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                 return '-'
             return f"{val:.2f}%"
 
+        # 判断分组：若代码在 CPO_CODES 中则归入 CPO，否则归入 QDII
+        group = "cpo" if r['code'] in CPO_CODES else "qdii"
+
         rows_html += f"""
-        <tr>
+        <tr data-group="{group}">
             <td class="code" data-val="{r['code']}">{r['code']}</td>
             <td class="name" data-val="{r['name']}">
                 <a href="{fund_url}" target="_blank" title="点击查看天天基金概况">{r['name']}</a>
@@ -495,6 +510,27 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         </tr>
         """
 
+    # 空组提示行（默认隐藏）
+    empty_row = f"""
+        <tr id="empty-row" style="display:none;">
+            <td colspan="{col_count}" style="text-align:center; padding:30px; color: var(--footer-text);">
+                该分类暂无基金，敬请期待
+            </td>
+        </tr>
+    """
+
+    groups = [
+        ("QDII", "qdii"),
+        ("半导体材料设备", "semiconductor"),
+        ("CPO", "cpo"),
+        ("人工智能", "ai"),
+        ("存储芯片", "storage")
+    ]
+
+    buttons_html = ""
+    for label, group_id in groups:
+        buttons_html += f'<button class="group-btn" data-group="{group_id}">{label}</button>'
+
     html_content = f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -513,6 +549,10 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             --progress-track: #e5e7eb;
             --footer-bg: #fff;
             --footer-text: #70757a;
+            --btn-bg: #e8eaed;
+            --btn-text: #3c4043;
+            --btn-active-bg: #1a73e8;
+            --btn-active-text: #fff;
         }}
         [data-theme="dark"] {{
             --bg: #1a1a1a;
@@ -525,6 +565,10 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             --progress-track: #3a3a3a;
             --footer-bg: #2d2d2d;
             --footer-text: #aaa;
+            --btn-bg: #3d3d3d;
+            --btn-text: #ccc;
+            --btn-active-bg: #1a73e8;
+            --btn-active-text: #fff;
         }}
         body {{ 
             font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif; 
@@ -558,9 +602,37 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             transition: background 0.2s;
         }}
         .theme-toggle:hover {{ opacity: 0.8; }}
+        .group-tabs {{
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            flex-shrink: 0;
+        }}
+        .group-btn {{
+            background: var(--btn-bg);
+            color: var(--btn-text);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 6px 18px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+        }}
+        .group-btn:hover {{
+            background: var(--btn-active-bg);
+            color: var(--btn-active-text);
+        }}
+        .group-btn.active {{
+            background: var(--btn-active-bg);
+            color: var(--btn-active-text);
+            border-color: var(--btn-active-bg);
+        }}
         .table-container {{ 
             width:100%; 
-            height: calc(100vh - 200px); 
+            height: calc(100vh - 260px); 
             overflow-y: auto; 
             overflow-x: scroll; 
             box-sizing:border-box; 
@@ -730,6 +802,9 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         <p style="font-size:12px; color: var(--footer-text);">申购费率已取优惠后费率，销售服务费默认0.00%。赎回费率百分比已高亮。</p>
         <p style="font-size:12px; color: var(--footer-text);">最高/最低净值显示为2026-04-01后最大回撤的峰值与谷值（谷值在峰值之后）。涨幅基于完整数据计算。</p>
     </div>
+    <div class="group-tabs">
+        {buttons_html}
+    </div>
     <div class="table-container">
         <table id="fundTable">
             <thead>
@@ -757,6 +832,7 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             </thead>
             <tbody>
                 {rows_html}
+                {empty_row}
             </tbody>
         </table>
     </div>
@@ -780,7 +856,52 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             }});
         }})();
 
-        // 以下为原排序和列宽拖拽逻辑
+        // 分组切换逻辑
+        document.addEventListener('DOMContentLoaded', function() {{
+            const buttons = document.querySelectorAll('.group-btn');
+            const allRows = document.querySelectorAll('#fundTable tbody tr');
+            const emptyRow = document.getElementById('empty-row');
+
+            // 默认激活 QDII
+            const defaultGroup = 'qdii';
+            buttons.forEach(btn => {{
+                if (btn.dataset.group === defaultGroup) {{
+                    btn.classList.add('active');
+                }}
+            }});
+
+            function filterGroup(group) {{
+                let hasVisible = false;
+                allRows.forEach(row => {{
+                    if (row.id === 'empty-row') return;
+                    const rowGroup = row.getAttribute('data-group');
+                    if (rowGroup === group) {{
+                        row.style.display = '';
+                        hasVisible = true;
+                    }} else {{
+                        row.style.display = 'none';
+                    }}
+                }});
+                if (hasVisible) {{
+                    emptyRow.style.display = 'none';
+                }} else {{
+                    emptyRow.style.display = '';
+                }}
+            }}
+
+            filterGroup(defaultGroup);
+
+            buttons.forEach(btn => {{
+                btn.addEventListener('click', function() {{
+                    buttons.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    const group = this.dataset.group;
+                    filterGroup(group);
+                }});
+            }});
+        }});
+
+        // 排序和列宽拖拽逻辑
         document.addEventListener("DOMContentLoaded", function () {{
             const table = document.getElementById("fundTable");
             const headers = table.querySelectorAll("th");
@@ -829,13 +950,14 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             const table = document.getElementById("fundTable");
             const tbody = table.querySelector("tbody");
             const rows = Array.from(tbody.querySelectorAll("tr"));
+            const dataRows = rows.filter(row => row.id !== 'empty-row');
             if (currentSortCol === colIndex) {{
                 isAscending = !isAscending;
             }} else {{
                 currentSortCol = colIndex;
                 isAscending = true;
             }}
-            rows.sort((a, b) => {{
+            dataRows.sort((a, b) => {{
                 const cellA = a.children[colIndex];
                 const cellB = b.children[colIndex];
                 let valA = cellA.getAttribute("data-val");
@@ -849,7 +971,10 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                     ? valA.localeCompare(valB, 'zh-Hans-CN', {{ sensitivity: 'accent' }})
                     : valB.localeCompare(valA, 'zh-Hans-CN', {{ sensitivity: 'accent' }});
             }});
-            rows.forEach(row => tbody.appendChild(row));
+            dataRows.forEach(row => tbody.appendChild(row));
+            const empty = document.getElementById('empty-row');
+            if (empty) tbody.appendChild(empty);
+
             const headers = table.querySelectorAll("th");
             headers.forEach((th, idx) => {{
                 const icon = th.querySelector(".sort-icon");
@@ -887,7 +1012,7 @@ def main():
     args = parser.parse_args()
     opener = get_direct_opener()
 
-    print(f"\n======== 开始抓取数据 (缓存启用，暗色模式支持) ========")
+    print(f"\n======== 开始抓取数据 (缓存启用，暗色模式支持，分类切换) ========")
     print(f"涨幅统计区间: {args.start} 至 {args.end}")
     print(f"回撤计算区间: {cutoff_date} 至 {args.end}")
     print(f"基金总数: {len(args.funds)}")
