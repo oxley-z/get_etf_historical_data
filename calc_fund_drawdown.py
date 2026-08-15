@@ -4,6 +4,7 @@ import json
 import time
 import random
 import argparse
+import webbrowser
 import urllib.request
 import urllib.parse
 from datetime import datetime, timedelta
@@ -14,7 +15,6 @@ from datetime import datetime, timedelta
 for env_var in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]:
     os.environ.pop(env_var, None)
 
-# 仅保留纯基金代码列表，名称由源动态获取
 DEFAULT_FUNDS = [
     "002891", "014002", "012922", "021662", "539002", "021842", "018036",
     "008254", "017731", "016665", "018230", "021277", "005698", "501312",
@@ -23,14 +23,11 @@ DEFAULT_FUNDS = [
 
 def get_direct_opener():
     """创建一个彻底绕过本地代理的 urllib opener"""
-    proxy_handler = urllib.request.ProxyHandler({})  # 空字典代表强制直连
+    proxy_handler = urllib.request.ProxyHandler({})
     return urllib.request.build_opener(proxy_handler)
 
-# ==========================================
-# 2. 从数据源动态获取基金名称（不写死）
-# ==========================================
 def fetch_fund_name_from_source(opener, code):
-    """从天天基金官方 JS 数据源中实时解析基金全称"""
+    """从天天基金官方 JS 数据源中动态解析基金全称"""
     url = f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -40,19 +37,13 @@ def fetch_fund_name_from_source(opener, code):
         req = urllib.request.Request(url, headers=headers)
         with opener.open(req, timeout=5) as resp:
             content = resp.read().decode('utf-8', errors='ignore')
-            # 匹配 var fS_name = "xxx";
             match = re.search(r'var\s+fS_name\s*=\s*["\']([^"\']+)["\']', content)
             if match:
                 return match.group(1)
     except Exception:
         pass
-    
-    # 降级备用：如果源获取失败，返回代码占位
-    return f"未知基金_{code}"
+    return f"基金_{code}"
 
-# ==========================================
-# 3. 多源净值获取模块
-# ==========================================
 def fetch_from_eastmoney(opener, code, start_date, end_date):
     base_url = "https://api.fund.eastmoney.com/f10/lsjz"
     params = {
@@ -124,9 +115,6 @@ def fetch_fund_data_multisource(opener, code, start_date, end_date):
 
     return None, "全部失败"
 
-# ==========================================
-# 4. 指标计算核心算法
-# ==========================================
 def analyze_fund_metrics(valid_data):
     data = sorted(valid_data, key=lambda x: x["date"])
     if not data:
@@ -168,66 +156,142 @@ def analyze_fund_metrics(valid_data):
         "rebound_gain": rebound_gain
     }
 
+def generate_html_report(results, start_date, end_date, filename="fund_drawdown_dashboard.html"):
+    """生成 HTML 报表"""
+    rows_html = ""
+    for r in results:
+        rows_html += f"""
+        <tr>
+            <td class="code">{r['code']}</td>
+            <td class="name">{r['name']}</td>
+            <td><span class="badge">{r['source']}</span></td>
+            <td>{r['peak_nav']:.4f}</td>
+            <td>{r['trough_nav']:.4f}</td>
+            <td>{r['latest_nav']:.4f}</td>
+            <td class="metric-red">{r['max_drawdown']:.2f}%</td>
+            <td>{r['recovery_rate']:.2f}%</td>
+            <td class="metric-green">{r['rebound_gain']:.2f}%</td>
+        </tr>
+        """
+
+    html_content = f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>场外基金历史净值与分析看板</title>
+    <style>
+        body {{ font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif; background-color: #f8f9fa; margin: 0; padding: 24px; color: #333; }}
+        .header {{ text-align: center; margin-bottom: 24px; }}
+        .header h2 {{ color: #1a73e8; margin: 0 0 8px 0; font-size: 24px; }}
+        .header p {{ color: #5f6368; font-size: 14px; margin: 0; }}
+        .table-container {{ overflow-x: auto; background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 16px; border: 1px solid #e0e0e0; }}
+        table {{ width: 100%; border-collapse: collapse; font-size: 14px; text-align: right; }}
+        th, td {{ padding: 12px 16px; border-bottom: 1px solid #eee; }}
+        th {{ background-color: #f1f3f4; color: #3c4043; font-weight: 600; text-align: right; user-select: none; }}
+        th:nth-child(1), th:nth-child(2), th:nth-child(3),
+        td:nth-child(1), td:nth-child(2), td:nth-child(3) {{ text-align: left; }}
+        tr:hover {{ background-color: #f8f9fa; }}
+        .code {{ font-family: "SFMono-Regular", Consolas, monospace; font-weight: bold; color: #1a73e8; }}
+        .name {{ font-weight: 500; color: #202124; }}
+        .badge {{ background: #e8f0fe; color: #1967d2; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }}
+        .metric-red {{ color: #d93025; font-weight: 600; }}
+        .metric-green {{ color: #188038; font-weight: 600; }}
+        .footer-note {{ margin-top: 20px; font-size: 13px; color: #70757a; line-height: 1.6; background: #fff; padding: 16px; border-radius: 8px; border: 1px solid #e0e0e0; }}
+        .footer-note p {{ margin: 4px 0; }}
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2>场外基金核心量化指标对比看板</h2>
+        <p>统计时间区间：<strong>{start_date}</strong> 至 <strong>{end_date}</strong> （包含基金数：{len(results)} 只）</p>
+    </div>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>代码</th>
+                    <th>基金名称 (动态源获取)</th>
+                    <th>来源</th>
+                    <th>最高净值</th>
+                    <th>最低净值</th>
+                    <th>最新净值</th>
+                    <th>最大回撤</th>
+                    <th>修复程度</th>
+                    <th>自低点反弹</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows_html}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="footer-note">
+        <p><strong>指标说明：</strong></p>
+        <p>1. <strong>修复程度 (%)</strong>：(最新净值 - 最低净值) / (最高净值 - 最低净值) × 100%（接近或超过 100% 表示接近或突破前期高点）。</p>
+        <p>2. <strong>自低点反弹 (%)</strong>：(最新净值 - 最低净值) / 最低净值 × 100%（衡量底部的绝对反弹力度）。</p>
+    </div>
+
+</body>
+</html>
+"""
+    with open(filename, "w", encoding="utf-8") as f:
+        f.write(html_content)
+    
+    return os.path.abspath(filename)
+
 def main():
     today_str = datetime.now().strftime("%Y-%m-%d")
     default_start = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
 
-    parser = argparse.ArgumentParser(description="多源动态获取名称与回撤分析系统")
+    parser = argparse.ArgumentParser(description="多源动态分析并直接生成 HTML 页面")
     parser.add_argument("--start", type=str, default=default_start)
     parser.add_argument("--end", type=str, default=today_str)
     parser.add_argument("--funds", nargs="+", default=DEFAULT_FUNDS)
+    parser.add_argument("--out", type=str, default="fund_drawdown_dashboard.html", help="输出的HTML文件名")
 
     args = parser.parse_args()
     opener = get_direct_opener()
 
-    print(f"\n======== 开始多源动态获取名称与深度分析 ========")
-    print(f"统计时间区间: {args.start} 至 {args.end}")
-    print(f"待处理基金数: {len(args.funds)} 只\n")
+    print(f"\n======== 开始抓取数据并生成 HTML 看板 ========")
+    print(f"统计区间: {args.start} 至 {args.end}")
+    print(f"处理进度:")
 
-    header = (
-        f"{'代码':<7} | "
-        f"{'基金名称 (动态源获取)':<26} | "
-        f"{'来源':<8} | "
-        f"{'最高净值':<8} | "
-        f"{'最低净值':<8} | "
-        f"{'最新净值':<8} | "
-        f"{'最大回撤':<9} | "
-        f"{'修复程度':<9} | "
-        f"{'自低点反弹'}"
-    )
-    print(header)
-    print("-" * 115)
-
-    for code in args.funds:
-        # 实时动态从源获取名称，绝不写死
+    results = []
+    for idx, code in enumerate(args.funds, start=1):
         fund_name = fetch_fund_name_from_source(opener, code)
-        
         raw_data, source_name = fetch_fund_data_multisource(opener, code, args.start, args.end)
         
         if not raw_data:
-            print(f"{code:<7} | {fund_name:<26} | {source_name:<8} | 无法获取历史数据")
+            print(f"[{idx}/{len(args.funds)}] {code} - {fund_name} ... ❌ 抓取失败")
             continue
 
         res = analyze_fund_metrics(raw_data)
-        if not res:
-            print(f"{code:<7} | {fund_name:<26} | {source_name:<8} | 净值数据不足")
-            continue
-
-        print(
-            f"{code:<7} | "
-            f"{fund_name:{chr(12288)}<20} | "  # 保持中文宽带对齐
-            f"{source_name:<6} | "
-            f"{res['peak_nav']:<8.4f} | "
-            f"{res['trough_nav']:<8.4f} | "
-            f"{res['latest_nav']:<8.4f} | "
-            f"{res['max_drawdown']:<7.2f}% | "
-            f"{res['recovery_rate']:<7.2f}% | "
-            f"{res['rebound_gain']:<7.2f}%"
-        )
+        if res:
+            res.update({
+                "code": code,
+                "name": fund_name,
+                "source": source_name
+            })
+            results.append(res)
+            print(f"[{idx}/{len(args.funds)}] {code} - {fund_name} ... ✅ 完成 ({source_name})")
         
         time.sleep(random.uniform(0.05, 0.1))
 
-    print("-" * 115)
+    if results:
+        abs_path = generate_html_report(results, args.start, args.end, filename=args.out)
+        print(f"\n🎉 网页生成成功！文件路径:")
+        print(f"👉 {abs_path}")
+        # 尝试自动在浏览器中打开生成的页面
+        try:
+            webbrowser.open(f"file://{abs_path}")
+        except Exception:
+            pass
+    else:
+        print("\n❌ 未能成功获取任何有效的基金数据，无法生成HTML。")
 
 if __name__ == "__main__":
     main()
