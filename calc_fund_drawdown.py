@@ -10,35 +10,38 @@ import urllib.parse
 import akshare as ak
 from datetime import datetime, timedelta
 
-# 强制清空代理环境变量，避免 VPN 或代理劫持请求
+# 强制清空代理环境变量
 for env_var in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]:
     os.environ.pop(env_var, None)
 
 DEFAULT_FUNDS = [
-    "002891", "014002", "012922", "021662", "539002", "021842", "018036",
-    "008254", "017731", "016665", "018230", "021277", "005698", "501312",
-    "017654", "022184", "017437", "017145", "016702", "016823", "019156"
+    "002891", "014002", "006555", "012922", "012920", "021662", "457001", "539002",
+    "018147", "021842", "006373", "018036", "501226", "008254", "008253", "017731",
+    "017730", "016665", "016664", "018230", "018229", "021277", "270023", "005698",
+    "024239", "501312", "017204", "017654", "017653", "022184", "100055", "017437",
+    "017436", "017145", "017144", "016702", "016701", "016823", "164212", "019156",
+    "019155",
+    "016668", "501225", "015202", "001668", "000043"
 ]
 
 def get_direct_opener():
-    """构建绕过本地代理的底层网络连接池"""
     proxy_handler = urllib.request.ProxyHandler({})
     return urllib.request.build_opener(proxy_handler)
 
 def fetch_fund_detail_meta(opener, code):
-    """全面抓取：名称, 规模, 管理费, 托管费, 销售服务费, 申购费, 多档持有期赎回费, 交易状态, 申购限额"""
+    """全面抓取：名称、规模、运作费率（管/托/销）、申购费率（优惠后）、赎回费率、交易状态、限额"""
     meta = {
         "name": f"基金_{code}",
         "scale": "未知",
         "scale_val": -1.0,
-        "fee_manage": "--",
-        "fee_custody": "--",
-        "fee_sales": "--",
-        "fee_purchase": "0.00%",     
+        "fee_manage": None,
+        "fee_custody": None,
+        "fee_sales": None,
+        "fee_purchase": "0.00%",
         "fee_redemption": "未知",
         "buy_status": "--",
-        "buy_limit": "无限额",          # 显示用字符串
-        "buy_limit_val": -1,           # 排序用数值（单位：元）
+        "buy_limit": "无限额",
+        "buy_limit_val": -1,
         "fee_total": "未知",
         "fee_val": -1.0
     }
@@ -49,97 +52,165 @@ def fetch_fund_detail_meta(opener, code):
         "Accept-Language": "zh-CN,zh;q=0.9"
     }
 
-    js_url = f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
+    # 1. 获取基金主页 HTML（用于解析费率、交易状态等）
+    main_url = f"https://fund.eastmoney.com/{code}.html"
+    main_html = None
     try:
-        req = urllib.request.Request(js_url, headers=headers)
+        req = urllib.request.Request(main_url, headers=headers)
         with opener.open(req, timeout=5) as resp:
-            content = resp.read().decode('utf-8', errors='ignore')
-
-            match_name = re.search(r'var\s+fS_name\s*=\s*["\']([^"\']+)["\']', content)
-            if match_name:
-                meta["name"] = match_name.group(1)
-
-            # 规模获取方式替换为 AkShare 雪球接口
-            try:
-                df_xq = ak.fund_individual_basic_info_xq(symbol=code)
-                if df_xq is not None and not df_xq.empty:
-                    cols = df_xq.columns.tolist()
-                    if len(cols) >= 2:
-                        info_dict = dict(zip(df_xq[cols[0]], df_xq[cols[1]]))
-
-                        for k in ["基金规模", "资产规模", "最新规模"]:
-                            if k in info_dict and info_dict[k]:
-                                scale_str = str(info_dict[k])
-                                scale_m = re.search(r'([\d\.]+)', scale_str)
-                                if scale_m:
-                                    val = float(scale_m.group(1))
-                                    meta["scale_val"] = val
-                                    meta["scale"] = f"{val:.2f} 亿"
-                                break
-            except Exception:
-                pass
-
-            match_rate = re.search(r'var\s+Data_rateInverstment\s*=\s*["\']([^"\']+)["\']', content)
-            if match_rate:
-                rate_text = match_rate.group(1)
-                m_match = re.search(r'管理费[：:]\s*([\d\.]+)%', rate_text)
-                c_match = re.search(r'托管费[：:]\s*([\d\.]+)%', rate_text)
-                s_match = re.search(r'销售服务费[：:]\s*([\d\.]+)%', rate_text)
-                
-                m_val = float(m_match.group(1)) if m_match else 0.0
-                c_val = float(c_match.group(1)) if c_match else 0.0
-                s_val = float(s_match.group(1)) if s_match else 0.0
-
-                if m_val > 0 or c_val > 0 or s_val > 0:
-                    meta["fee_manage"] = f"{m_val:.2f}%"
-                    meta["fee_custody"] = f"{c_val:.2f}%"
-                    meta["fee_sales"] = f"{s_val:.2f}%"
-                    tot = m_val + c_val + s_val
-                    meta["fee_val"] = tot
-                    meta["fee_total"] = f"{tot:.2f}%"
-            
-            buy_m = re.search(r'var\s+fund_sourceRate\s*=\s*"([^"]+)";', content)
-            if buy_m:
-                meta["fee_purchase"] = buy_m.group(1)
+            main_html = resp.read().decode('utf-8', errors='ignore')
     except Exception:
         pass
 
+    if main_html:
+        # 基金名称（优先从主页<title>获取）
+        name_match = re.search(r'<title>(.*?)基金', main_html)
+        if name_match:
+            meta["name"] = name_match.group(1).strip() + "基金"
+
+        # ---- 运作费率从主页精确匹配 ----
+        manage_match = re.search(r'管理费率?[：:]\s*([\d.]+)%', main_html)
+        if manage_match:
+            meta["fee_manage"] = manage_match.group(1)
+
+        custody_match = re.search(r'托管费率?[：:]\s*([\d.]+)%', main_html)
+        if custody_match:
+            meta["fee_custody"] = custody_match.group(1)
+
+        sales_match = re.search(r'销售服务费率?[：:]\s*([\d.]+)%', main_html)
+        if sales_match:
+            meta["fee_sales"] = sales_match.group(1)
+
+        # 申购费率（优惠后，取最小值）
+        rate_section = re.search(r'申购费率[：:](.*?)(?=<div|$)', main_html, re.S)
+        if rate_section:
+            rates = re.findall(r'([\d.]+%)', rate_section.group(1))
+            if rates:
+                min_rate_str = min(rates, key=lambda x: float(x.strip('%')))
+                meta["fee_purchase"] = min_rate_str
+
+        # 交易状态和申购限额
+        trade = re.search(r"交易状态：</span>(.*?)</div>", main_html, re.S)
+        if trade:
+            text = re.sub(r"<.*?>", "", trade.group(1))
+            text = text.replace("&nbsp;", "").strip()
+            status = re.search(r"^(.*?)\s*\(", text)
+            if status:
+                meta["buy_status"] = status.group(1).strip()
+            limit_match = re.search(r"单日累计购买上限([\d.]+)(万?)元", text)
+            if limit_match:
+                num = float(limit_match.group(1))
+                if limit_match.group(2) == "万":
+                    num *= 10000
+                meta["buy_limit"] = f"{limit_match.group(1)}{limit_match.group(2)}元"
+                meta["buy_limit_val"] = num
+            else:
+                meta["buy_limit"] = "无限额"
+                meta["buy_limit_val"] = -1
+
+    # 2. 从 pingzhongdata.js 补充名称、规模、费率等
+    js_url = f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
+    js_content = None
+    try:
+        req = urllib.request.Request(js_url, headers=headers)
+        with opener.open(req, timeout=5) as resp:
+            js_content = resp.read().decode('utf-8', errors='ignore')
+    except Exception:
+        pass
+
+    if js_content:
+        if meta["name"] == f"基金_{code}":
+            match_name = re.search(r'var\s+fS_name\s*=\s*["\']([^"\']+)["\']', js_content)
+            if match_name:
+                meta["name"] = match_name.group(1)
+
+        # 规模（AkShare）
+        try:
+            df_xq = ak.fund_individual_basic_info_xq(symbol=code)
+            if df_xq is not None and not df_xq.empty:
+                cols = df_xq.columns.tolist()
+                if len(cols) >= 2:
+                    info_dict = dict(zip(df_xq[cols[0]], df_xq[cols[1]]))
+                    for k in ["基金规模", "资产规模", "最新规模"]:
+                        if k in info_dict and info_dict[k]:
+                            scale_str = str(info_dict[k])
+                            unit_match = re.search(r'([\d.]+)\s*(亿|万)', scale_str)
+                            if unit_match:
+                                num = float(unit_match.group(1))
+                                if unit_match.group(2) == '万':
+                                    num /= 10000.0
+                                meta["scale_val"] = num
+                                meta["scale"] = f"{num:.2f} 亿"
+                            else:
+                                num_match = re.search(r'([\d.]+)', scale_str)
+                                if num_match:
+                                    num = float(num_match.group(1))
+                                    meta["scale_val"] = num
+                                    meta["scale"] = f"{num:.2f} 亿"
+                            break
+        except Exception:
+            pass
+
+        # 如果管理/托管/销售费率有缺失，从 Data_rateInverstment 补充
+        rate_match = re.search(r'var\s+Data_rateInverstment\s*=\s*["\']([^"\']+)["\']', js_content)
+        if rate_match:
+            rate_text = rate_match.group(1)
+            if meta["fee_manage"] is None:
+                m = re.search(r'管理费[：:]\s*([\d.]+)%', rate_text)
+                if m:
+                    meta["fee_manage"] = m.group(1)
+            if meta["fee_custody"] is None:
+                c = re.search(r'托管费[：:]\s*([\d.]+)%', rate_text)
+                if c:
+                    meta["fee_custody"] = c.group(1)
+            if meta["fee_sales"] is None:
+                s = re.search(r'销售服务费[：:]\s*([\d.]+)%', rate_text)
+                if s:
+                    meta["fee_sales"] = s.group(1)
+
+        # 申购费率（若主页未取到优惠，则用标准费率）
+        if meta["fee_purchase"] == "0.00%":
+            buy_m = re.search(r'var\s+fund_sourceRate\s*=\s*"([^"]+)";', js_content)
+            if buy_m:
+                meta["fee_purchase"] = buy_m.group(1)
+
+    # 3. 从 F10 页面补充缺失的费率和规模，并强制解析赎回费率
     f10_url = f"https://fundf10.eastmoney.com/jjfl_{code}.html"
     try:
         req = urllib.request.Request(f10_url, headers=headers)
         with opener.open(req, timeout=5) as resp:
-            html = resp.read().decode('utf-8', errors='ignore')
+            f10_html = resp.read().decode('utf-8', errors='ignore')
 
+            # ----- 补充管理/托管/销售费率（若仍缺失） -----
+            if meta["fee_manage"] is None:
+                mm = re.search(r'管理费率.*?([\d.]+)%', f10_html, re.S)
+                if mm:
+                    meta["fee_manage"] = mm.group(1)
+            if meta["fee_custody"] is None:
+                cc = re.search(r'托管费率.*?([\d.]+)%', f10_html, re.S)
+                if cc:
+                    meta["fee_custody"] = cc.group(1)
+            if meta["fee_sales"] is None:
+                ss = re.search(r'销售服务费率.*?([\d.]+)%', f10_html, re.S)
+                if ss:
+                    meta["fee_sales"] = ss.group(1)
+
+            # ----- 补充规模（若仍未知） -----
             if meta["scale"] == "未知":
-                scale_m = re.search(r'基金规模.*?([\d\.]+)\s*亿元', html, re.S)
+                scale_m = re.search(r'基金规模.*?([\d.]+)\s*亿元', f10_html, re.S)
                 if scale_m:
-                    meta["scale_val"] = float(scale_m.group(1))
-                    meta["scale"] = f"{scale_m.group(1)} 亿"
+                    num = float(scale_m.group(1))
+                    meta["scale_val"] = num
+                    meta["scale"] = f"{num:.2f} 亿"
+                else:
+                    scale_m = re.search(r'基金规模.*?([\d.]+)\s*万元', f10_html, re.S)
+                    if scale_m:
+                        num = float(scale_m.group(1)) / 10000.0
+                        meta["scale_val"] = num
+                        meta["scale"] = f"{num:.2f} 亿"
 
-            if meta["fee_total"] == "未知":
-                m_m = re.search(r'管理费率.*?([\d\.]+)%', html, re.S)
-                c_m = re.search(r'托管费率.*?([\d\.]+)%', html, re.S)
-                s_m = re.search(r'销售服务费率.*?([\d\.]+)%', html, re.S)
-                
-                m_v = float(m_m.group(1)) if m_m else 0.0
-                c_v = float(c_m.group(1)) if c_m else 0.0
-                s_v = float(s_m.group(1)) if s_m else 0.0
-                
-                if m_v > 0 or c_v > 0 or s_v > 0:
-                    meta["fee_manage"] = f"{m_v:.2f}%"
-                    meta["fee_custody"] = f"{c_v:.2f}%"
-                    meta["fee_sales"] = f"{s_v:.2f}%"
-                    tot = m_v + c_v + s_v
-                    meta["fee_val"] = tot
-                    meta["fee_total"] = f"{tot:.2f}%"
-
-            purch_section = re.search(r'申购费率.*?(?:</table>|<div class="info">)', html, re.S)
-            if purch_section:
-                vals = re.findall(r'([\d\.]+)%', purch_section.group(0))
-                if vals:
-                    meta["fee_purchase"] = f"{float(vals[0]):.2f}%"
-
-            red_section = re.search(r'赎回费率.*?(?:</table>|</div>\s*</div>)', html, re.S)
+            # ----- 强制解析赎回费率（参考 calc_fund_drawdown.py） -----
+            red_section = re.search(r'赎回费率.*?(?:</table>|</div>\s*</div>)', f10_html, re.S)
             if red_section:
                 red_html = red_section.group(0)
                 rows = re.findall(r'<tr[^>]*>(.*?)<\/tr>', red_html, re.S)
@@ -151,104 +222,109 @@ def fetch_fund_detail_meta(opener, code):
                         rate_desc = re.sub(r'<[^>]+>', '', cols[1]).strip()
                         if period_desc and rate_desc and '%' in rate_desc:
                             red_tiers.append(f"{period_desc}: {rate_desc}")
-                
                 if red_tiers:
                     meta["fee_redemption"] = " | ".join(red_tiers)
                 else:
-                    red_m = re.findall(r'([\d\.]+)%', red_html)
+                    red_m = re.findall(r'([\d.]+)%', red_html)
                     if red_m:
                         meta["fee_redemption"] = f"常规档: {red_m[0]}%"
     except Exception:
         pass
 
-    if code.endswith('C') or code.startswith('014') or code.startswith('012') or code.startswith('021'):
-        if meta["fee_purchase"] == "0.00%":
-            meta["fee_purchase"] = "0.00% (C类免)"
+    # 4. 处理缺失值：管理费和托管费若仍为None则设为"--"，销售服务费设为"0.00%"
+    if meta["fee_manage"] is None:
+        meta["fee_manage"] = "--"
+    else:
+        meta["fee_manage"] = f"{float(meta['fee_manage']):.2f}%"
 
-    # 获取交易状态和申购限额（修复：支持“万元”和“元”，并提取数值用于排序）
-    trade_url = f"https://fund.eastmoney.com/{code}.html"
-    try:
-        req = urllib.request.Request(trade_url, headers=headers)
-        with opener.open(req, timeout=5) as resp:
-            trade_html = resp.read().decode("utf-8", errors="ignore")
+    if meta["fee_custody"] is None:
+        meta["fee_custody"] = "--"
+    else:
+        meta["fee_custody"] = f"{float(meta['fee_custody']):.2f}%"
 
-        trade = re.search(r"交易状态：</span>(.*?)</div>", trade_html, re.S)
-        if trade:
-            text = re.sub(r"<.*?>", "", trade.group(1))
-            text = text.replace("&nbsp;", "").strip()
+    if meta["fee_sales"] is None:
+        meta["fee_sales"] = "0.00%"
+    else:
+        meta["fee_sales"] = f"{float(meta['fee_sales']):.2f}%"
 
-            status = re.search(r"^(.*?)\s*\(", text)
-            if status:
-                meta["buy_status"] = status.group(1).strip()
-
-            # 修复：提取数字和单位，计算元数值
-            limit_match = re.search(r"单日累计购买上限([\d.]+)(万?)元", text)
-            if limit_match:
-                num = float(limit_match.group(1))
-                if limit_match.group(2) == "万":
-                    num *= 10000
-                meta["buy_limit"] = f"{limit_match.group(1)}{limit_match.group(2)}元"  # 保留原始格式
-                meta["buy_limit_val"] = num
-            else:
-                # 无上限或未匹配，保持默认
-                meta["buy_limit"] = "无限额"
-                meta["buy_limit_val"] = -1
-    except Exception:
-        pass
+    # 5. 计算运作费合计
+    m_val = float(re.search(r'([\d.]+)', meta["fee_manage"]).group(1)) if meta["fee_manage"] != "--" else 0.0
+    c_val = float(re.search(r'([\d.]+)', meta["fee_custody"]).group(1)) if meta["fee_custody"] != "--" else 0.0
+    s_val = float(re.search(r'([\d.]+)', meta["fee_sales"]).group(1)) if meta["fee_sales"] != "--" else 0.0
+    tot = m_val + c_val + s_val
+    if tot > 0:
+        meta["fee_val"] = tot
+        meta["fee_total"] = f"{tot:.2f}%"
+    else:
+        meta["fee_total"] = "0.00%"
 
     return meta
 
 def fetch_from_eastmoney(opener, code, start_date, end_date):
-    """获取历史净值数据"""
-    base_url = "https://api.fund.eastmoney.com/f10/lsjz"
-    params = {
-        "callback": "jQuery11230_lsjz",
-        "fundCode": code,
-        "pageIndex": 1,
-        "pageSize": 200,
-        "startDate": start_date,
-        "endDate": end_date,
-        "_": str(int(time.time() * 1000))
-    }
-    url = f"{base_url}?{urllib.parse.urlencode(params)}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Referer": f"https://fundf10.eastmoney.com/jjjz_{code}.html"
-    }
-    try:
-        req = urllib.request.Request(url, headers=headers)
-        with opener.open(req, timeout=5) as resp:
-            html = resp.read().decode('utf-8')
-            match = re.search(r'jQuery11230_lsjz\((.*)\)', html)
-            if match:
-                res_json = json.loads(match.group(1))
-                lsjz = res_json.get("Data", {}).get("LSJZList", [])
-                if lsjz:
-                    clean_data = []
+    """获取历史净值数据（自动翻页，每页20条）"""
+    all_data = []
+    page_index = 1
+    page_size = 20
+
+    while True:
+        base_url = "https://api.fund.eastmoney.com/f10/lsjz"
+        params = {
+            "callback": "jQuery11230_lsjz",
+            "fundCode": code,
+            "pageIndex": page_index,
+            "pageSize": page_size,
+            "startDate": start_date,
+            "endDate": end_date,
+            "_": str(int(time.time() * 1000))
+        }
+        url = f"{base_url}?{urllib.parse.urlencode(params)}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": f"https://fundf10.eastmoney.com/jjjz_{code}.html"
+        }
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            with opener.open(req, timeout=5) as resp:
+                html = resp.read().decode('utf-8')
+                match = re.search(r'jQuery11230_lsjz\((.*)\)', html)
+                if match:
+                    res_json = json.loads(match.group(1))
+                    lsjz = res_json.get("Data", {}).get("LSJZList", [])
+                    if not lsjz:
+                        break
                     for item in lsjz:
                         if item.get("DWJZ"):
-                            clean_data.append({"date": item["FSRQ"], "nav": float(item["DWJZ"])})
-                    return clean_data
-    except Exception:
-        pass
-    return None
+                            all_data.append({"date": item["FSRQ"], "nav": float(item["DWJZ"])})
+                    if len(lsjz) < page_size:
+                        break
+                    page_index += 1
+                else:
+                    break
+        except Exception:
+            break
+
+    return all_data if all_data else None
 
 def analyze_fund_metrics(valid_data):
-    """计算核心量化指标：最大回撤、修复率、低点反弹幅度"""
     data = sorted(valid_data, key=lambda x: x["date"])
     if not data:
         return None
+
+    max_item = max(data, key=lambda x: x["nav"])
+    min_item = min(data, key=lambda x: x["nav"])
+    max_nav_val = max_item["nav"]
+    min_nav_val = min_item["nav"]
+    max_nav_date = max_item["date"]
+    min_nav_date = min_item["date"]
 
     max_drawdown = 0.0
     peak_nav = data[0]["nav"]
     trough_nav = data[0]["nav"]
     temp_peak = data[0]["nav"]
-
     for item in data:
         nav = item["nav"]
         if nav > temp_peak:
             temp_peak = nav
-            
         drawdown = (temp_peak - nav) / temp_peak
         if drawdown > max_drawdown:
             max_drawdown = drawdown
@@ -256,9 +332,8 @@ def analyze_fund_metrics(valid_data):
             trough_nav = nav
 
     latest_nav = data[-1]["nav"]
-
     if max_drawdown == 0:
-        recovery_rate = 100.0  
+        recovery_rate = 100.0
     elif peak_nav == trough_nav:
         recovery_rate = 0.0
     else:
@@ -267,6 +342,10 @@ def analyze_fund_metrics(valid_data):
     rebound_gain = ((latest_nav - trough_nav) / trough_nav) * 100.0 if trough_nav > 0 else 0.0
 
     return {
+        "max_nav": max_nav_val,
+        "max_nav_date": max_nav_date,
+        "min_nav": min_nav_val,
+        "min_nav_date": min_nav_date,
         "peak_nav": peak_nav,
         "trough_nav": trough_nav,
         "latest_nav": latest_nav,
@@ -276,32 +355,45 @@ def analyze_fund_metrics(valid_data):
     }
 
 def generate_html_report(results, start_date, end_date, filename="fund_drawdown_dashboard.html"):
-    """生成包含申购限额列的 HTML 看板，限额按数值排序"""
     rows_html = ""
     for r in results:
         fund_url = f"https://fund.eastmoney.com/{r['code']}.html"
-        
         max_dd_pct = min(max(r['max_drawdown'], 0), 100)
         rec_pct = min(max(r['recovery_rate'], 0), 100)
         reb_pct = min(max(r['rebound_gain'], 0), 100)
-
-        # 获取限额显示字符串和数值
         limit_display = r.get('buy_limit', '无限额')
         limit_val = r.get('buy_limit_val', -1)
+
+        max_nav_display = f"{r['max_nav']:.4f} ({r['max_nav_date']})"
+        min_nav_display = f"{r['min_nav']:.4f} ({r['min_nav_date']})"
+
+        # 拆分赎回费率为多行，并对百分比进行高亮
+        redemption_text = r.get('fee_redemption', '未知')
+        if redemption_text and redemption_text != "未知":
+            parts = redemption_text.split(" | ")
+            # 对每个 part 中的百分比加高亮
+            highlighted_parts = []
+            for part in parts:
+                # 将如 "1.50%" 替换为 '<span class="highlight-rate">1.50%</span>'
+                highlighted = re.sub(r'(\d+\.\d+%)', r'<span class="highlight-rate">\1</span>', part)
+                highlighted_parts.append(highlighted)
+            redemption_lines = "<br>".join(highlighted_parts)
+        else:
+            redemption_lines = redemption_text or "未知"
 
         rows_html += f"""
         <tr>
             <td class="code" data-val="{r['code']}">{r['code']}</td>
             <td class="name" data-val="{r['name']}">
                 <a href="{fund_url}" target="_blank" title="点击查看天天基金概况">{r['name']}</a>
-                <div class="redemption-sub">赎回: {r['fee_redemption']}</div>
+                <div class="redemption-sub" style="white-space: normal; line-height: 1.6;">赎回:<br>{redemption_lines}</div>
             </td>
             <td data-val="{r['scale_val']}" class="highlight-val">{r['scale']}</td>
             <td data-val="{r['fee_val']}">{r['fee_total']} <span class="fee-sub">(管:{r['fee_manage']}/托:{r['fee_custody']}/销:{r['fee_sales']})</span></td>
             <td data-val="{r['fee_purchase']}">{r['fee_purchase']}</td>
             <td data-val="{limit_val}">{r.get('buy_status', '--')}<div class="fee-sub">{limit_display}</div></td>
-            <td data-val="{r['peak_nav']}">{r['peak_nav']:.4f}</td>
-            <td data-val="{r['trough_nav']}">{r['trough_nav']:.4f}</td>
+            <td data-val="{r['max_nav']}">{max_nav_display}</td>
+            <td data-val="{r['min_nav']}">{min_nav_display}</td>
             <td data-val="{r['latest_nav']}">{r['latest_nav']:.4f}</td>
             <td class="metric-red" data-val="{r['max_drawdown']}">
                 <div class="progress-container progress-text">
@@ -354,7 +446,6 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             padding:20px; 
             border:1px solid #e0e0e0; 
         }}
-        
         table {{ 
             width:100%; 
             min-width:1650px; 
@@ -371,17 +462,15 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             text-overflow:ellipsis; 
             box-sizing:border-box; 
         }}
-        
-        /* ----- 各列宽度与换行策略 ----- */
         th:nth-child(1), td:nth-child(1) {{ width: 80px; text-align: left; white-space: nowrap; }}
         th:nth-child(2), td:nth-child(2) {{ width: 260px; min-width: 200px; text-align: left; white-space: normal; word-break: break-word; vertical-align: middle; }}
         th:nth-child(3), td:nth-child(3) {{ width: 120px; text-align: left; white-space: nowrap; }}
         th:nth-child(4), td:nth-child(4) {{ width: 160px; text-align: left; white-space: normal; word-break: break-word; }}
         th:nth-child(5), td:nth-child(5) {{ width: 80px; text-align: left; white-space: nowrap; }}
-        th:nth-child(6), td:nth-child(6) {{ width: 120px; text-align: left; white-space: nowrap; }}  /* 申购限额列 */
+        th:nth-child(6), td:nth-child(6) {{ width: 120px; text-align: left; white-space: nowrap; }}
         th:nth-child(7), td:nth-child(7),
         th:nth-child(8), td:nth-child(8),
-        th:nth-child(9), td:nth-child(9) {{ width: 80px; white-space: nowrap; }}
+        th:nth-child(9), td:nth-child(9) {{ width: 120px; white-space: nowrap; }}
         th:nth-last-child(3),
         td:nth-last-child(3),
         th:nth-last-child(2),
@@ -392,7 +481,6 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             min-width: 200px;
             white-space: nowrap;
         }}
-
         th {{ 
             background-color: #f1f3f4; 
             color: #3c4043; 
@@ -407,7 +495,6 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         th:hover {{ background-color: #e4e7eb; }}
         th:nth-child(1), th:nth-child(2), th:nth-child(3), th:nth-child(4), th:nth-child(5), th:nth-child(6) {{ text-align: left; }}
         tr:hover {{ background-color: #f8f9fa; }}
-        
         .resizer {{
             position: absolute; 
             right: 0; 
@@ -420,7 +507,6 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             z-index: 10;
         }}
         .resizer:hover, th.resizing .resizer {{ background-color: #1a73e8; }}
-
         .sort-icon {{ font-size: 10px; margin-left: 2px; color: #70757a; }}
         .code {{ font-family: "SFMono-Regular", Consolas, monospace; font-weight: bold; color: #1a73e8; }}
         .name a {{ 
@@ -439,13 +525,13 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             color: #7f8c8d; 
             font-weight: normal; 
             margin-top: 2px; 
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+        }}
+        .highlight-rate {{
+            color: #d93025;
+            font-weight: bold;
         }}
         .highlight-val {{ font-weight: 600; color: #e67e22; }}
         .fee-sub {{ font-size: 10px; color: #7f8c8d; }}
-        
         .progress-container {{
             background-color:#e5e7eb;
             border-radius:6px;
@@ -474,7 +560,6 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         .bar-red {{ background-color:#d93025; }}
         .bar-blue {{ background-color:#1a73e8; }}
         .bar-green {{ background-color:#188038; }}
-
         .metric-red {{ color: #d93025; font-weight: 600; }}
         .metric-green {{ color: #188038; font-weight: 600; }}
         .footer-note {{ 
@@ -491,12 +576,11 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
     </style>
 </head>
 <body>
-
     <div class="header">
         <h2>场外基金核心量化与全费率规模看板（含申购限额）</h2>
         <p>统计时间区间：<strong>{start_date}</strong> 至 <strong>{end_date}</strong> （包含基金数：{len(results)} 只）</p>
+        <p style="font-size:12px; color:#5f6368;">申购费率已取优惠后费率，销售服务费若未显示则默认为0.00%。赎回费率百分比已高亮。</p>
     </div>
-
     <div class="table-container">
         <table id="fundTable">
             <thead>
@@ -520,31 +604,22 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             </tbody>
         </table>
     </div>
-
     <div class="footer-note">
-        <p><strong>使用提示：</strong> 列宽可拖拽调整，点击表头排序。名称列与运作费列支持自动换行，避免文字覆盖。申购限额按数值大小排序（元为单位）。</p>
+        <p><strong>使用提示：</strong> 列宽可拖拽调整，点击表头排序。赎回费率百分比已高亮（红色加粗）。</p>
     </div>
-
     <script>
         document.addEventListener("DOMContentLoaded", function () {{
             const table = document.getElementById("fundTable");
             const headers = table.querySelectorAll("th");
-
             headers.forEach((th, idx) => {{
                 th.addEventListener("click", function(e) {{
-                    if (th.classList.contains("is-resizing") || window._isDragging) {{
-                        return;
-                    }}
+                    if (th.classList.contains("is-resizing") || window._isDragging) return;
                     sortTable(idx);
                 }});
-
                 const resizer = document.createElement("div");
                 resizer.classList.add("resizer");
                 th.appendChild(resizer);
-
-                let x = 0;
-                let w = 0;
-
+                let x = 0, w = 0;
                 resizer.addEventListener("mousedown", function (e) {{
                     e.preventDefault();
                     e.stopPropagation();
@@ -554,13 +629,11 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                     th.style.width = w + "px";
                     th.classList.add("resizing");
                     th.classList.add("is-resizing");
-
                     function mouseMoveHandler(e) {{
                         const dx = e.clientX - x;
                         const newWidth = Math.max(40, w + dx);
                         th.style.width = newWidth + "px";
                     }}
-
                     function mouseUpHandler(e) {{
                         th.classList.remove("resizing");
                         document.removeEventListener("mousemove", mouseMoveHandler);
@@ -572,49 +645,38 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                             th.classList.remove("is-resizing");
                         }}, 50);
                     }}
-
                     document.addEventListener("mousemove", mouseMoveHandler);
                     document.addEventListener("mouseup", mouseUpHandler);
                 }});
             }});
         }});
-
         let currentSortCol = -1;
         let isAscending = true;
-
         function sortTable(colIndex) {{
             const table = document.getElementById("fundTable");
             const tbody = table.querySelector("tbody");
             const rows = Array.from(tbody.querySelectorAll("tr"));
-
             if (currentSortCol === colIndex) {{
                 isAscending = !isAscending;
             }} else {{
                 currentSortCol = colIndex;
                 isAscending = true;
             }}
-
             rows.sort((a, b) => {{
                 const cellA = a.children[colIndex];
                 const cellB = b.children[colIndex];
-                
                 let valA = cellA.getAttribute("data-val");
                 let valB = cellB.getAttribute("data-val");
-
                 const numA = parseFloat(valA);
                 const numB = parseFloat(valB);
-
                 if (!isNaN(numA) && !isNaN(numB)) {{
                     return isAscending ? numA - numB : numB - numA;
                 }}
-
                 return isAscending 
                     ? valA.localeCompare(valB, 'zh-Hans-CN', {{ sensitivity: 'accent' }})
                     : valB.localeCompare(valA, 'zh-Hans-CN', {{ sensitivity: 'accent' }});
             }});
-
             rows.forEach(row => tbody.appendChild(row));
-
             const headers = table.querySelectorAll("th");
             headers.forEach((th, idx) => {{
                 const icon = th.querySelector(".sort-icon");
@@ -635,12 +697,11 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
 """
     with open(filename, "w", encoding="utf-8") as f:
         f.write(html_content)
-    
     return os.path.abspath(filename)
 
 def main():
     today_str = datetime.now().strftime("%Y-%m-%d")
-    default_start = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
+    default_start = "2026-04-01"
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--start", type=str, default=default_start)
@@ -651,18 +712,17 @@ def main():
     args = parser.parse_args()
     opener = get_direct_opener()
 
-    print(f"\n======== 开始抓取数据 (含申购限额，已修复单位识别与排序) ========")
+    print(f"\n======== 开始抓取数据 (赎回费率百分比高亮) ========")
     print(f"统计区间: {args.start} 至 {args.end}")
+    print(f"基金总数: {len(args.funds)}")
 
     results = []
     for idx, code in enumerate(args.funds, start=1):
         meta = fetch_fund_detail_meta(opener, code)
         raw_data = fetch_from_eastmoney(opener, code, args.start, args.end)
-        
         if not raw_data:
             print(f"[{idx}/{len(args.funds)}] {code} - {meta['name']} ... ❌ 历史净值抓取失败")
             continue
-
         res = analyze_fund_metrics(raw_data)
         if res:
             res.update({
@@ -684,7 +744,6 @@ def main():
             })
             results.append(res)
             print(f"[{idx}/{len(args.funds)}] {code} - {meta['name']} ... ✅ 完成")
-        
         time.sleep(random.uniform(0.05, 0.1))
 
     if results:
