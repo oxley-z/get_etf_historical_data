@@ -18,15 +18,17 @@ for env_var in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_p
 
 DEFAULT_FUNDS = [
     "002891", "014002", "006555", "012922", "012920", "021662", "457001", "539002",
-    # "018147", "021842", "006373", "018036", "501226", "008254", "008253", "017731",
-    # "017730", "016665", "016664", "018230", "018229", "021277", "270023", "005698",
-    # "024239", "501312", "017204", "017654", "017653", "022184", "100055", "017437",
-    # "017436", "017145", "017144", "016702", "016701", "016823", "164212", "019156",
-    # "019155",
-    # "016668", "501225", "015202", "001668", "000043",
+    "018147", "021842", "006373", "018036", "501226", "008254", "008253", "017731",
+    "017730", "016665", "016664", "018230", "018229", "021277", "270023", "005698",
+    "024239", "501312", "017204", "017654", "017653", "022184", "100055", "017437",
+    "017436", "017145", "017144", "016702", "016701", "016823", "164212", "019156",
+    "019155",
+    "016668", "501225", "015202", "001668", "000043",
     # CPO 组
     "022365", "540010", "002112", "011892", "021528",
-    "009645", "011370", "011452", "016371"
+    "009645", "011370", "011452", "016371",
+    # 存储芯片组（新增）
+    "025500", "025209", "018816", "014320", "027063"
 ]
 
 CACHE_DIR = "cache"
@@ -603,6 +605,10 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         "009645", "011370", "011452", "016371"
     }
 
+    STORAGE_CODES = {
+        "025500", "025209", "018816", "014320", "027063"
+    }
+
     col_count = 19
 
     def date_to_label(date_str):
@@ -656,7 +662,13 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             else:
                 return ''
 
-        group = "cpo" if r['code'] in CPO_CODES else "qdii"
+        # 分组判断
+        if r['code'] in CPO_CODES:
+            group = "cpo"
+        elif r['code'] in STORAGE_CODES:
+            group = "storage"
+        else:
+            group = "qdii"
 
         holdings_history = r.get('holdings', [])
         print(f"[HTML生成] 基金 {r['code']} 持仓数据: {len(holdings_history)} 个报告期")
@@ -712,14 +724,12 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         # 持仓展开行：每个季度一个卡片，采用三列布局（名称、占比、变化）
         if holdings_history:
             sorted_holdings = sorted(holdings_history, key=lambda x: x['date'], reverse=True)
-            # 只显示最近三个季度
             display_holdings = sorted_holdings[:3]
             holdings_html = ""
             for i, period in enumerate(display_holdings):
                 date_str = period['date']
                 holdings_list = period['holdings']
                 label = date_to_label(date_str)
-                # 上一季度数据（索引 i+1 存在则取，否则 None）
                 prev_period = sorted_holdings[i+1] if i+1 < len(sorted_holdings) else None
                 prev_holdings_dict = {}
                 if prev_period:
@@ -739,18 +749,18 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                                 change_class = ''
                             elif diff > 0.3:
                                 change_text = f'加仓 {diff:.2f}%'
-                                change_class = 'change-add'      # 红色
+                                change_class = 'change-add'
                             elif diff > 0:
                                 change_text = f'↑{diff:.2f}%'
                                 change_class = 'change-up'
                             elif diff < -0.3:
                                 change_text = f'减仓 {abs(diff):.2f}%'
-                                change_class = 'change-sub'      # 绿色
+                                change_class = 'change-sub'
                             else:
                                 change_text = f'↓{abs(diff):.2f}%'
                                 change_class = 'change-down'
                         else:
-                            change_text = '新进'
+                            change_text = '新增'
                             change_class = 'change-new'
                         stocks_html += f'''
                         <div class="stock-item">
@@ -780,7 +790,6 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         </tr>
         """
 
-    # 空组提示行（保持不变）
     empty_row = f"""
         <tr id="empty-row" style="display:none;">
             <td colspan="{col_count}" style="text-align:center; padding:30px; color: var(--footer-text);">
@@ -789,7 +798,6 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         </tr>
     """
 
-    # 分组按钮（保持不变）
     groups = [
         ("QDII", "qdii"),
         ("半导体材料设备", "semiconductor"),
@@ -801,7 +809,6 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
     for label, group_id in groups:
         buttons_html += f'<button class="group-btn" data-group="{group_id}">{label}</button>'
 
-    # 生成完整 HTML，CSS 部分已作调整：
     html_content = f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -978,6 +985,19 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             box-sizing:border-box; 
             transition: border-color 0.3s;
         }}
+        /* ---- 优化固定表头 ---- */
+        #fundTable thead th {{
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background-color: var(--header-bg);
+            border-bottom: 2px solid var(--border);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }}
+        [data-theme="dark"] #fundTable thead th {{
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }}
+        /* ---- 固定表头结束 ---- */
         th:nth-child(1), td:nth-child(1) {{ width: 60px; text-align: left; white-space: nowrap; }}
         th:nth-child(2), td:nth-child(2) {{ width: 240px; min-width: 180px; text-align: left; white-space: normal; word-break: break-word; vertical-align: middle; }}
         th:nth-child(3), td:nth-child(3) {{ width: 80px; text-align: left; white-space: nowrap; }}
@@ -1122,8 +1142,8 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         }}
         .stock-item {{
             display: grid;
-            grid-template-columns: 1fr auto auto;
-            gap: 8px;
+            grid-template-columns: 1fr 70px 90px;
+            gap: 6px;
             font-size: 13px;
             align-items: center;
         }}
@@ -1131,6 +1151,7 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+            text-align: left;
         }}
         .stock-ratio {{
             text-align: right;
