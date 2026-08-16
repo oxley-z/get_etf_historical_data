@@ -660,6 +660,16 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         except:
             return date_str
 
+    # 构建基金净值数据字典用于图表
+    nav_data_json = {}
+    for r in results:
+        if 'nav_data' in r and r['nav_data']:
+            # 按日期排序（已排序）
+            nav_data_json[r['code']] = {
+                'dates': [item['date'] for item in r['nav_data']],
+                'navs': [item['nav'] for item in r['nav_data']]
+            }
+
     rows_html = ""
     for r in results:
         fund_url = f"https://fund.eastmoney.com/{r['code']}.html"
@@ -765,7 +775,7 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         </tr>
         """
 
-        # 持仓展开行：每个季度一个卡片，采用三列布局（名称、占比、变化）
+        # 持仓展开行：左侧三个季度卡片，右侧图表
         if holdings_history:
             sorted_holdings = sorted(holdings_history, key=lambda x: x['date'], reverse=True)
             display_holdings = sorted_holdings[:3]
@@ -824,11 +834,29 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         else:
             holdings_html = '<div>暂无持仓数据</div>'
 
+        # 图表区域（右侧50%）
+        chart_html = f"""
+        <div class="chart-container" id="chart-container-{r['code']}">
+            <div class="chart-controls">
+                <button class="period-btn active" data-period="month" data-code="{r['code']}">近一月</button>
+                <button class="period-btn" data-period="quarter" data-code="{r['code']}">近三月</button>
+                <button class="period-btn" data-period="half" data-code="{r['code']}">近半年</button>
+                <button class="period-btn" data-period="year" data-code="{r['code']}">近一年</button>
+                <button class="period-btn" data-period="ytd" data-code="{r['code']}">今年内</button>
+                <button class="period-btn" data-period="week" data-code="{r['code']}">近一周</button>
+            </div>
+            <canvas id="chart-{r['code']}" width="400" height="200"></canvas>
+        </div>
+        """
+
         rows_html += f"""
         <tr class="holding-row" data-code="{r['code']}">
             <td colspan="{col_count}" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
-                <div class="holdings-container">
-                    {holdings_html}
+                <div class="holdings-wrapper">
+                    <div class="holdings-container">
+                        {holdings_html}
+                    </div>
+                    {chart_html}
                 </div>
             </td>
         </tr>
@@ -848,8 +876,8 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         ("CPO", "cpo"),
         ("人工智能", "ai"),
         ("存储芯片", "storage"),
-        ("电网设备", "grid"),    # 新增
-        ("机器人", "robot")      # 新增
+        ("电网设备", "grid"),
+        ("机器人", "robot")
     ]
     buttons_html = ""
     for label, group_id in groups:
@@ -860,7 +888,8 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>场外基金量化与费率规模看板（含多周期涨幅）</title>
+    <title>场外基金量化与费率规模看板（含多周期涨幅及走势图）</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {{
             --bg: #f8f9fa;
@@ -1031,7 +1060,6 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             box-sizing:border-box; 
             transition: border-color 0.3s;
         }}
-        /* ---- 优化固定表头 ---- */
         #fundTable thead th {{
             position: sticky;
             top: 0;
@@ -1043,7 +1071,6 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         [data-theme="dark"] #fundTable thead th {{
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }}
-        /* ---- 固定表头结束 ---- */
         th:nth-child(1), td:nth-child(1) {{ width: 60px; text-align: left; white-space: nowrap; }}
         th:nth-child(2), td:nth-child(2) {{ width: 240px; min-width: 180px; text-align: left; white-space: normal; word-break: break-word; vertical-align: middle; }}
         th:nth-child(3), td:nth-child(3) {{ width: 80px; text-align: left; white-space: nowrap; }}
@@ -1157,25 +1184,36 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         .holding-row {{ display: none; }}
         .holding-row.show {{ display: table-row; }}
 
-        /* 持仓卡片样式优化 */
-        .holdings-container {{
+        /* 持仓与折线图同一行：左半边三个季度等宽，右半边折线图 */
+        .holdings-wrapper {{
             display: flex;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
             gap: 20px;
-            justify-content: flex-start;
-            padding: 8px 0;
+            align-items: stretch;
+            width: 100%;
+        }}
+        .holdings-container {{
+            flex: 0 0 calc(50% - 10px);
+            width: calc(50% - 10px);
+            display: flex;
+            flex-direction: row;
+            gap: 10px;
+            align-items: stretch;
+            min-width: 0;
         }}
         .quarter-card {{
+            flex: 1 1 0;
+            min-width: 0;
             background: var(--card-bg);
             border-radius: 8px;
-            padding: 12px 16px;
-            min-width: 260px;
-            flex: 0 1 auto;
+            padding: 10px 10px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+            overflow: hidden;
         }}
         .quarter-label {{
             font-weight: bold;
-            font-size: 14px;
+            font-size: 12px;
             margin-bottom: 8px;
             color: var(--header-text);
             border-bottom: 1px solid var(--border);
@@ -1188,9 +1226,9 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         }}
         .stock-item {{
             display: grid;
-            grid-template-columns: 1fr 70px 90px;
-            gap: 6px;
-            font-size: 13px;
+            grid-template-columns: minmax(0, 1fr) 54px 62px;
+            gap: 4px;
+            font-size: 11px;
             align-items: center;
         }}
         .stock-name {{
@@ -1205,7 +1243,7 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         }}
         .stock-change {{
             text-align: right;
-            font-size: 12px;
+            font-size: 10px;
             white-space: nowrap;
         }}
         .change-add {{ color: #d93025; }}
@@ -1213,6 +1251,62 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         .change-up {{ color: #d93025; }}
         .change-down {{ color: #188038; }}
         .change-new {{ color: #1a73e8; }}
+
+        .chart-container {{
+            flex: 0 0 calc(50% - 20px);
+            background: var(--card-bg);
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            min-height: 200px;
+        }}
+        .chart-controls {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 6px;
+        }}
+        .chart-controls button {{
+            background: var(--btn-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2px 10px;
+            font-size: 11px;
+            cursor: pointer;
+            color: var(--btn-text);
+        }}
+        .chart-controls button.active {{
+            background: var(--btn-active-bg);
+            color: var(--btn-active-text);
+            border-color: var(--btn-active-bg);
+        }}
+        .chart-container canvas {{
+            width: 100% !important;
+            height: auto !important;
+            max-height: 200px;
+            flex: 1;
+        }}
+
+        @media (max-width: 1000px) {{
+            .holdings-wrapper {{
+                gap: 10px;
+            }}
+            .holdings-container {{
+                gap: 6px;
+            }}
+            .quarter-card {{
+                padding: 8px 6px;
+            }}
+            .stock-item {{
+                grid-template-columns: minmax(0, 1fr) 48px 56px;
+                font-size: 10px;
+            }}
+            .stock-change {{
+                font-size: 9px;
+            }}
+        }}
 
         .footer-note {{ 
             margin-top: 10px; 
@@ -1232,7 +1326,7 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
 <body>
     <button class="theme-toggle" id="themeToggle">🌓 切换主题</button>
     <div class="header">
-        <h2>场外基金核心量化与全费率规模看板（含多周期涨幅）</h2>
+        <h2>场外基金核心量化与全费率规模看板（含多周期涨幅及走势图）</h2>
         <p>统计时间区间：<strong>{start_date}</strong> 至 <strong>{end_date}</strong> （包含基金数：{len(results)} 只）</p>
         <p style="font-size:12px; color: var(--footer-text);">申购费率已取优惠后费率，销售服务费默认0.00%。赎回费率百分比已高亮。</p>
         <p style="font-size:12px; color: var(--footer-text);">最高/最低净值显示为2026-04-01后最大回撤的峰值与谷值（谷值在峰值之后）。涨幅基于完整数据计算。</p>
@@ -1276,9 +1370,13 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
     </div>
     <div class="footer-note">
         <p><strong>使用提示：</strong> 列宽可拖拽调整，点击表头排序。涨幅数据基于可获取的历史净值，若区间内无对应日期数据则显示“-”。<br>
-        <span style="color: #1a73e8;">👉 点击基金行可展开/收起前十大持仓股（每个季度单独卡片显示）。</span></p>
+        <span style="color: #1a73e8;">👉 点击基金行可展开/收起持仓与净值走势图；左半边三个季度持仓等宽排列，鼠标进入走势图显示十字线、时间、净值和区间涨幅。</span></p>
     </div>
     <script>
+        // 基金净值数据（由Python注入）
+        var fundNavData = {json.dumps(nav_data_json, ensure_ascii=False)};
+
+        // 主题切换
         (function() {{
             const toggle = document.getElementById('themeToggle');
             const currentTheme = localStorage.getItem('theme') || 'light';
@@ -1366,7 +1464,221 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             applyFilters();
         }});
 
-        // 点击基金行展开/关闭持仓
+        // 图表相关
+        var chartInstances = {{}};
+        var chartColors = {{
+            line: '#1a73e8',
+            point: '#1a73e8',
+            bg: 'rgba(26,115,232,0.1)'
+        }};
+
+        // 鼠标十字线插件：鼠标进入图表后显示横/纵十字线
+        const crosshairPlugin = {{
+            id: 'fundCrosshair',
+            afterDraw(chart) {{
+                const crosshair = chart._fundCrosshair;
+                if (!crosshair) return;
+
+                const ctx = chart.ctx;
+                const area = chart.chartArea;
+                if (!area) return;
+
+                const x = Math.max(area.left, Math.min(area.right, crosshair.x));
+                const y = Math.max(area.top, Math.min(area.bottom, crosshair.y));
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(x, area.top);
+                ctx.lineTo(x, area.bottom);
+                ctx.moveTo(area.left, y);
+                ctx.lineTo(area.right, y);
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--footer-text').trim() || '#70757a';
+                ctx.setLineDash([4, 4]);
+                ctx.stroke();
+                ctx.restore();
+            }}
+        }};
+
+        Chart.register(crosshairPlugin);
+
+        function filterNavData(data, period) {{
+            if (!data || !data.dates || data.dates.length === 0) return {{ dates: [], navs: [] }};
+            const dates = data.dates;
+            const navs = data.navs;
+            const latest = new Date(dates[dates.length - 1]);
+            let startDate = new Date(latest);
+            if (period === 'week') {{
+                startDate.setDate(latest.getDate() - 7);
+            }} else if (period === 'month') {{
+                startDate.setMonth(latest.getMonth() - 1);
+            }} else if (period === 'quarter') {{
+                startDate.setMonth(latest.getMonth() - 3);
+            }} else if (period === 'half') {{
+                startDate.setMonth(latest.getMonth() - 6);
+            }} else if (period === 'year') {{
+                startDate.setFullYear(latest.getFullYear() - 1);
+            }} else if (period === 'ytd') {{
+                startDate = new Date(latest.getFullYear(), 0, 1);
+            }}
+            const indices = [];
+            for (let i = 0; i < dates.length; i++) {{
+                const d = new Date(dates[i]);
+                if (d >= startDate) {{
+                    indices.push(i);
+                }}
+            }}
+            if (indices.length === 0) {{
+                // 如果区间无数据，取全部
+                return {{ dates: dates, navs: navs }};
+            }}
+            const filteredDates = indices.map(i => dates[i]);
+            const filteredNavs = indices.map(i => navs[i]);
+            return {{ dates: filteredDates, navs: filteredNavs }};
+        }}
+
+        function initChart(code) {{
+            const canvas = document.getElementById(`chart-${{code}}`);
+            if (!canvas) return;
+            // 检查是否已初始化
+            if (chartInstances[code]) {{
+                if (typeof chartInstances[code].destroy === 'function') {{
+                    chartInstances[code].destroy();
+                    delete chartInstances[code];
+                }} else {{
+                    return;
+                }}
+            }}
+            const data = fundNavData[code];
+            if (!data || !data.dates || data.dates.length === 0) {{
+                canvas.parentElement.innerHTML = '<div style="padding:20px;text-align:center;color:var(--footer-text);">无净值数据</div>';
+                return;
+            }}
+            // 默认显示近一月
+            const filtered = filterNavData(data, 'month');
+            const ctx = canvas.getContext('2d');
+            const chart = new Chart(ctx, {{
+                type: 'line',
+                data: {{
+                    labels: filtered.dates,
+                    datasets: [{{
+                        label: '净值',
+                        data: filtered.navs,
+                        borderColor: chartColors.line,
+                        backgroundColor: chartColors.bg,
+                        pointBackgroundColor: chartColors.point,
+                        pointRadius: 1.5,
+                        pointHoverRadius: 4,
+                        fill: true,
+                        tension: 0.1
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {{
+                        mode: 'index',
+                        intersect: false
+                    }},
+                    onHover: function(event, activeElements, chart) {{
+                        const rect = chart.canvas.getBoundingClientRect();
+                        const x = event.native ? event.native.offsetX : (event.x - rect.left);
+                        const y = event.native ? event.native.offsetY : (event.y - rect.top);
+                        if (x >= chart.chartArea.left && x <= chart.chartArea.right &&
+                            y >= chart.chartArea.top && y <= chart.chartArea.bottom) {{
+                            chart._fundCrosshair = {{x: x, y: y}};
+                        }} else {{
+                            chart._fundCrosshair = null;
+                        }}
+                        chart.draw();
+                    }},
+                    plugins: {{
+                        legend: {{
+                            display: false
+                        }},
+                        tooltip: {{
+                            enabled: true,
+                            mode: 'index',
+                            intersect: false,
+                            displayColors: false,
+                            callbacks: {{
+                                title: function(items) {{
+                                    if (!items || !items.length) return '';
+                                    return '时间: ' + items[0].label;
+                                }},
+                                label: function(context) {{
+                                    const values = context.dataset.data;
+                                    const index = context.dataIndex;
+                                    const value = Number(context.parsed.y);
+                                    const firstValue = Number(values[0]);
+                                    if (Number.isFinite(firstValue) && firstValue !== 0) {{
+                                        const change = ((value - firstValue) / firstValue) * 100;
+                                        return '净值: ' + value.toFixed(4) + '    涨幅: ' + (change >= 0 ? '+' : '') + change.toFixed(2) + '%';
+                                    }}
+                                    return '净值: ' + value.toFixed(4);
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        x: {{
+                            ticks: {{
+                                maxTicksLimit: 12,
+                                font: {{
+                                    size: 9
+                                }},
+                                color: getComputedStyle(document.documentElement).getPropertyValue('--footer-text').trim() || '#70757a'
+                            }},
+                            grid: {{
+                                display: false
+                            }}
+                        }},
+                        y: {{
+                            ticks: {{
+                                font: {{
+                                    size: 9
+                                }},
+                                color: getComputedStyle(document.documentElement).getPropertyValue('--footer-text').trim() || '#70757a'
+                            }},
+                            grid: {{
+                                color: getComputedStyle(document.documentElement).getPropertyValue('--border').trim() || '#e0e0e0'
+                            }}
+                        }}
+                    }}
+                }}
+            }});
+            chartInstances[code] = chart;
+
+            // 鼠标离开图表时隐藏十字线
+            canvas.addEventListener('mouseleave', function() {{
+                if (chart) {{
+                    chart._fundCrosshair = null;
+                    chart.draw();
+                }}
+            }});
+
+            // 绑定周期按钮事件
+            const container = document.getElementById(`chart-container-${{code}}`);
+            if (container) {{
+                const btns = container.querySelectorAll('.period-btn');
+                btns.forEach(btn => {{
+                    btn.addEventListener('click', function() {{
+                        btns.forEach(b => b.classList.remove('active'));
+                        this.classList.add('active');
+                        const period = this.dataset.period;
+                        const filteredData = filterNavData(data, period);
+                        if (chart) {{
+                            chart.data.labels = filteredData.dates;
+                            chart.data.datasets[0].data = filteredData.navs;
+                            chart._fundCrosshair = null;
+                            chart.update();
+                        }}
+                    }});
+                }});
+            }}
+        }}
+
+        // 点击基金行展开/关闭持仓，并初始化图表
         document.addEventListener('DOMContentLoaded', function() {{
             const table = document.getElementById('fundTable');
             table.addEventListener('click', function(e) {{
@@ -1380,6 +1692,10 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                     holdingRow.classList.toggle('show');
                     if (holdingRow.classList.contains('show')) {{
                         holdingRow.style.display = '';
+                        // 延迟初始化图表，确保渲染完成
+                        setTimeout(function() {{
+                            initChart(code);
+                        }}, 100);
                     }} else {{
                         holdingRow.style.display = 'none';
                     }}
@@ -1387,7 +1703,7 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             }});
         }});
 
-        // 排序和列宽拖拽逻辑
+        // 排序和列宽拖拽逻辑（原代码保留）
         document.addEventListener("DOMContentLoaded", function () {{
             const table = document.getElementById("fundTable");
             const headers = table.querySelectorAll("th");
@@ -1503,6 +1819,58 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             }});
         }}
     </script>
+
+<style>
+.holding-empty {{
+    min-height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #999;
+    font-size: 14px;
+}}
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function () {{
+    // 对所有持仓卡片进行处理：
+    // 卡片标签保留原来的“2026年2季度股票投资明细”等标题；
+    // 如果卡片内部没有有效持仓行，则显示“暂无持仓数据”。
+    document.querySelectorAll(".holding-card, .position-card, .holding-item").forEach(function(card) {{
+        var table = card.querySelector("table");
+        if (!table) {{
+            if (!card.querySelector(".holding-empty")) {{
+                var empty = document.createElement("div");
+                empty.className = "holding-empty";
+                empty.textContent = "暂无持仓数据";
+                card.appendChild(empty);
+            }}
+            return;
+        }}
+
+        var rows = table.querySelectorAll("tbody tr");
+        var validRows = 0;
+
+        rows.forEach(function(row) {{
+            var cells = row.querySelectorAll("td");
+            var text = row.textContent.trim();
+            if (cells.length > 0 && text && text !== "暂无持仓数据") {{
+                validRows++;
+            }}
+        }});
+
+        if (validRows === 0) {{
+            table.style.display = "none";
+            if (!card.querySelector(".holding-empty")) {{
+                var empty = document.createElement("div");
+                empty.className = "holding-empty";
+                empty.textContent = "暂无持仓数据";
+                card.appendChild(empty);
+            }}
+        }}
+    }});
+}});
+</script>
+
 </body>
 </html>
 """
@@ -1537,7 +1905,9 @@ def main():
         if not raw_data:
             print(f"[{idx}/{len(args.funds)}] {code} - {meta['name']} ... ❌ 历史净值抓取失败")
             continue
-        res = analyze_fund_metrics(raw_data, args.end, cutoff_date)
+        # 排序并保存净值数据用于图表
+        raw_data_sorted = sorted(raw_data, key=lambda x: x['date'])
+        res = analyze_fund_metrics(raw_data_sorted, args.end, cutoff_date)
         if res:
             res.update({
                 "code": code,
@@ -1555,7 +1925,8 @@ def main():
                 "buy_limit": meta.get("buy_limit", "无限额"),
                 "buy_limit_val": meta.get("buy_limit_val", -1),
                 "holdings": meta.get("holdings", []),
-                "source": "天天基金"
+                "source": "天天基金",
+                "nav_data": raw_data_sorted  # 添加净值数据
             })
             results.append(res)
             print(f"[{idx}/{len(args.funds)}] {code} - {meta['name']} ... ✅ 完成 (持仓报告期数: {len(res['holdings'])})")
