@@ -39,18 +39,24 @@ DEFAULT_FUNDS = [
     "024663", "024726", "023286", "023408", "025506",
     "025493", "025653", "005963", "014162", "011840",
     "024412", "024775", "026613", "023551", "024561",
-    # 电网设备组（新增）
+    # 电网设备组
     "025857", "023639", "023675", "019411", "167002",
     "020425", "002164", "017133", "017042", "026681",
     "016387", "025833", "011172", "001665", "018919",
-    # 机器人组（新增）
+    # 机器人组
     "016531", "018345", "020482", "018125", "007519",
     "014243", "018957", "003835", "014939", "008998",
     "004233", "008182", "017968", "024648"
 ]
 
 CACHE_DIR = "cache"
+HOLDINGS_CACHE_DIR = os.path.join(CACHE_DIR, "holdings")
+NAV_CACHE_DIR = os.path.join(CACHE_DIR, "nav")
+
+# 创建缓存目录
 os.makedirs(CACHE_DIR, exist_ok=True)
+os.makedirs(HOLDINGS_CACHE_DIR, exist_ok=True)
+os.makedirs(NAV_CACHE_DIR, exist_ok=True)
 
 def get_direct_opener():
     proxy_handler = urllib.request.ProxyHandler({})
@@ -102,7 +108,7 @@ def fetch_holdings(opener, code):
     返回格式: [{"date": "2026Q2", "holdings": [{"name": "xx", "ratio": 9.9}]}]
     """
     print(f"\n[DEBUG] 开始获取基金 {code} 的持仓数据")
-    cache_file = os.path.join(CACHE_DIR, f"{code}_holdings.json")
+    cache_file = os.path.join(HOLDINGS_CACHE_DIR, f"{code}_holdings.json")
 
     # 1. 检查缓存（如果存在且有效，直接返回）
     if os.path.exists(cache_file):
@@ -198,7 +204,7 @@ def fetch_holdings(opener, code):
     except Exception as e:
         print(f"[DEBUG] akshare 主方法失败: {e}")
 
-    # 3. 降级方案：保留原有的多种尝试（API、akshare 季度末日期、akshare 年份格式）
+    # 3. 降级方案
     print("[DEBUG] 降级到原有方法...")
     try:
         return _fetch_holdings_legacy(opener, code)
@@ -435,7 +441,7 @@ def fetch_fund_detail_meta(opener, code):
 
 def fetch_from_eastmoney(opener, code, start_date, end_date):
     """获取历史净值数据（自动翻页，每页20条），带缓存"""
-    cache_file = os.path.join(CACHE_DIR, f"{code}.json")
+    cache_file = os.path.join(NAV_CACHE_DIR, f"{code}.json")
     if os.path.exists(cache_file):
         try:
             with open(cache_file, 'r', encoding='utf-8') as f:
