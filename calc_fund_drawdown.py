@@ -29,13 +29,13 @@ DEFAULT_FUNDS = [
     "022365", "540010", "002112", "011892", "021528",
     "009645", "011370", "011452", "016371", "001956",
     "016234", "016173", "006616", "018291", "020661",
-    "017462", "001438", "008984", "180031", "004320"
+    "017462", "001438", "008984", "180031", "004320",
     # 存储芯片组
     "025500", "025209", "018816", "014320", "027063",
     # 半导体材料设备组
     "024418", "024975", "020640", "019633", "024424",
     "017811", "013841", "007491", "020629", "017747",
-    "026633", "162214", "007343", "018777", 
+    "026633", "162214", "007343", "018777",
     # 人工智能组
     "024663", "024726", "023286", "023408", "025506",
     "025493", "025653", "005963", "014162", "011840",
@@ -623,7 +623,7 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         "022365", "540010", "002112", "011892", "021528",
         "009645", "011370", "011452", "016371", "001956",
         "016234", "016173", "006616", "018291", "020661",
-        "017462", "001438", "008984"
+        "017462", "001438", "008984", "180031", "004320"
     }
 
     STORAGE_CODES = {
@@ -879,7 +879,9 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         </tr>
     """
 
+    # 修改点：在 groups 列表最前面插入 ("汇总", "all")
     groups = [
+        ("汇总", "all"),
         ("QDII", "qdii"),
         ("半导体材料设备", "semiconductor"),
         ("CPO", "cpo"),
@@ -1401,14 +1403,14 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             }});
         }})();
 
-        // 分组 + 搜索 联动过滤
+        // 分组 + 搜索 联动过滤（修改：增加 'all' 分组支持）
         document.addEventListener('DOMContentLoaded', function() {{
             const buttons = document.querySelectorAll('.group-btn');
             const searchInput = document.getElementById('searchInput');
             const emptyRow = document.getElementById('empty-row');
             const allRows = document.querySelectorAll('#fundTable tbody tr:not(#empty-row)');
 
-            let currentGroup = 'qdii';
+            let currentGroup = 'all';   // 默认显示汇总
             let searchKeyword = '';
 
             function applyFilters() {{
@@ -1421,7 +1423,7 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                     const name = nameCell ? nameCell.textContent.toLowerCase() : '';
                     const codeCell = row.querySelector('.code');
                     const code = codeCell ? codeCell.textContent.toLowerCase() : '';
-                    const matchGroup = (rowGroup === currentGroup);
+                    const matchGroup = (currentGroup === 'all') || (rowGroup === currentGroup);   // 修改此处
                     const matchSearch = keyword === '' || name.includes(keyword) || code.includes(keyword);
                     const visible = matchGroup && matchSearch;
                     if (visible) {{
@@ -1468,7 +1470,8 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                 applyFilters();
             }});
 
-            const defaultBtn = document.querySelector('.group-btn[data-group="qdii"]');
+            // 默认激活汇总按钮
+            const defaultBtn = document.querySelector('.group-btn[data-group="all"]');
             if (defaultBtn) defaultBtn.classList.add('active');
             applyFilters();
         }});
