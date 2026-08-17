@@ -49,6 +49,16 @@ DEFAULT_FUNDS = [
     "004233", "008182", "017968", "024648"
 ]
 
+# QDII 基金代码集合（用于判断是否为 QDII）
+QDII_CODES = {
+    "002891", "014002", "006555", "012922", "012920", "021662", "457001", "539002",
+    "018147", "021842", "006373", "018036", "501226", "008254", "008253", "017731",
+    "017730", "016665", "016664", "018230", "018229", "021277", "270023", "005698",
+    "024239", "501312", "017204", "017654", "017653", "022184", "100055", "017437",
+    "017436", "017145", "017144", "016702", "016701", "016823", "164212", "019156",
+    "019155", "016668", "501225", "015202", "001668", "000043"
+}
+
 CACHE_DIR = "cache"
 HOLDINGS_CACHE_DIR = os.path.join(CACHE_DIR, "holdings")
 NAV_CACHE_DIR = os.path.join(CACHE_DIR, "nav")
@@ -521,7 +531,7 @@ def get_nav_at_date(data, target_date_str):
             break
     return best
 
-def analyze_fund_metrics(valid_data, end_date, cutoff_date):
+def analyze_fund_metrics(valid_data, end_date, cutoff_date, is_qdii=False):
     data_all = sorted(valid_data, key=lambda x: x["date"])
     if not data_all:
         return None
@@ -533,12 +543,24 @@ def analyze_fund_metrics(valid_data, end_date, cutoff_date):
     latest_nav = data_all[-1]["nav"]
     latest_date = data_all[-1]["date"]
 
-    # 计算今日涨幅（相对于前一个交易日），仅作为计算，显示逻辑在HTML中根据日期决定
+    # 计算今日涨幅
+    # 对非QDII：最新日期必须等于今天才显示涨幅，否则返回None
+    # 对QDII：只要有至少两个数据点，就直接计算最新相对于前一天的涨幅（因为数据滞后，用户想看到“上一个工作日”的涨跌）
     today_gain = None
-    if len(data_all) >= 2:
-        prev_nav = data_all[-2]["nav"]
-        if prev_nav and prev_nav > 0:
-            today_gain = ((latest_nav / prev_nav) - 1) * 100.0
+    today_str = datetime.now().strftime("%Y-%m-%d")
+
+    if is_qdii:
+        # QDII：直接计算最新净值相对于前一个净值的涨跌幅
+        if len(data_all) >= 2:
+            prev_nav = data_all[-2]["nav"]
+            if prev_nav and prev_nav > 0:
+                today_gain = ((latest_nav / prev_nav) - 1) * 100.0
+    else:
+        # 非QDII：最新日期为今天时，计算相对于前一天的涨幅
+        if latest_date == today_str and len(data_all) >= 2:
+            prev_nav = data_all[-2]["nav"]
+            if prev_nav and prev_nav > 0:
+                today_gain = ((latest_nav / prev_nav) - 1) * 100.0
 
     max_drawdown = 0.0
     peak_nav = data_cutoff[0]["nav"]
@@ -736,12 +758,12 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             for idx, p in enumerate(holdings_history):
                 print(f"[HTML生成]  季度 {p['date']} 股票数: {len(p['holdings'])}")
 
-        # 今日涨幅：如果最新日期等于今天，显示涨幅，否则显示 "--"
+        # 今日涨幅：直接使用计算好的 today_gain（QDII 已直接计算，非 QDII 按日期判断）
         today_gain_val = r.get('today_gain', None)
-        if r['latest_date'] == today_str:
+        if today_gain_val is not None:
             today_gain_display = format_gain(today_gain_val)
             today_gain_class = gain_class(today_gain_val)
-            today_data_val = today_gain_val if today_gain_val is not None else -9999
+            today_data_val = today_gain_val
         else:
             today_gain_display = "--"
             today_gain_class = ''
@@ -929,6 +951,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             --input-bg: #fff;
             --input-border: #ddd;
             --card-bg: #f0f2f5;
+            --link-color: #1a73e8;
         }}
         [data-theme="dark"] {{
             --bg: #1a1a1a;
@@ -948,6 +971,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             --input-bg: #333;
             --input-border: #555;
             --card-bg: #2a2a2a;
+            --link-color: #4a9eff;
         }}
         body {{ 
             font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif; 
@@ -962,39 +986,48 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             justify-content: flex-start;
             transition: background-color 0.3s, color 0.3s;
         }}
-        .header {{ text-align: center; margin-bottom: 12px; flex-shrink: 0; }}
-        .header h2 {{ color: #1a73e8; margin: 0 0 4px 0; font-size: 20px; }}
-        .header p {{ color: var(--footer-text); font-size: 13px; margin: 0; }}
+        .header {{ text-align: center; margin-bottom: 8px; flex-shrink: 0; }}
+        .header-top {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }}
+        .header-top h2 {{ color: #1a73e8; margin: 0; font-size: 20px; }}
         .theme-toggle {{
-            position: fixed;
-            top: 20px;
-            right: 30px;
             background: var(--header-bg);
             color: var(--text);
             border: 1px solid var(--border);
             border-radius: 20px;
             padding: 6px 14px;
-            font-size: 16px;
+            font-size: 14px;
             cursor: pointer;
-            z-index: 100;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             transition: background 0.2s;
+            flex-shrink: 0;
         }}
         .theme-toggle:hover {{ opacity: 0.8; }}
+        .header p {{ color: var(--footer-text); font-size: 13px; margin: 2px 0; }}
         .group-tabs {{
             display: flex;
             flex-wrap: wrap;
-            justify-content: center;
+            justify-content: space-between;
+            align-items: center;
             gap: 8px;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
             flex-shrink: 0;
+        }}
+        .group-buttons {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
         }}
         .group-btn {{
             background: var(--btn-bg);
             color: var(--btn-text);
             border: 1px solid var(--border);
             border-radius: 20px;
-            padding: 6px 18px;
+            padding: 5px 16px;
             font-size: 13px;
             cursor: pointer;
             transition: all 0.2s;
@@ -1009,33 +1042,55 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             color: var(--btn-active-text);
             border-color: var(--btn-active-bg);
         }}
-        .search-container {{
-            display: flex;
-            justify-content: center;
-            margin-bottom: 12px;
-            flex-shrink: 0;
-        }}
         .search-container input {{
-            padding: 6px 14px;
+            padding: 5px 14px;
             border-radius: 20px;
             border: 1px solid var(--input-border);
             background: var(--input-bg);
             color: var(--text);
             font-size: 14px;
-            width: 300px;
-            max-width: 80%;
+            width: 220px;
             outline: none;
             transition: border-color 0.2s;
         }}
-        .search-container input:focus {{
-            border-color: #1a73e8;
+        .search-container input:focus {{ border-color: #1a73e8; }}
+        .search-container input::placeholder {{ color: var(--footer-text); }}
+
+        .friend-links {{
+            background: var(--card-bg);
+            border-radius: 8px;
+            padding: 6px 14px;
+            margin-bottom: 10px;
+            font-size: 13px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 4px 8px;
+            border: 1px solid var(--border);
+            flex-shrink: 0;
         }}
-        .search-container input::placeholder {{
+        .friend-links .links-label {{
+            font-weight: 600;
+            color: var(--header-text);
+            margin-right: 4px;
+        }}
+        .friend-links a {{
+            color: var(--link-color);
+            text-decoration: none;
+            font-weight: 500;
+        }}
+        .friend-links a:hover {{ text-decoration: underline; }}
+        .friend-links .link-desc {{
             color: var(--footer-text);
+            font-size: 12px;
         }}
+        .friend-links .link-sep {{
+            color: var(--border);
+        }}
+
         .table-container {{ 
             width:100%; 
-            height: calc(100vh - 280px); 
+            height: calc(100vh - 320px); 
             overflow-y: auto; 
             overflow-x: scroll; 
             box-sizing:border-box; 
@@ -1205,7 +1260,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         .holding-row {{ display: none; }}
         .holding-row.show {{ display: table-row; }}
 
-        /* 持仓与折线图同一行：左半边三个季度等宽，右半边折线图 */
         .holdings-wrapper {{
             display: flex;
             flex-wrap: nowrap;
@@ -1327,6 +1381,16 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             .stock-change {{
                 font-size: 9px;
             }}
+            .group-tabs {{
+                flex-direction: column;
+                align-items: stretch;
+            }}
+            .search-container input {{
+                width: 100%;
+            }}
+            .friend-links {{
+                font-size: 11px;
+            }}
         }}
 
         .footer-note {{ 
@@ -1345,19 +1409,43 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
     </style>
 </head>
 <body>
-    <button class="theme-toggle" id="themeToggle">🌓 切换主题</button>
     <div class="header">
-        <h2>场外基金核心量化与全费率规模看板（含多周期涨幅及走势图）</h2>
+        <div class="header-top">
+            <h2>场外基金核心量化与全费率规模看板（含多周期涨幅及走势图）</h2>
+            <button class="theme-toggle" id="themeToggle">🌓 切换主题</button>
+        </div>
         <p>统计时间区间：<strong>{start_date}</strong> 至 <strong>{end_date}</strong> （包含基金数：{len(results)} 只）</p>
         <p style="font-size:12px; color: var(--footer-text);">申购费率已取优惠后费率，销售服务费默认0.00%。赎回费率百分比已高亮。</p>
         <p style="font-size:12px; color: var(--footer-text);">最高/最低净值显示为2026-04-01后最大回撤的峰值与谷值（谷值在峰值之后）。涨幅基于完整数据计算。</p>
     </div>
+
     <div class="group-tabs">
-        {buttons_html}
+        <div class="group-buttons">
+            {buttons_html}
+        </div>
+        <div class="search-container">
+            <input type="text" id="searchInput" placeholder="🔍 搜索基金名称或代码 ...">
+        </div>
     </div>
-    <div class="search-container">
-        <input type="text" id="searchInput" placeholder="🔍 搜索基金名称或代码 ...">
+
+    <div class="friend-links">
+        <span class="links-label">🔗 友情链接：</span>
+        <a href="https://www.wise-hold.com/" target="_blank">WISE HOLD</a>
+        <span class="link-desc">追踪机构持仓与政商名人投资动向</span>
+        <span class="link-sep">|</span>
+        <a href="https://www.wise-etf.com/" target="_blank">WiseETF</a>
+        <span class="link-desc">美股ETF/QDII基金估值与溢价监控</span>
+        <span class="link-sep">|</span>
+        <a href="https://nsdk.top/" target="_blank">纳指估值助手</a>
+        <span class="link-desc">纳指基金估值与持仓参考</span>
+        <span class="link-sep">|</span>
+        <a href="https://btcdca.me/" target="_blank">定投估值计算机</a>
+        <span class="link-desc">多资产定投策略与估值评分</span>
+        <span class="link-sep">|</span>
+        <a href="https://finews.elsetech.app/" target="_blank">FiNews 美股日报</a>
+        <span class="link-desc">每日美股盘后总结与新闻聚合</span>
     </div>
+
     <div class="table-container">
         <table id="fundTable">
             <thead>
@@ -1930,7 +2018,9 @@ def main():
             continue
         # 排序并保存净值数据用于图表
         raw_data_sorted = sorted(raw_data, key=lambda x: x['date'])
-        res = analyze_fund_metrics(raw_data_sorted, args.end, cutoff_date)
+        # 判断是否为 QDII
+        is_qdii = code in QDII_CODES
+        res = analyze_fund_metrics(raw_data_sorted, args.end, cutoff_date, is_qdii=is_qdii)
         if res:
             res.update({
                 "code": code,
@@ -1949,7 +2039,7 @@ def main():
                 "buy_limit_val": meta.get("buy_limit_val", -1),
                 "holdings": meta.get("holdings", []),
                 "source": "天天基金",
-                "nav_data": raw_data_sorted  # 添加净值数据
+                "nav_data": raw_data_sorted
             })
             results.append(res)
             print(f"[{idx}/{len(args.funds)}] {code} - {meta['name']} ... ✅ 完成 (持仓报告期数: {len(res['holdings'])})")
