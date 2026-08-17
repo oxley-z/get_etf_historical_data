@@ -201,26 +201,10 @@ def fetch_holdings(opener, code):
 
     # 3. 降级方案：保留原有的多种尝试（API、akshare 季度末日期、akshare 年份格式）
     print("[DEBUG] 降级到原有方法...")
-    # 以下是原有 fetch_holdings 的完整逻辑（作为后备）
-    # 为了保持代码简洁，直接调用原函数（需避免递归，此处采用内联方式）
-    # 注意：此处为了节省篇幅，只做示意，实际应复制原后备代码。
-    # 但原脚本中已有完整后备，我们直接调用 _fetch_holdings_legacy 函数（如果存在）
-    # 若不存在，我们临时定义。
-    # 在这里我们采用 try-except 尝试调用已存在的备用函数（如果有）
     try:
-        # 假定原函数被重命名为 _fetch_holdings_legacy
         return _fetch_holdings_legacy(opener, code)
     except NameError:
-        # 如果不存在，则使用原始的内联后备代码（此处省略，因原文件已有）
-        # 但为了本函数完整，我们重新实现简化的后备：
         print("[DEBUG] 无备用函数，使用简化后备...")
-        # 这里简单返回空，实际使用中，原有脚本的 fetch_holdings 有完整后备逻辑，
-        # 但为了避免递归，我们在此只做占位。
-        # 注意：如果原文件已将原 fetch_holdings 改名，则此处应调用它。
-        # 由于我们是在原文件中替换，建议原 fetch_holdings 重命名为 _fetch_holdings_legacy
-        # 然后在本函数末尾调用它。
-        # 为了便于用户，我们在本文件中保留原函数并改名，但为了简洁，我假定用户会按此操作。
-        # 这里直接提示错误。
         print("[ERROR] 请将原 fetch_holdings 函数重命名为 _fetch_holdings_legacy 并保留")
         return []
 
@@ -544,6 +528,13 @@ def analyze_fund_metrics(valid_data, end_date, cutoff_date):
     latest_nav = data_all[-1]["nav"]
     latest_date = data_all[-1]["date"]
 
+    # 计算今日涨幅（相对于前一个交易日），仅作为计算，显示逻辑在HTML中根据日期决定
+    today_gain = None
+    if len(data_all) >= 2:
+        prev_nav = data_all[-2]["nav"]
+        if prev_nav and prev_nav > 0:
+            today_gain = ((latest_nav / prev_nav) - 1) * 100.0
+
     max_drawdown = 0.0
     peak_nav = data_cutoff[0]["nav"]
     trough_nav = data_cutoff[0]["nav"]
@@ -610,6 +601,7 @@ def analyze_fund_metrics(valid_data, end_date, cutoff_date):
         "recovery_rate": recovery_rate,
         "recovery_days": recovery_days,
         "rebound_gain": rebound_gain,
+        "today_gain": today_gain,
         "week_gain": week_gain,
         "month_gain": month_gain,
         "quarter_gain": quarter_gain,
@@ -618,7 +610,7 @@ def analyze_fund_metrics(valid_data, end_date, cutoff_date):
         "ytd_gain": ytd_gain
     }
 
-def generate_html_report(results, start_date, end_date, filename="fund_drawdown_dashboard.html"):
+def generate_html_report(results, start_date, end_date, today_str, filename="fund_drawdown_dashboard.html"):
     CPO_CODES = {
         "022365", "540010", "002112", "011892", "021528",
         "009645", "011370", "011452", "016371", "001956",
@@ -654,7 +646,7 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         "004233", "008182", "017968", "024648"
     }
 
-    col_count = 19
+    col_count = 20  # 新增今日涨幅列
 
     def date_to_label(date_str):
         if 'Q' in date_str:
@@ -739,6 +731,17 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
             for idx, p in enumerate(holdings_history):
                 print(f"[HTML生成]  季度 {p['date']} 股票数: {len(p['holdings'])}")
 
+        # 今日涨幅：如果最新日期等于今天，显示涨幅，否则显示 "--"
+        today_gain_val = r.get('today_gain', None)
+        if r['latest_date'] == today_str:
+            today_gain_display = format_gain(today_gain_val)
+            today_gain_class = gain_class(today_gain_val)
+            today_data_val = today_gain_val if today_gain_val is not None else -9999
+        else:
+            today_gain_display = "--"
+            today_gain_class = ''
+            today_data_val = -9999
+
         rows_html += f"""
         <tr data-group="{group}" class="fund-row" data-code="{r['code']}">
             <td class="code" data-val="{r['code']}">{r['code']}</td>
@@ -775,6 +778,7 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                 </div>
             </td>
             <td data-val="{r['recovery_days']}">{r['recovery_days']} 天</td>
+            <td data-val="{today_data_val}" class="{today_gain_class}">{today_gain_display}</td>
             <td data-val="{r['week_gain'] if r['week_gain'] is not None else -9999}" class="{gain_class(r['week_gain'])}">{format_gain(r['week_gain'])}</td>
             <td data-val="{r['month_gain'] if r['month_gain'] is not None else -9999}" class="{gain_class(r['month_gain'])}">{format_gain(r['month_gain'])}</td>
             <td data-val="{r['quarter_gain'] if r['quarter_gain'] is not None else -9999}" class="{gain_class(r['quarter_gain'])}">{format_gain(r['quarter_gain'])}</td>
@@ -879,7 +883,7 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         </tr>
     """
 
-    # 修改点：在 groups 列表最前面插入 ("汇总", "all")
+    # 分组标签
     groups = [
         ("汇总", "all"),
         ("QDII", "qdii"),
@@ -1056,7 +1060,7 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         }}
         table {{ 
             width:100%; 
-            min-width:2250px; 
+            min-width:2350px; 
             border-collapse:collapse; 
             font-size:12px; 
             text-align:right; 
@@ -1091,16 +1095,17 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
         th:nth-child(7), td:nth-child(7),
         th:nth-child(8), td:nth-child(8) {{ width: 128px; white-space: nowrap; }}
         th:nth-child(9), td:nth-child(9) {{ width: 85px; white-space: nowrap; }}
-        th:nth-child(10), td:nth-child(10) ,
+        th:nth-child(10), td:nth-child(10),
         th:nth-child(11), td:nth-child(11),
         th:nth-child(12), td:nth-child(12) {{ width: 300px; white-space: nowrap; }}
         th:nth-child(13), td:nth-child(13) {{ width: 80px; white-space: nowrap; }}
-        th:nth-child(14), td:nth-child(14),
+        th:nth-child(14), td:nth-child(14) {{ width: 70px; white-space: nowrap; }}
         th:nth-child(15), td:nth-child(15),
         th:nth-child(16), td:nth-child(16),
         th:nth-child(17), td:nth-child(17),
         th:nth-child(18), td:nth-child(18),
-        th:nth-child(19), td:nth-child(19) {{ width: 80px; white-space: nowrap; }}
+        th:nth-child(19), td:nth-child(19),
+        th:nth-child(20), td:nth-child(20) {{ width: 80px; white-space: nowrap; }}
         th {{ 
             background-color: var(--header-bg);
             color: var(--header-text);
@@ -1365,12 +1370,13 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                     <th data-col="10">自低点反弹 <span class="sort-icon">⇅</span></th>
                     <th data-col="11">修复程度 <span class="sort-icon">⇅</span></th>
                     <th data-col="12">修复时间 <span class="sort-icon">⇅</span></th>
-                    <th data-col="13">近一周 <span class="sort-icon">⇅</span></th>
-                    <th data-col="14">近一月 <span class="sort-icon">⇅</span></th>
-                    <th data-col="15">近3月 <span class="sort-icon">⇅</span></th>
-                    <th data-col="16">近半年 <span class="sort-icon">⇅</span></th>
-                    <th data-col="17">近一年 <span class="sort-icon">⇅</span></th>
-                    <th data-col="18">今年内 <span class="sort-icon">⇅</span></th>
+                    <th data-col="13">今日涨幅 ({today_str}) <span class="sort-icon">⇅</span></th>
+                    <th data-col="14">近一周 <span class="sort-icon">⇅</span></th>
+                    <th data-col="15">近一月 <span class="sort-icon">⇅</span></th>
+                    <th data-col="16">近三月 <span class="sort-icon">⇅</span></th>
+                    <th data-col="17">近半年 <span class="sort-icon">⇅</span></th>
+                    <th data-col="18">近一年 <span class="sort-icon">⇅</span></th>
+                    <th data-col="19">今年内 <span class="sort-icon">⇅</span></th>
                 </tr>
             </thead>
             <tbody>
@@ -1423,7 +1429,7 @@ def generate_html_report(results, start_date, end_date, filename="fund_drawdown_
                     const name = nameCell ? nameCell.textContent.toLowerCase() : '';
                     const codeCell = row.querySelector('.code');
                     const code = codeCell ? codeCell.textContent.toLowerCase() : '';
-                    const matchGroup = (currentGroup === 'all') || (rowGroup === currentGroup);   // 修改此处
+                    const matchGroup = (currentGroup === 'all') || (rowGroup === currentGroup);
                     const matchSearch = keyword === '' || name.includes(keyword) || code.includes(keyword);
                     const visible = matchGroup && matchSearch;
                     if (visible) {{
@@ -1945,7 +1951,7 @@ def main():
         time.sleep(random.uniform(0.05, 0.1))
 
     if results:
-        abs_path = generate_html_report(results, args.start, args.end, filename=args.out)
+        abs_path = generate_html_report(results, args.start, args.end, today_str, filename=args.out)
         print(f"\n🎉 网页生成成功！文件路径: {abs_path}")
         try:
             webbrowser.open(f"file://{abs_path}")
