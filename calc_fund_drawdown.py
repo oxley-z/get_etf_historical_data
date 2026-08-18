@@ -1250,7 +1250,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         th:nth-child(11), td:nth-child(11),
         th:nth-child(12), td:nth-child(12) {{ width: 300px; white-space: nowrap; }}
         th:nth-child(13), td:nth-child(13) {{ width: 80px; white-space: nowrap; }}
-        th:nth-child(14), td:nth-child(14) {{ width: 70px; white-space: nowrap; }}
+        th:nth-child(14), td:nth-child(14) {{ width: 155px; min-width: 90px; white-space: normal; }}
         th:nth-child(15), td:nth-child(15),
         th:nth-child(16), td:nth-child(16),
         th:nth-child(17), td:nth-child(17),
