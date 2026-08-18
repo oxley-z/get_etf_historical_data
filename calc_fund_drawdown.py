@@ -758,10 +758,12 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             for idx, p in enumerate(holdings_history):
                 print(f"[HTML生成]  季度 {p['date']} 股票数: {len(p['holdings'])}")
 
-        # 今日涨幅：直接使用计算好的 today_gain（QDII 已直接计算，非 QDII 按日期判断）
+        # 今日涨幅：直接使用计算好的 today_gain
         today_gain_val = r.get('today_gain', None)
+        latest_date = r['latest_date']
         if today_gain_val is not None:
-            today_gain_display = format_gain(today_gain_val)
+            # 显示涨幅和日期小字
+            today_gain_display = format_gain(today_gain_val) + f' <span class="gain-date">({latest_date})</span>'
             today_gain_class = gain_class(today_gain_val)
             today_data_val = today_gain_val
         else:
@@ -925,6 +927,23 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
     for label, group_id in groups:
         buttons_html += f'<button class="group-btn" data-group="{group_id}">{label}</button>'
 
+    # 生成友链卡片HTML（右侧）
+    friend_links = [
+        {"name": "WISE HOLD", "url": "https://www.wise-hold.com/", "desc": "追踪机构持仓与政商名人投资动向"},
+        {"name": "WiseETF", "url": "https://www.wise-etf.com/", "desc": "美股ETF/QDII基金估值与溢价监控"},
+        {"name": "纳指估值助手", "url": "https://nsdk.top/", "desc": "纳指基金估值与持仓参考"},
+        {"name": "定投估值计算机", "url": "https://btcdca.me/", "desc": "多资产定投策略与估值评分"},
+        {"name": "FiNews 美股日报", "url": "https://finews.elsetech.app/", "desc": "每日美股盘后总结与新闻聚合"}
+    ]
+    friend_cards_html = ""
+    for link in friend_links:
+        friend_cards_html += f"""
+        <div class="friend-card">
+            <a href="{link['url']}" target="_blank">{link['name']}</a>
+            <span class="friend-desc">{link['desc']}</span>
+        </div>
+        """
+
     html_content = f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -952,6 +971,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             --input-border: #ddd;
             --card-bg: #f0f2f5;
             --link-color: #1a73e8;
+            --card-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }}
         [data-theme="dark"] {{
             --bg: #1a1a1a;
@@ -972,13 +992,14 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             --input-border: #555;
             --card-bg: #2a2a2a;
             --link-color: #4a9eff;
+            --card-shadow: 0 1px 3px rgba(0,0,0,0.3);
         }}
         body {{ 
             font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif; 
             background-color: var(--bg);
             color: var(--text);
             margin: 0; 
-            padding: 20px 30px; 
+            padding: 16px 24px; 
             height: 100vh;
             overflow: hidden;
             display: flex;
@@ -986,118 +1007,188 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             justify-content: flex-start;
             transition: background-color 0.3s, color 0.3s;
         }}
-        .header {{ text-align: center; margin-bottom: 8px; flex-shrink: 0; }}
-        .header-top {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 4px;
+        /* 顶部 Dashboard：左侧信息/标签/搜索 + 右侧友链 */
+        .top-wrapper {{
+            display:grid;
+            grid-template-columns:minmax(0, 1fr) minmax(0, 1fr);
+            gap:16px;
+            height:238px;
+            flex:0 0 238px;
+            margin-bottom:14px;
+            min-height:0;
         }}
-        .header-top h2 {{ color: #1a73e8; margin: 0; font-size: 20px; }}
+        .top-left, .top-right {{
+            min-width:0;
+            min-height:0;
+            border:1px solid var(--border);
+            border-radius:12px;
+            background:var(--table-bg);
+            box-shadow:0 4px 15px rgba(0,0,0,0.07);
+            box-sizing:border-box;
+        }}
+        .top-left {{
+            padding:14px 16px;
+            display:flex;
+            flex-direction:column;
+            overflow:hidden;
+        }}
+        .top-right {{
+            padding:14px;
+            display:flex;
+            flex-direction:column;
+            gap:10px;
+            overflow:hidden;
+        }}
         .theme-toggle {{
-            background: var(--header-bg);
-            color: var(--text);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 6px 14px;
-            font-size: 14px;
-            cursor: pointer;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            transition: background 0.2s;
-            flex-shrink: 0;
+            align-self:flex-end;
+            background:var(--header-bg);
+            color:var(--text);
+            border:1px solid var(--border);
+            border-radius:18px;
+            padding:4px 12px;
+            font-size:12px;
+            cursor:pointer;
+            flex:0 0 auto;
         }}
-        .theme-toggle:hover {{ opacity: 0.8; }}
-        .header p {{ color: var(--footer-text); font-size: 13px; margin: 2px 0; }}
+        .theme-toggle:hover {{ opacity:0.82; }}
+
+        /* 左侧说明区：标题 + 原有文字说明 */
+        .header {{ text-align:left; margin:0 0 8px 0; }}
+        .header-top {{
+            display:flex;
+            align-items:center;
+            margin-bottom:3px;
+        }}
+        .header-top h2 {{
+            color:#1a73e8;
+            margin:0;
+            font-size:20px;
+            line-height:1.25;
+        }}
+        .header p {{ color:var(--footer-text); font-size:11px; margin:2px 0; line-height:1.35; }}
+        .header-info {{
+            border:1px solid #e3e7eb;
+            border-radius:8px;
+            background:var(--hover-bg);
+            padding:7px 10px;
+            margin-bottom:8px;
+            overflow:hidden;
+        }}
+        .header-info p {{ margin:2px 0; }}
+
+        /* 左下控制区：标签在左、搜索框在右 */
         .group-tabs {{
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: space-between;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 8px;
-            flex-shrink: 0;
+            display:grid;
+            grid-template-columns:minmax(0,1fr) 250px;
+            gap:10px;
+            align-items:center;
+            margin-top:auto;
+            min-height:42px;
         }}
         .group-buttons {{
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
+            display:flex;
+            flex-wrap:wrap;
+            gap:6px;
+            align-content:center;
+            min-width:0;
         }}
         .group-btn {{
-            background: var(--btn-bg);
-            color: var(--btn-text);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 5px 16px;
-            font-size: 13px;
-            cursor: pointer;
-            transition: all 0.2s;
-            font-weight: 500;
+            background:var(--btn-bg);
+            color:var(--btn-text);
+            border:1px solid var(--border);
+            border-radius:18px;
+            padding:4px 12px;
+            font-size:12px;
+            cursor:pointer;
+            transition:all .2s;
+            font-weight:500;
+            white-space:nowrap;
         }}
         .group-btn:hover {{
-            background: var(--btn-active-bg);
-            color: var(--btn-active-text);
+            background:var(--btn-active-bg);
+            color:var(--btn-active-text);
         }}
         .group-btn.active {{
-            background: var(--btn-active-bg);
-            color: var(--btn-active-text);
-            border-color: var(--btn-active-bg);
+            background:var(--btn-active-bg);
+            color:var(--btn-active-text);
+            border-color:var(--btn-active-bg);
         }}
+        .search-container {{ width:100%; }}
         .search-container input {{
-            padding: 5px 14px;
-            border-radius: 20px;
-            border: 1px solid var(--input-border);
-            background: var(--input-bg);
-            color: var(--text);
-            font-size: 14px;
-            width: 220px;
-            outline: none;
-            transition: border-color 0.2s;
+            width:100%;
+            max-width:none;
+            height:34px;
+            padding:5px 13px;
+            border-radius:18px;
+            border:1px solid #35a853;
+            background:var(--input-bg);
+            color:var(--text);
+            font-size:13px;
+            outline:none;
+            box-sizing:border-box;
+            box-shadow:0 0 0 2px rgba(52,168,83,.08);
         }}
-        .search-container input:focus {{ border-color: #1a73e8; }}
-        .search-container input::placeholder {{ color: var(--footer-text); }}
+        .search-container input:focus {{ border-color:#188038; box-shadow:0 0 0 3px rgba(52,168,83,.14); }}
+        .search-container input::placeholder {{ color:var(--footer-text); }}
 
-        .friend-links {{
-            background: var(--card-bg);
-            border-radius: 8px;
-            padding: 6px 14px;
-            margin-bottom: 10px;
-            font-size: 13px;
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 4px 8px;
-            border: 1px solid var(--border);
-            flex-shrink: 0;
+        /* 右侧友链：3列卡片，最后一行自动放2张 */
+        .friend-cards-wrapper {{
+            display:grid;
+            grid-template-columns:repeat(3,minmax(0,1fr));
+            gap:9px;
+            width:100%;
+            min-height:0;
+            flex:1;
         }}
-        .friend-links .links-label {{
-            font-weight: 600;
-            color: var(--header-text);
-            margin-right: 4px;
+        .friend-card {{
+            min-width:0;
+            min-height:70px;
+            background:var(--card-bg);
+            border-radius:8px;
+            padding:10px 11px;
+            box-shadow:var(--card-shadow);
+            border:1px solid var(--border);
+            box-sizing:border-box;
+            overflow:hidden;
+            transition:transform .12s, box-shadow .12s;
         }}
-        .friend-links a {{
-            color: var(--link-color);
-            text-decoration: none;
-            font-weight: 500;
+        .friend-card:hover {{
+            transform:translateY(-1px);
+            box-shadow:0 4px 12px rgba(0,0,0,.12);
         }}
-        .friend-links a:hover {{ text-decoration: underline; }}
-        .friend-links .link-desc {{
-            color: var(--footer-text);
-            font-size: 12px;
+        .friend-card a {{
+            color:var(--link-color);
+            text-decoration:none;
+            font-weight:650;
+            font-size:14px;
+            display:block;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
         }}
-        .friend-links .link-sep {{
-            color: var(--border);
+        .friend-card a:hover {{ text-decoration:underline; }}
+        .friend-card .friend-desc {{
+            font-size:11px;
+            color:var(--footer-text);
+            display:block;
+            margin-top:4px;
+            line-height:1.35;
+            display:-webkit-box;
+            -webkit-line-clamp:2;
+            -webkit-box-orient:vertical;
+            overflow:hidden;
         }}
 
         .table-container {{ 
             width:100%; 
-            height: calc(100vh - 320px); 
+            height: calc(100vh - 286px); 
             overflow-y: auto; 
             overflow-x: scroll; 
             box-sizing:border-box; 
             background: var(--table-bg);
             border-radius:12px; 
             box-shadow:0 4px 15px rgba(0,0,0,0.08); 
-            padding:20px; 
+            padding:12px; 
             border:1px solid var(--border);
             flex: 1 1 auto;
             min-height: 0;
@@ -1174,7 +1265,13 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             user-select: none; 
             cursor: pointer; 
             transition: background-color 0.2s, color 0.2s; 
-            white-space: nowrap; 
+            white-space: normal;
+            word-break: keep-all;
+            overflow-wrap: anywhere;
+            line-height: 1.25;
+            height: 46px;
+            min-height: 46px;
+            vertical-align: middle;
             position: relative; 
         }}
         th:hover {{ background-color: #e4e7eb; }}
@@ -1251,6 +1348,11 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         .metric-green {{ color: #188038; font-weight: 600; }}
         .gain-positive {{ color: #d93025; font-weight: bold; }}
         .gain-negative {{ color: #188038; font-weight: bold; }}
+        .gain-date {{
+            font-size: 10px;
+            color: var(--footer-text);
+            font-weight: normal;
+        }}
         .fund-row {{ cursor: pointer; }}
         .fund-row .name a {{ pointer-events: auto; cursor: pointer; }}
         .holding-row td {{
@@ -1282,7 +1384,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             background: var(--card-bg);
             border-radius: 8px;
             padding: 10px 10px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            box-shadow: var(--card-shadow);
             box-sizing: border-box;
             overflow: hidden;
         }}
@@ -1332,7 +1434,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             background: var(--card-bg);
             border-radius: 8px;
             padding: 10px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            box-shadow: var(--card-shadow);
             display: flex;
             flex-direction: column;
             min-height: 200px;
@@ -1381,25 +1483,39 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             .stock-change {{
                 font-size: 9px;
             }}
+            .top-wrapper {{
+                grid-template-columns:1fr;
+                height:auto;
+                flex-basis:auto;
+            }}
+            .top-left, .top-right {{
+                min-height:210px;
+            }}
+            .top-right {{
+                width:100%;
+            }}
+            .friend-cards-wrapper {{
+                width: 100%;
+            }}
+            .friend-card {{
+                min-height:64px;
+            }}
             .group-tabs {{
                 flex-direction: column;
                 align-items: stretch;
             }}
             .search-container input {{
-                width: 100%;
-            }}
-            .friend-links {{
-                font-size: 11px;
+                max-width: 100%;
             }}
         }}
 
         .footer-note {{ 
-            margin-top: 10px; 
+            margin-top: 4px; 
             font-size: 12px; 
             color: var(--footer-text);
-            line-height: 1.4; 
+            line-height: 1.35; 
             background: var(--footer-bg);
-            padding: 10px 12px; 
+            padding: 7px 12px; 
             border-radius: 6px; 
             border: 1px solid var(--border);
             flex-shrink: 0;
@@ -1409,41 +1525,36 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="header-top">
-            <h2>场外基金核心量化与全费率规模看板（含多周期涨幅及走势图）</h2>
+    <div class="top-wrapper">
+        <section class="top-left">
+            <div class="header">
+                <div class="header-top">
+                    <h2>场外基金核心量化与全费率规模看板（含多周期涨幅及走势图）</h2>
+                </div>
+                <p>统计时间区间：<strong>{start_date}</strong> 至 <strong>{end_date}</strong>（包含基金数：{len(results)} 只）</p>
+            </div>
+
+            <div class="header-info">
+                <p>申购费率已取优惠后费率，销售服务费默认0.00%，赎回费率百分比已高亮。</p>
+                <p>最高/最低净值为回撤计算区间内峰值与谷值（谷值位于峰值之后）；涨幅基于完整历史净值计算。</p>
+            </div>
+
+            <div class="group-tabs">
+                <div class="group-buttons">
+                    {buttons_html}
+                </div>
+                <div class="search-container">
+                    <input type="text" id="searchInput" placeholder="🔍 搜索基金名称或代码 ...">
+                </div>
+            </div>
+        </section>
+
+        <section class="top-right">
             <button class="theme-toggle" id="themeToggle">🌓 切换主题</button>
-        </div>
-        <p>统计时间区间：<strong>{start_date}</strong> 至 <strong>{end_date}</strong> （包含基金数：{len(results)} 只）</p>
-        <p style="font-size:12px; color: var(--footer-text);">申购费率已取优惠后费率，销售服务费默认0.00%。赎回费率百分比已高亮。</p>
-        <p style="font-size:12px; color: var(--footer-text);">最高/最低净值显示为2026-04-01后最大回撤的峰值与谷值（谷值在峰值之后）。涨幅基于完整数据计算。</p>
-    </div>
-
-    <div class="group-tabs">
-        <div class="group-buttons">
-            {buttons_html}
-        </div>
-        <div class="search-container">
-            <input type="text" id="searchInput" placeholder="🔍 搜索基金名称或代码 ...">
-        </div>
-    </div>
-
-    <div class="friend-links">
-        <span class="links-label">🔗 友情链接：</span>
-        <a href="https://www.wise-hold.com/" target="_blank">WISE HOLD</a>
-        <span class="link-desc">追踪机构持仓与政商名人投资动向</span>
-        <span class="link-sep">|</span>
-        <a href="https://www.wise-etf.com/" target="_blank">WiseETF</a>
-        <span class="link-desc">美股ETF/QDII基金估值与溢价监控</span>
-        <span class="link-sep">|</span>
-        <a href="https://nsdk.top/" target="_blank">纳指估值助手</a>
-        <span class="link-desc">纳指基金估值与持仓参考</span>
-        <span class="link-sep">|</span>
-        <a href="https://btcdca.me/" target="_blank">定投估值计算机</a>
-        <span class="link-desc">多资产定投策略与估值评分</span>
-        <span class="link-sep">|</span>
-        <a href="https://finews.elsetech.app/" target="_blank">FiNews 美股日报</a>
-        <span class="link-desc">每日美股盘后总结与新闻聚合</span>
+            <div class="friend-cards-wrapper">
+                {friend_cards_html}
+            </div>
+        </section>
     </div>
 
     <div class="table-container">
