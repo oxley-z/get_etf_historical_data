@@ -144,7 +144,6 @@ def fetch_holdings(opener, code):
             with open(cache_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             if isinstance(data, list) and len(data) >= 2 and 'date' in data[0]:
-                # 至少有两个季度且非空
                 if any(len(p['holdings']) > 0 for p in data):
                     print(f"[DEBUG] 使用缓存数据，共 {len(data)} 个报告期")
                     return data
@@ -161,7 +160,7 @@ def fetch_holdings(opener, code):
     print("[DEBUG] 尝试使用 akshare 获取多年度数据...")
     try:
         current_year = datetime.now().year
-        years = [str(current_year - i) for i in range(3)]  # 今年、去年、前年
+        years = [str(current_year - i) for i in range(3)]
         all_dfs = []
         for year in years:
             try:
@@ -174,38 +173,29 @@ def fetch_holdings(opener, code):
 
         if all_dfs:
             combined = pd.concat(all_dfs, ignore_index=True)
-            # 去重（同一季度可能重复）
             combined.drop_duplicates(inplace=True)
-            # 确保 '季度' 列存在
             if '季度' not in combined.columns:
-                # 若没有季度列，尝试从报告期生成（通常有 '报告期'）
                 if '报告期' in combined.columns:
-                    # 转换报告期 (如 2026-06-30 -> 2026Q2)
                     combined['季度'] = combined['报告期'].apply(
                         lambda x: f"{x[:4]}Q{(int(x[5:7])-1)//3 + 1}" if isinstance(x, str) and len(x)>=7 else None
                     )
                 else:
-                    # 若没有，尝试用 '截止日期' 等
                     date_col = next((c for c in combined.columns if '日期' in c or '时间' in c), None)
                     if date_col:
                         combined['季度'] = combined[date_col].apply(
                             lambda x: f"{x[:4]}Q{(int(x[5:7])-1)//3 + 1}" if isinstance(x, str) and len(x)>=7 else None
                         )
                     else:
-                        # 最后，尝试从 '股票代码' 分组无法得到季度，则放弃
                         print("[DEBUG] 无法确定季度列，akshare 数据无效")
                         raise ValueError("缺少季度信息")
 
-            # 按季度分组，取每个季度前10大，取最近四个季度
-            quarters = sorted(combined['季度'].unique(), reverse=True)[:4]  # 修改为4个季度
+            quarters = sorted(combined['季度'].unique(), reverse=True)[:4]
             result = []
             for q in quarters:
                 df_q = combined[combined['季度'] == q].sort_values('占净值比例', ascending=False)
-                # 取前10，并确保列名正确（可能有 '股票名称' 或 '名称'）
                 name_col = '股票名称' if '股票名称' in df_q.columns else '名称' if '名称' in df_q.columns else None
                 ratio_col = '占净值比例' if '占净值比例' in df_q.columns else None
                 if name_col is None or ratio_col is None:
-                    # 尝试其他列
                     for col in df_q.columns:
                         if '名称' in col:
                             name_col = col
@@ -225,7 +215,6 @@ def fetch_holdings(opener, code):
                 result.append({'date': q, 'holdings': holdings})
             if result:
                 print(f"[DEBUG] akshare 获取成功，共 {len(result)} 个季度")
-                # 保存缓存
                 with open(cache_file, 'w', encoding='utf-8') as f:
                     json.dump(result, f, ensure_ascii=False, indent=2)
                 return result
@@ -561,7 +550,6 @@ def analyze_fund_metrics(valid_data, end_date, cutoff_date, is_qdii=False):
     latest_nav = data_all[-1]["nav"]
     latest_date = data_all[-1]["date"]
 
-    # 计算今日涨幅
     today_gain = None
     today_str = datetime.now().strftime("%Y-%m-%d")
 
@@ -704,6 +692,29 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         except:
             return date_str
 
+    def quarter_to_end_date(date_str):
+        """将 2026Q2 / 2026-06-30 等转换为截止日 YYYY-MM-DD"""
+        if not date_str:
+            return ""
+        # 已是完整日期
+        if re.match(r'^\d{4}-\d{2}-\d{2}$', str(date_str)):
+            return date_str
+        # 处理 2026Q2 形式
+        m = re.match(r'^(\d{4})Q([1-4])$', str(date_str), re.I)
+        if m:
+            year = m.group(1)
+            q = int(m.group(2))
+            end_map = {1: "03-31", 2: "06-30", 3: "09-30", 4: "12-31"}
+            return f"{year}-{end_map[q]}"
+        # 处理 2026年2季度 等中文形式（兜底）
+        m2 = re.search(r'(\d{4}).*?([1-4])', str(date_str))
+        if m2:
+            year = m2.group(1)
+            q = int(m2.group(2))
+            end_map = {1: "03-31", 2: "06-30", 3: "09-30", 4: "12-31"}
+            return f"{year}-{end_map[q]}"
+        return ""
+
     nav_data_json = {}
     for r in results:
         if 'nav_data' in r and r['nav_data']:
@@ -833,7 +844,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         </tr>
         """
 
-        # 持仓展开行（含前十大合计）
+        # 持仓展开行（含前十大合计 + 截止日）
         if holdings_history:
             sorted_holdings = sorted(holdings_history, key=lambda x: x['date'], reverse=True)
             display_holdings = sorted_holdings[:3]
@@ -842,6 +853,8 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                 date_str = period['date']
                 holdings_list = period['holdings']
                 label = date_to_label(date_str)
+                end_date = quarter_to_end_date(date_str)
+                end_date_html = f'<span class="quarter-end">截止至：{end_date}</span>' if end_date else ""
                 prev_period = sorted_holdings[i+1] if i+1 < len(sorted_holdings) else None
                 prev_holdings_dict = {}
                 if prev_period:
@@ -895,7 +908,10 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                     stocks_html = '<div style="color: var(--footer-text);">暂无持仓数据</div>'
                 holdings_html += f"""
                 <div class="quarter-card">
-                    <div class="quarter-label">{label}</div>
+                    <div class="quarter-label">
+                        <span class="quarter-title">{label}</span>
+                        {end_date_html}
+                    </div>
                     <div class="quarter-stocks">{stocks_html}</div>
                 </div>
                 """
@@ -1410,6 +1426,24 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             color: var(--header-text);
             border-bottom: 1px solid var(--border);
             padding-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }}
+        .quarter-title {{
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }}
+        .quarter-end {{
+            flex-shrink: 0;
+            font-size: 10px;
+            font-weight: 500;
+            color: var(--footer-text);
+            white-space: nowrap;
         }}
         .quarter-stocks {{
             display: flex;
@@ -1443,7 +1477,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         .change-up {{ color: #d93025; }}
         .change-down {{ color: #188038; }}
         .change-new {{ color: #1a73e8; }}
-        /* 前十大合计样式 */
         .stock-total {{
             margin-top: 6px;
             padding-top: 6px;
@@ -1595,7 +1628,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
     </div>
     <div class="footer-note">
         <p><strong>使用提示：</strong> 列宽可拖拽调整，点击表头排序。涨幅数据基于可获取的历史净值，若区间内无对应日期数据则显示“-”。<br>
-        <span style="color: #1a73e8;">👉 点击基金行可展开/收起持仓与净值走势图；左半边三个季度持仓等宽排列，鼠标进入走势图显示十字线、时间、净值和区间涨幅。每个季度底部显示「前十大合计」占比。</span></p>
+        <span style="color: #1a73e8;">👉 点击基金行可展开/收起持仓与净值走势图；左半边三个季度持仓等宽排列，鼠标进入走势图显示十字线、时间、净值和区间涨幅。每个季度标题右侧显示「截止至：YYYY-MM-DD」，底部显示「前十大合计」占比。</span></p>
     </div>
     <script>
         var fundNavData = {json.dumps(nav_data_json, ensure_ascii=False)};
