@@ -59,6 +59,24 @@ QDII_CODES = {
     "019155", "016668", "501225", "015202", "001668", "000043"
 }
 
+# ============= 指数定义 =============
+INDEX_SYMBOLS = ["NDX", "SPX", "SOXX", "SOXL"]
+INDEX_NAMES = {
+    "NDX": "纳斯达克100指数",
+    "SPX": "标普500指数",
+    "SOXX": "iShares 半导体ETF",
+    "SOXL": "三倍做多半导体ETF-Direxion"
+}
+INDEX_SET = set(INDEX_SYMBOLS)
+
+# 新浪接口对应的符号映射（仅支持 .NDX / .INX / .DJI / .IXIC）
+SINA_INDEX_MAP = {
+    "NDX": ".NDX",
+    "SPX": ".INX",
+    # SOXX 和 SOXL 不在新浪美股指数接口中，后面单独处理
+}
+# =========================================
+
 CACHE_DIR = "cache"
 HOLDINGS_CACHE_DIR = os.path.join(CACHE_DIR, "holdings")
 NAV_CACHE_DIR = os.path.join(CACHE_DIR, "nav")
@@ -673,6 +691,10 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         "004233", "008182", "017968", "024648"
     }
 
+    # ========= 指数代码集合 =========
+    INDEX_SET_LOCAL = {"NDX", "SPX", "SOXX", "SOXL"}
+    # =====================================
+
     col_count = 20  # 新增今日涨幅列
 
     def date_to_label(date_str):
@@ -700,7 +722,16 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
 
     rows_html = ""
     for r in results:
-        fund_url = f"https://fund.eastmoney.com/{r['code']}.html"
+        # ========== 指数专用跳转链接 ==========
+        INDEX_URL_MAP = {
+            "NDX":  "https://quote.eastmoney.com/gb/zsNDX100.html",
+            "SPX":  "https://quote.eastmoney.com/gb/zsSPX.html",
+            "SOXX": "https://quote.eastmoney.com/us/SOXX.html",
+            "SOXL": "https://quote.eastmoney.com/us/SOXL.html",
+        }
+        fund_url = INDEX_URL_MAP.get(r['code'], f"https://fund.eastmoney.com/{r['code']}.html")
+        # ==================================================
+
         max_dd_pct = min(max(r['max_drawdown'], 0), 100)
         rec_pct = min(max(r['recovery_rate'], 0), 100)
         reb_pct = min(max(r['rebound_gain'], 0), 100)
@@ -736,7 +767,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             else:
                 return ''
 
-        # 分组判断
+        # ===== 分组判断（添加指数分支） =====
         if r['code'] in CPO_CODES:
             group = "cpo"
         elif r['code'] in STORAGE_CODES:
@@ -749,6 +780,8 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             group = "grid"
         elif r['code'] in ROBOT_CODES:
             group = "robot"
+        elif r['code'] in INDEX_SET_LOCAL:          # 指数
+            group = "index"
         else:
             group = "qdii"
 
@@ -775,7 +808,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         <tr data-group="{group}" class="fund-row" data-code="{r['code']}">
             <td class="code" data-val="{r['code']}">{r['code']}</td>
             <td class="name" data-val="{r['name']}">
-                <a href="{fund_url}" target="_blank" title="点击查看天天基金概况">{r['name']}</a>
+                <a href="{fund_url}" target="_blank" title="点击查看行情/概况">{r['name']}</a>
                 <div class="redemption-sub" style="white-space: normal; line-height: 1.6;">赎回:<br>{redemption_lines}</div>
             </td>
             <td data-val="{r['scale_val']}" class="highlight-val">{r['scale']}</td>
@@ -912,7 +945,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         </tr>
     """
 
-    # 分组标签
+    # 分组标签（添加“指数”）
     groups = [
         ("汇总", "all"),
         ("QDII", "qdii"),
@@ -921,7 +954,8 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         ("人工智能", "ai"),
         ("存储芯片", "storage"),
         ("电网设备", "grid"),
-        ("机器人", "robot")
+        ("机器人", "robot"),
+        ("指数", "index")
     ]
     buttons_html = ""
     for label, group_id in groups:
@@ -2100,6 +2134,134 @@ document.addEventListener("DOMContentLoaded", function () {{
         f.write(html_content)
     return os.path.abspath(filename)
 
+def fetch_index_data(symbol, start_date, end_date):
+    """
+    获取指数/ETF历史数据，统一返回 [{'date': 'YYYY-MM-DD', 'nav': float}, ...]
+    """
+    df = None
+    close_col = None
+    date_col = None
+
+    try:
+        if symbol in SINA_INDEX_MAP:
+            # NDX / SPX 使用新浪美股指数接口
+            sina_symbol = SINA_INDEX_MAP[symbol]
+            print(f"[指数] 尝试 ak.index_us_stock_sina(symbol='{sina_symbol}') ...")
+            df = ak.index_us_stock_sina(symbol=sina_symbol)
+            if df is not None and not df.empty:
+                date_col = 'date' if 'date' in df.columns else df.columns[0]
+                close_col = 'close' if 'close' in df.columns else None
+                if close_col is None:
+                    for c in df.columns:
+                        if 'close' in str(c).lower() or '收盘' in str(c):
+                            close_col = c
+                            break
+                if close_col is None:
+                    close_col = df.columns[4] if len(df.columns) > 4 else df.columns[-1]
+
+        elif symbol == "SOXL":
+            # SOXL 是 ETF
+            print(f"[指数] 尝试获取 SOXL (ETF) ...")
+            for try_symbol in ["105.SOXL", "SOXL", "106.SOXL"]:
+                try:
+                    df = ak.stock_us_hist(
+                        symbol=try_symbol,
+                        period="daily",
+                        start_date=start_date.replace("-", ""),
+                        end_date=end_date.replace("-", ""),
+                        adjust=""
+                    )
+                    if df is not None and not df.empty:
+                        print(f"[指数] SOXL 使用 stock_us_hist({try_symbol}) 成功")
+                        break
+                except Exception:
+                    continue
+            if df is None or df.empty:
+                try:
+                    df = ak.stock_us_daily(symbol="SOXL", adjust="")
+                    print("[指数] SOXL 使用 stock_us_daily 成功")
+                except Exception as e:
+                    print(f"[指数] SOXL stock_us_daily 失败: {e}")
+
+            if df is not None and not df.empty:
+                date_col = '日期' if '日期' in df.columns else ('date' if 'date' in df.columns else df.columns[0])
+                close_col = '收盘' if '收盘' in df.columns else ('close' if 'close' in df.columns else None)
+                if close_col is None:
+                    for c in df.columns:
+                        if 'close' in str(c).lower() or '收盘' in str(c):
+                            close_col = c
+                            break
+
+        elif symbol == "SOXX":
+            # SOXX 是 ETF（原先 SOX 最终也是用它的数据）
+            print(f"[指数] 尝试获取 SOXX (iShares 半导体ETF) ...")
+            for try_symbol in ["105.SOXX", "SOXX", "106.SOXX"]:
+                try:
+                    df = ak.stock_us_hist(
+                        symbol=try_symbol,
+                        period="daily",
+                        start_date=start_date.replace("-", ""),
+                        end_date=end_date.replace("-", ""),
+                        adjust=""
+                    )
+                    if df is not None and not df.empty:
+                        print(f"[指数] SOXX 使用 stock_us_hist({try_symbol}) 成功")
+                        break
+                except Exception:
+                    continue
+            if df is None or df.empty:
+                try:
+                    df = ak.stock_us_daily(symbol="SOXX", adjust="")
+                    print("[指数] SOXX 使用 stock_us_daily 成功")
+                except Exception as e:
+                    print(f"[指数] SOXX stock_us_daily 失败: {e}")
+
+            if df is not None and not df.empty:
+                date_col = '日期' if '日期' in df.columns else ('date' if 'date' in df.columns else df.columns[0])
+                close_col = '收盘' if '收盘' in df.columns else ('close' if 'close' in df.columns else None)
+                if close_col is None:
+                    for c in df.columns:
+                        if 'close' in str(c).lower() or '收盘' in str(c):
+                            close_col = c
+                            break
+
+        # ===== 公共处理逻辑 =====
+        if df is None or df.empty:
+            print(f"[指数] {symbol} 无有效数据返回")
+            return None
+
+        df = df.copy()
+        df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+        df = df.dropna(subset=[date_col])
+        df['date_str'] = df[date_col].dt.strftime('%Y-%m-%d')
+
+        mask = (df['date_str'] >= start_date) & (df['date_str'] <= end_date)
+        df = df.loc[mask].sort_values('date_str')
+
+        if df.empty:
+            print(f"[指数] {symbol} 在 {start_date} ~ {end_date} 无数据")
+            return None
+
+        data = []
+        for _, row in df.iterrows():
+            try:
+                nav = float(row[close_col])
+                if nav > 0:
+                    data.append({"date": row['date_str'], "nav": nav})
+            except (ValueError, TypeError):
+                continue
+
+        if not data:
+            print(f"[指数] {symbol} 转换后无有效数据点")
+            return None
+
+        print(f"[指数] {symbol} 成功获取 {len(data)} 个数据点")
+        return data
+
+    except Exception as e:
+        print(f"[指数] {symbol} 获取过程异常: {e}")
+        return None
+
 def main():
     today_str = datetime.now().strftime("%Y-%m-%d")
     default_start = "2025-01-01"
@@ -2155,6 +2317,59 @@ def main():
             results.append(res)
             print(f"[{idx}/{len(args.funds)}] {code} - {meta['name']} ... ✅ 完成 (持仓报告期数: {len(res['holdings'])})")
         time.sleep(random.uniform(0.05, 0.1))
+
+    # ========= 指数数据获取 =========
+    print("\n======== 开始获取指数数据 ========")
+    for symbol in INDEX_SYMBOLS:
+        try:
+            data = fetch_index_data(symbol, args.start, args.end)
+            if not data:
+                print(f"[指数] {symbol} 无数据，跳过")
+                continue
+
+            # 构造元数据（指数无费率、规模）
+            meta = {
+                "name": INDEX_NAMES.get(symbol, symbol),
+                "scale": "--",
+                "scale_val": -1.0,
+                "fee_manage": "--",
+                "fee_custody": "--",
+                "fee_sales": "--",
+                "fee_purchase": "--",
+                "fee_redemption": "--",
+                "buy_status": "--",
+                "buy_limit": "--",
+                "buy_limit_val": -1,
+                "fee_total": "--",
+                "fee_val": -1.0,
+                "holdings": []
+            }
+            res = analyze_fund_metrics(data, args.end, cutoff_date, is_qdii=False)
+            if res:
+                res.update({
+                    "code": symbol,
+                    "name": meta["name"],
+                    "scale": meta["scale"],
+                    "scale_val": meta["scale_val"],
+                    "fee_manage": meta["fee_manage"],
+                    "fee_custody": meta["fee_custody"],
+                    "fee_sales": meta["fee_sales"],
+                    "fee_total": meta["fee_total"],
+                    "fee_val": meta["fee_val"],
+                    "fee_purchase": meta["fee_purchase"],
+                    "fee_redemption": meta["fee_redemption"],
+                    "buy_status": meta["buy_status"],
+                    "buy_limit": meta["buy_limit"],
+                    "buy_limit_val": meta["buy_limit_val"],
+                    "holdings": meta["holdings"],
+                    "source": "akshare指数",
+                    "nav_data": data
+                })
+                results.append(res)
+                print(f"[指数] {symbol} - {meta['name']} ... ✅ (数据点 {len(data)})")
+        except Exception as e:
+            print(f"[指数] {symbol} 获取失败: {e}")
+    # =====================================
 
     if results:
         abs_path = generate_html_report(results, args.start, args.end, today_str, filename=args.out)
