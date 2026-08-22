@@ -562,19 +562,15 @@ def analyze_fund_metrics(valid_data, end_date, cutoff_date, is_qdii=False):
     latest_date = data_all[-1]["date"]
 
     # 计算今日涨幅
-    # 对非QDII：最新日期必须等于今天才显示涨幅，否则返回None
-    # 对QDII：只要有至少两个数据点，就直接计算最新相对于前一天的涨幅（因为数据滞后，用户想看到“上一个工作日”的涨跌）
     today_gain = None
     today_str = datetime.now().strftime("%Y-%m-%d")
 
     if is_qdii:
-        # QDII：直接计算最新净值相对于前一个净值的涨跌幅
         if len(data_all) >= 2:
             prev_nav = data_all[-2]["nav"]
             if prev_nav and prev_nav > 0:
                 today_gain = ((latest_nav / prev_nav) - 1) * 100.0
     else:
-        # 非QDII：最新日期为今天时，计算相对于前一天的涨幅
         if latest_date == today_str and len(data_all) >= 2:
             prev_nav = data_all[-2]["nav"]
             if prev_nav and prev_nav > 0:
@@ -691,11 +687,9 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         "004233", "008182", "017968", "024648"
     }
 
-    # ========= 指数代码集合 =========
     INDEX_SET_LOCAL = {"NDX", "SPX", "SOXX", "SOXL"}
-    # =====================================
 
-    col_count = 20  # 新增今日涨幅列
+    col_count = 20
 
     def date_to_label(date_str):
         if 'Q' in date_str:
@@ -710,11 +704,9 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         except:
             return date_str
 
-    # 构建基金净值数据字典用于图表
     nav_data_json = {}
     for r in results:
         if 'nav_data' in r and r['nav_data']:
-            # 按日期排序（已排序）
             nav_data_json[r['code']] = {
                 'dates': [item['date'] for item in r['nav_data']],
                 'navs': [item['nav'] for item in r['nav_data']]
@@ -722,7 +714,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
 
     rows_html = ""
     for r in results:
-        # ========== 指数专用跳转链接 ==========
         INDEX_URL_MAP = {
             "NDX":  "https://quote.eastmoney.com/gb/zsNDX100.html",
             "SPX":  "https://quote.eastmoney.com/gb/zsSPX.html",
@@ -730,7 +721,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             "SOXL": "https://quote.eastmoney.com/us/SOXL.html",
         }
         fund_url = INDEX_URL_MAP.get(r['code'], f"https://fund.eastmoney.com/{r['code']}.html")
-        # ==================================================
 
         max_dd_pct = min(max(r['max_drawdown'], 0), 100)
         rec_pct = min(max(r['recovery_rate'], 0), 100)
@@ -767,7 +757,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             else:
                 return ''
 
-        # ===== 分组判断（添加指数分支） =====
         if r['code'] in CPO_CODES:
             group = "cpo"
         elif r['code'] in STORAGE_CODES:
@@ -780,22 +769,16 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             group = "grid"
         elif r['code'] in ROBOT_CODES:
             group = "robot"
-        elif r['code'] in INDEX_SET_LOCAL:          # 指数
+        elif r['code'] in INDEX_SET_LOCAL:
             group = "index"
         else:
             group = "qdii"
 
         holdings_history = r.get('holdings', [])
-        print(f"[HTML生成] 基金 {r['code']} 持仓数据: {len(holdings_history)} 个报告期")
-        if holdings_history:
-            for idx, p in enumerate(holdings_history):
-                print(f"[HTML生成]  季度 {p['date']} 股票数: {len(p['holdings'])}")
 
-        # 今日涨幅：直接使用计算好的 today_gain
         today_gain_val = r.get('today_gain', None)
         latest_date = r['latest_date']
         if today_gain_val is not None:
-            # 显示涨幅和日期小字
             today_gain_display = format_gain(today_gain_val) + f' <span class="gain-date">({latest_date})</span>'
             today_gain_class = gain_class(today_gain_val)
             today_data_val = today_gain_val
@@ -850,7 +833,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         </tr>
         """
 
-        # 持仓展开行：左侧三个季度卡片，右侧图表
+        # 持仓展开行（含前十大合计）
         if holdings_history:
             sorted_holdings = sorted(holdings_history, key=lambda x: x['date'], reverse=True)
             display_holdings = sorted_holdings[:3]
@@ -864,10 +847,12 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                 if prev_period:
                     prev_holdings_dict = {h['name']: h['ratio'] for h in prev_period['holdings']}
                 stocks_html = ""
+                total_ratio = 0.0
                 if holdings_list:
                     for h in holdings_list:
                         name = h['name']
                         ratio = h['ratio']
+                        total_ratio += ratio
                         change_text = ''
                         change_class = ''
                         if name in prev_holdings_dict:
@@ -898,6 +883,14 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                             <span class="stock-change {change_class}">{change_text}</span>
                         </div>
                         '''
+                    # 前十大合计
+                    stocks_html += f'''
+                    <div class="stock-item stock-total">
+                        <span class="stock-name">前十大合计</span>
+                        <span class="stock-ratio">{total_ratio:.2f}%</span>
+                        <span class="stock-change"></span>
+                    </div>
+                    '''
                 else:
                     stocks_html = '<div style="color: var(--footer-text);">暂无持仓数据</div>'
                 holdings_html += f"""
@@ -909,7 +902,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         else:
             holdings_html = '<div>暂无持仓数据</div>'
 
-        # 图表区域（右侧50%）
         chart_html = f"""
         <div class="chart-container" id="chart-container-{r['code']}">
             <div class="chart-controls">
@@ -945,7 +937,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         </tr>
     """
 
-    # 分组标签（添加“指数”）
     groups = [
         ("汇总", "all"),
         ("QDII", "qdii"),
@@ -961,7 +952,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
     for label, group_id in groups:
         buttons_html += f'<button class="group-btn" data-group="{group_id}">{label}</button>'
 
-    # 生成友链卡片HTML（右侧）
     friend_links = [
         {"name": "WISE HOLD", "url": "https://www.wise-hold.com/", "desc": "追踪机构持仓与政商名人投资动向"},
         {"name": "WiseETF", "url": "https://www.wise-etf.com/", "desc": "美股ETF/QDII基金估值与溢价监控"},
@@ -1041,7 +1031,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             justify-content: flex-start;
             transition: background-color 0.3s, color 0.3s;
         }}
-        /* 顶部 Dashboard：左侧信息/标签/搜索 + 右侧友链 */
         .top-wrapper {{
             display:grid;
             grid-template-columns:minmax(0, 1fr) minmax(0, 1fr);
@@ -1085,8 +1074,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             flex:0 0 auto;
         }}
         .theme-toggle:hover {{ opacity:0.82; }}
-
-        /* 左侧说明区：标题 + 原有文字说明 */
         .header {{ text-align:left; margin:0 0 8px 0; }}
         .header-top {{
             display:flex;
@@ -1109,8 +1096,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             overflow:hidden;
         }}
         .header-info p {{ margin:2px 0; }}
-
-        /* 左下控制区：标签在左、搜索框在右 */
         .group-tabs {{
             display:grid;
             grid-template-columns:minmax(0,1fr) 250px;
@@ -1164,8 +1149,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         }}
         .search-container input:focus {{ border-color:#188038; box-shadow:0 0 0 3px rgba(52,168,83,.14); }}
         .search-container input::placeholder {{ color:var(--footer-text); }}
-
-        /* 右侧友链：3列卡片，最后一行自动放2张 */
         .friend-cards-wrapper {{
             display:grid;
             grid-template-columns:repeat(3,minmax(0,1fr));
@@ -1212,7 +1195,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             -webkit-box-orient:vertical;
             overflow:hidden;
         }}
-
         .table-container {{ 
             width:100%; 
             height: calc(100vh - 286px); 
@@ -1395,7 +1377,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         }}
         .holding-row {{ display: none; }}
         .holding-row.show {{ display: table-row; }}
-
         .holdings-wrapper {{
             display: flex;
             flex-wrap: nowrap;
@@ -1462,7 +1443,20 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         .change-up {{ color: #d93025; }}
         .change-down {{ color: #188038; }}
         .change-new {{ color: #1a73e8; }}
-
+        /* 前十大合计样式 */
+        .stock-total {{
+            margin-top: 6px;
+            padding-top: 6px;
+            border-top: 1px dashed var(--border);
+            font-weight: 600;
+        }}
+        .stock-total .stock-name {{
+            color: var(--header-text);
+        }}
+        .stock-total .stock-ratio {{
+            color: #e67e22;
+            font-weight: 700;
+        }}
         .chart-container {{
             flex: 0 0 calc(50% - 20px);
             background: var(--card-bg);
@@ -1499,50 +1493,30 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             max-height: 200px;
             flex: 1;
         }}
-
         @media (max-width: 1000px) {{
-            .holdings-wrapper {{
-                gap: 10px;
-            }}
-            .holdings-container {{
-                gap: 6px;
-            }}
-            .quarter-card {{
-                padding: 8px 6px;
-            }}
+            .holdings-wrapper {{ gap: 10px; }}
+            .holdings-container {{ gap: 6px; }}
+            .quarter-card {{ padding: 8px 6px; }}
             .stock-item {{
                 grid-template-columns: minmax(0, 1fr) 48px 56px;
                 font-size: 10px;
             }}
-            .stock-change {{
-                font-size: 9px;
-            }}
+            .stock-change {{ font-size: 9px; }}
             .top-wrapper {{
                 grid-template-columns:1fr;
                 height:auto;
                 flex-basis:auto;
             }}
-            .top-left, .top-right {{
-                min-height:210px;
-            }}
-            .top-right {{
-                width:100%;
-            }}
-            .friend-cards-wrapper {{
-                width: 100%;
-            }}
-            .friend-card {{
-                min-height:64px;
-            }}
+            .top-left, .top-right {{ min-height:210px; }}
+            .top-right {{ width:100%; }}
+            .friend-cards-wrapper {{ width: 100%; }}
+            .friend-card {{ min-height:64px; }}
             .group-tabs {{
                 flex-direction: column;
                 align-items: stretch;
             }}
-            .search-container input {{
-                max-width: 100%;
-            }}
+            .search-container input {{ max-width: 100%; }}
         }}
-
         .footer-note {{ 
             margin-top: 4px; 
             font-size: 12px; 
@@ -1567,12 +1541,10 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                 </div>
                 <p>统计时间区间：<strong>{start_date}</strong> 至 <strong>{end_date}</strong>（包含基金数：{len(results)} 只）</p>
             </div>
-
             <div class="header-info">
                 <p>申购费率已取优惠后费率，销售服务费默认0.00%，赎回费率百分比已高亮。</p>
                 <p>最高/最低净值为回撤计算区间内峰值与谷值（谷值位于峰值之后）；涨幅基于完整历史净值计算。</p>
             </div>
-
             <div class="group-tabs">
                 <div class="group-buttons">
                     {buttons_html}
@@ -1582,7 +1554,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                 </div>
             </div>
         </section>
-
         <section class="top-right">
             <button class="theme-toggle" id="themeToggle">🌓 切换主题</button>
             <div class="friend-cards-wrapper">
@@ -1590,7 +1561,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             </div>
         </section>
     </div>
-
     <div class="table-container">
         <table id="fundTable">
             <thead>
@@ -1625,19 +1595,16 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
     </div>
     <div class="footer-note">
         <p><strong>使用提示：</strong> 列宽可拖拽调整，点击表头排序。涨幅数据基于可获取的历史净值，若区间内无对应日期数据则显示“-”。<br>
-        <span style="color: #1a73e8;">👉 点击基金行可展开/收起持仓与净值走势图；左半边三个季度持仓等宽排列，鼠标进入走势图显示十字线、时间、净值和区间涨幅。</span></p>
+        <span style="color: #1a73e8;">👉 点击基金行可展开/收起持仓与净值走势图；左半边三个季度持仓等宽排列，鼠标进入走势图显示十字线、时间、净值和区间涨幅。每个季度底部显示「前十大合计」占比。</span></p>
     </div>
     <script>
-        // 基金净值数据（由Python注入）
         var fundNavData = {json.dumps(nav_data_json, ensure_ascii=False)};
 
-        // 主题切换
         (function() {{
             const toggle = document.getElementById('themeToggle');
             const currentTheme = localStorage.getItem('theme') || 'light';
             document.documentElement.setAttribute('data-theme', currentTheme);
             toggle.textContent = currentTheme === 'dark' ? '☀️ 亮色' : '🌓 暗色';
-
             toggle.addEventListener('click', function() {{
                 const current = document.documentElement.getAttribute('data-theme');
                 const next = current === 'dark' ? 'light' : 'dark';
@@ -1647,16 +1614,13 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             }});
         }})();
 
-        // 分组 + 搜索 联动过滤（修改：增加 'all' 分组支持）
         document.addEventListener('DOMContentLoaded', function() {{
             const buttons = document.querySelectorAll('.group-btn');
             const searchInput = document.getElementById('searchInput');
             const emptyRow = document.getElementById('empty-row');
             const allRows = document.querySelectorAll('#fundTable tbody tr:not(#empty-row)');
-
-            let currentGroup = 'all';   // 默认显示汇总
+            let currentGroup = 'all';
             let searchKeyword = '';
-
             function applyFilters() {{
                 let hasVisible = false;
                 const keyword = searchKeyword.trim().toLowerCase();
@@ -1699,7 +1663,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                     emptyRow.querySelector('td').textContent = msg;
                 }}
             }}
-
             buttons.forEach(btn => {{
                 btn.addEventListener('click', function() {{
                     buttons.forEach(b => b.classList.remove('active'));
@@ -1708,40 +1671,31 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                     applyFilters();
                 }});
             }});
-
             searchInput.addEventListener('input', function() {{
                 searchKeyword = this.value;
                 applyFilters();
             }});
-
-            // 默认激活汇总按钮
             const defaultBtn = document.querySelector('.group-btn[data-group="all"]');
             if (defaultBtn) defaultBtn.classList.add('active');
             applyFilters();
         }});
 
-        // 图表相关
         var chartInstances = {{}};
         var chartColors = {{
             line: '#1a73e8',
             point: '#1a73e8',
             bg: 'rgba(26,115,232,0.1)'
         }};
-
-        // 鼠标十字线插件：鼠标进入图表后显示横/纵十字线
         const crosshairPlugin = {{
             id: 'fundCrosshair',
             afterDraw(chart) {{
                 const crosshair = chart._fundCrosshair;
                 if (!crosshair) return;
-
                 const ctx = chart.ctx;
                 const area = chart.chartArea;
                 if (!area) return;
-
                 const x = Math.max(area.left, Math.min(area.right, crosshair.x));
                 const y = Math.max(area.top, Math.min(area.bottom, crosshair.y));
-
                 ctx.save();
                 ctx.beginPath();
                 ctx.moveTo(x, area.top);
@@ -1755,7 +1709,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                 ctx.restore();
             }}
         }};
-
         Chart.register(crosshairPlugin);
 
         function filterNavData(data, period) {{
@@ -1785,7 +1738,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                 }}
             }}
             if (indices.length === 0) {{
-                // 如果区间无数据，取全部
                 return {{ dates: dates, navs: navs }};
             }}
             const filteredDates = indices.map(i => dates[i]);
@@ -1796,7 +1748,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         function initChart(code) {{
             const canvas = document.getElementById(`chart-${{code}}`);
             if (!canvas) return;
-            // 检查是否已初始化
             if (chartInstances[code]) {{
                 if (typeof chartInstances[code].destroy === 'function') {{
                     chartInstances[code].destroy();
@@ -1810,7 +1761,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                 canvas.parentElement.innerHTML = '<div style="padding:20px;text-align:center;color:var(--footer-text);">无净值数据</div>';
                 return;
             }}
-            // 默认显示近一月
             const filtered = filterNavData(data, 'month');
             const ctx = canvas.getContext('2d');
             const chart = new Chart(ctx, {{
@@ -1849,9 +1799,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                         chart.draw();
                     }},
                     plugins: {{
-                        legend: {{
-                            display: false
-                        }},
+                        legend: {{ display: false }},
                         tooltip: {{
                             enabled: true,
                             mode: 'index',
@@ -1864,7 +1812,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                                 }},
                                 label: function(context) {{
                                     const values = context.dataset.data;
-                                    const index = context.dataIndex;
                                     const value = Number(context.parsed.y);
                                     const firstValue = Number(values[0]);
                                     if (Number.isFinite(firstValue) && firstValue !== 0) {{
@@ -1880,20 +1827,14 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                         x: {{
                             ticks: {{
                                 maxTicksLimit: 12,
-                                font: {{
-                                    size: 9
-                                }},
+                                font: {{ size: 9 }},
                                 color: getComputedStyle(document.documentElement).getPropertyValue('--footer-text').trim() || '#70757a'
                             }},
-                            grid: {{
-                                display: false
-                            }}
+                            grid: {{ display: false }}
                         }},
                         y: {{
                             ticks: {{
-                                font: {{
-                                    size: 9
-                                }},
+                                font: {{ size: 9 }},
                                 color: getComputedStyle(document.documentElement).getPropertyValue('--footer-text').trim() || '#70757a'
                             }},
                             grid: {{
@@ -1904,16 +1845,12 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                 }}
             }});
             chartInstances[code] = chart;
-
-            // 鼠标离开图表时隐藏十字线
             canvas.addEventListener('mouseleave', function() {{
                 if (chart) {{
                     chart._fundCrosshair = null;
                     chart.draw();
                 }}
             }});
-
-            // 绑定周期按钮事件
             const container = document.getElementById(`chart-container-${{code}}`);
             if (container) {{
                 const btns = container.querySelectorAll('.period-btn');
@@ -1934,7 +1871,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             }}
         }}
 
-        // 点击基金行展开/关闭持仓，并初始化图表
         document.addEventListener('DOMContentLoaded', function() {{
             const table = document.getElementById('fundTable');
             table.addEventListener('click', function(e) {{
@@ -1948,7 +1884,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                     holdingRow.classList.toggle('show');
                     if (holdingRow.classList.contains('show')) {{
                         holdingRow.style.display = '';
-                        // 延迟初始化图表，确保渲染完成
                         setTimeout(function() {{
                             initChart(code);
                         }}, 100);
@@ -1959,7 +1894,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             }});
         }});
 
-        // 排序和列宽拖拽逻辑（原代码保留）
         document.addEventListener("DOMContentLoaded", function () {{
             const table = document.getElementById("fundTable");
             const headers = table.querySelectorAll("th");
@@ -2011,26 +1945,22 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                 row.classList.remove('show');
                 row.style.display = 'none';
             }});
-
             const table = document.getElementById("fundTable");
             const tbody = table.querySelector("tbody");
             const allRows = Array.from(tbody.querySelectorAll("tr"));
             const dataRows = allRows.filter(row => row.id !== 'empty-row' && !row.classList.contains('holding-row'));
             const holdingRows = allRows.filter(row => row.classList.contains('holding-row'));
-
             const holdingMap = {{}};
             holdingRows.forEach(row => {{
                 const code = row.getAttribute('data-code');
                 if (code) holdingMap[code] = row;
             }});
-
             if (currentSortCol === colIndex) {{
                 isAscending = !isAscending;
             }} else {{
                 currentSortCol = colIndex;
                 isAscending = true;
             }}
-
             dataRows.sort((a, b) => {{
                 const cellA = a.children[colIndex];
                 const cellB = b.children[colIndex];
@@ -2045,7 +1975,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                     ? valA.localeCompare(valB, 'zh-Hans-CN', {{ sensitivity: 'accent' }})
                     : valB.localeCompare(valA, 'zh-Hans-CN', {{ sensitivity: 'accent' }});
             }});
-
             const fragment = document.createDocumentFragment();
             dataRows.forEach(row => {{
                 fragment.appendChild(row);
@@ -2059,7 +1988,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             if (empty) fragment.appendChild(empty);
             tbody.innerHTML = '';
             tbody.appendChild(fragment);
-
             const headers = table.querySelectorAll("th");
             headers.forEach((th, idx) => {{
                 const icon = th.querySelector(".sort-icon");
@@ -2075,58 +2003,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             }});
         }}
     </script>
-
-<style>
-.holding-empty {{
-    min-height: 120px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #999;
-    font-size: 14px;
-}}
-</style>
-<script>
-document.addEventListener("DOMContentLoaded", function () {{
-    // 对所有持仓卡片进行处理：
-    // 卡片标签保留原来的“2026年2季度股票投资明细”等标题；
-    // 如果卡片内部没有有效持仓行，则显示“暂无持仓数据”。
-    document.querySelectorAll(".holding-card, .position-card, .holding-item").forEach(function(card) {{
-        var table = card.querySelector("table");
-        if (!table) {{
-            if (!card.querySelector(".holding-empty")) {{
-                var empty = document.createElement("div");
-                empty.className = "holding-empty";
-                empty.textContent = "暂无持仓数据";
-                card.appendChild(empty);
-            }}
-            return;
-        }}
-
-        var rows = table.querySelectorAll("tbody tr");
-        var validRows = 0;
-
-        rows.forEach(function(row) {{
-            var cells = row.querySelectorAll("td");
-            var text = row.textContent.trim();
-            if (cells.length > 0 && text && text !== "暂无持仓数据") {{
-                validRows++;
-            }}
-        }});
-
-        if (validRows === 0) {{
-            table.style.display = "none";
-            if (!card.querySelector(".holding-empty")) {{
-                var empty = document.createElement("div");
-                empty.className = "holding-empty";
-                empty.textContent = "暂无持仓数据";
-                card.appendChild(empty);
-            }}
-        }}
-    }});
-}});
-</script>
-
 </body>
 </html>
 """
@@ -2144,7 +2020,6 @@ def fetch_index_data(symbol, start_date, end_date):
 
     try:
         if symbol in SINA_INDEX_MAP:
-            # NDX / SPX 使用新浪美股指数接口
             sina_symbol = SINA_INDEX_MAP[symbol]
             print(f"[指数] 尝试 ak.index_us_stock_sina(symbol='{sina_symbol}') ...")
             df = ak.index_us_stock_sina(symbol=sina_symbol)
@@ -2160,7 +2035,6 @@ def fetch_index_data(symbol, start_date, end_date):
                     close_col = df.columns[4] if len(df.columns) > 4 else df.columns[-1]
 
         elif symbol == "SOXL":
-            # SOXL 是 ETF
             print(f"[指数] 尝试获取 SOXL (ETF) ...")
             for try_symbol in ["105.SOXL", "SOXL", "106.SOXL"]:
                 try:
@@ -2193,7 +2067,6 @@ def fetch_index_data(symbol, start_date, end_date):
                             break
 
         elif symbol == "SOXX":
-            # SOXX 是 ETF（原先 SOX 最终也是用它的数据）
             print(f"[指数] 尝试获取 SOXX (iShares 半导体ETF) ...")
             for try_symbol in ["105.SOXX", "SOXX", "106.SOXX"]:
                 try:
@@ -2225,7 +2098,6 @@ def fetch_index_data(symbol, start_date, end_date):
                             close_col = c
                             break
 
-        # ===== 公共处理逻辑 =====
         if df is None or df.empty:
             print(f"[指数] {symbol} 无有效数据返回")
             return None
@@ -2289,9 +2161,7 @@ def main():
         if not raw_data:
             print(f"[{idx}/{len(args.funds)}] {code} - {meta['name']} ... ❌ 历史净值抓取失败")
             continue
-        # 排序并保存净值数据用于图表
         raw_data_sorted = sorted(raw_data, key=lambda x: x['date'])
-        # 判断是否为 QDII
         is_qdii = code in QDII_CODES
         res = analyze_fund_metrics(raw_data_sorted, args.end, cutoff_date, is_qdii=is_qdii)
         if res:
@@ -2318,7 +2188,6 @@ def main():
             print(f"[{idx}/{len(args.funds)}] {code} - {meta['name']} ... ✅ 完成 (持仓报告期数: {len(res['holdings'])})")
         time.sleep(random.uniform(0.05, 0.1))
 
-    # ========= 指数数据获取 =========
     print("\n======== 开始获取指数数据 ========")
     for symbol in INDEX_SYMBOLS:
         try:
@@ -2327,7 +2196,6 @@ def main():
                 print(f"[指数] {symbol} 无数据，跳过")
                 continue
 
-            # 构造元数据（指数无费率、规模）
             meta = {
                 "name": INDEX_NAMES.get(symbol, symbol),
                 "scale": "--",
@@ -2369,7 +2237,6 @@ def main():
                 print(f"[指数] {symbol} - {meta['name']} ... ✅ (数据点 {len(data)})")
         except Exception as e:
             print(f"[指数] {symbol} 获取失败: {e}")
-    # =====================================
 
     if results:
         abs_path = generate_html_report(results, args.start, args.end, today_str, filename=args.out)
