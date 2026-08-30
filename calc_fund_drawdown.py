@@ -49,7 +49,6 @@ DEFAULT_FUNDS = [
     "004233", "008182", "017968", "024648"
 ]
 
-# QDII 基金代码集合
 QDII_CODES = {
     "002891", "014002", "006555", "012922", "012920", "021662", "457001", "539002",
     "018147", "021842", "006373", "018036", "501226", "008254", "008253", "017731",
@@ -59,7 +58,6 @@ QDII_CODES = {
     "019155", "016668", "501225", "015202", "001668", "000043", "007280", "019449"
 }
 
-# 指数定义
 INDEX_SYMBOLS = ["NDX", "SPX", "SOXX", "SOXL"]
 INDEX_NAMES = {
     "NDX": "纳斯达克100指数",
@@ -87,9 +85,7 @@ def get_direct_opener():
     return urllib.request.build_opener(proxy_handler)
 
 def fetch_holdings(opener, code):
-    """获取基金前十大持仓（最近四个季度）"""
     cache_file = os.path.join(HOLDINGS_CACHE_DIR, f"{code}_holdings.json")
-
     if os.path.exists(cache_file):
         try:
             with open(cache_file, 'r', encoding='utf-8') as f:
@@ -660,7 +656,9 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         return ""
 
     nav_data_json = {}
+    fund_names_json = {}
     for r in results:
+        fund_names_json[r['code']] = r['name']
         if 'nav_data' in r and r['nav_data']:
             nav_data_json[r['code']] = {
                 'dates': [item['date'] for item in r['nav_data']],
@@ -746,7 +744,10 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         <tr data-group="{group}" class="fund-row" data-code="{r['code']}">
             <td class="code" data-val="{r['code']}">{r['code']}</td>
             <td class="name" data-val="{r['name']}">
-                <a href="{fund_url}" target="_blank" title="点击查看行情/概况">{r['name']}</a>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+                    <a href="{fund_url}" target="_blank" title="点击查看行情/概况" style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{r['name']}</a>
+                    <button class="dca-btn" data-code="{r['code']}" title="启动定投回测测算小工具">📊 定投</button>
+                </div>
                 <div class="redemption-sub" style="white-space: normal; line-height: 1.6;">赎回:<br>{redemption_lines}</div>
             </td>
             <td data-val="{r['scale_val']}" class="highlight-val">{r['scale']}</td>
@@ -927,7 +928,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         """
 
     now_dt = datetime.now()
-    # 生成精确到分钟的更新时间
     update_time_str = now_dt.strftime("%Y-%m-%d %H:%M")
 
     if now_dt.weekday() == 5:
@@ -1228,7 +1228,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }}
         th:nth-child(1), td:nth-child(1) {{ width: 60px; text-align: left; white-space: nowrap; }}
-        th:nth-child(2), td:nth-child(2) {{ width: 240px; min-width: 180px; text-align: left; white-space: normal; word-break: break-word; vertical-align: middle; }}
+        th:nth-child(2), td:nth-child(2) {{ width: 250px; min-width: 200px; text-align: left; white-space: normal; word-break: break-word; vertical-align: middle; }}
         th:nth-child(3), td:nth-child(3) {{ width: 80px; text-align: left; white-space: nowrap; }}
         th:nth-child(4), td:nth-child(4) {{ width: 130px; text-align: left; white-space: normal; word-break: break-word; }}
         th:nth-child(5), td:nth-child(5) {{ width: 70px; text-align: left; white-space: nowrap; }}
@@ -1293,6 +1293,38 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             vertical-align:middle; 
         }}
         .name a:hover {{ text-decoration: underline; color: #1557b0; }}
+        
+        /* 智能定投按钮样式 */
+        .dca-btn {{
+            background: #e8f0fe;
+            color: #1a73e8;
+            border: 1px solid #dadce0;
+            border-radius: 12px;
+            padding: 2px 6px;
+            font-size: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+        }}
+        .dca-btn:hover {{
+            background: #1a73e8;
+            color: #fff;
+            border-color: #1a73e8;
+            transform: scale(1.05);
+        }}
+        [data-theme="dark"] .dca-btn {{
+            background: #2a3b50;
+            color: #8ab4f8;
+            border-color: #3c4043;
+        }}
+        [data-theme="dark"] .dca-btn:hover {{
+            background: #8ab4f8;
+            color: #202124;
+        }}
+
         .redemption-sub {{ 
             font-size: 10px; 
             color: var(--footer-text);
@@ -1509,7 +1541,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             .search-container input {{ max-width: 100%; }}
         }}
         
-        /* 底部信息栏：两端对齐，左侧说明 + 右侧更新时间 */
         .footer-note {{ 
             margin-top: 0; 
             font-size: 11px; 
@@ -1542,6 +1573,147 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             border-radius: 4px;
             border: 1px solid var(--border);
             white-space: nowrap;
+        }}
+
+        /* 定投弹窗样式 */
+        .modal-overlay {{
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.45);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: blur(2px);
+        }}
+        .modal-overlay.show {{ display: flex; }}
+        .modal-card {{
+            background: var(--table-bg);
+            color: var(--text);
+            width: 92%;
+            max-width: 820px;
+            border-radius: 14px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            animation: modalFadeIn 0.2s ease;
+        }}
+        @keyframes modalFadeIn {{
+            from {{ transform: scale(0.96); opacity: 0; }}
+            to {{ transform: scale(1); opacity: 1; }}
+        }}
+        .modal-header {{
+            padding: 12px 18px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--header-bg);
+        }}
+        .modal-header h3 {{
+            margin: 0;
+            font-size: 15px;
+            color: var(--link-color);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }}
+        .modal-close {{
+            background: transparent;
+            border: none;
+            font-size: 20px;
+            color: var(--footer-text);
+            cursor: pointer;
+            line-height: 1;
+        }}
+        .modal-close:hover {{ color: #d93025; }}
+        .modal-body {{
+            padding: 14px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }}
+        .dca-controls {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+            background: var(--card-bg);
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }}
+        .dca-field {{
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }}
+        .dca-field select, .dca-field input {{
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid var(--input-border);
+            background: var(--input-bg);
+            color: var(--text);
+            font-size: 12px;
+            outline: none;
+        }}
+        .dca-field select:focus, .dca-field input:focus {{
+            border-color: var(--link-color);
+        }}
+        .dca-run-btn {{
+            grid-column: 1 / -1;
+            background: var(--btn-active-bg);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            margin-top: 2px;
+        }}
+        .dca-run-btn:hover {{ opacity: 0.9; }}
+        
+        .dca-results-grid {{
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 8px;
+        }}
+        .dca-result-card {{
+            background: var(--hover-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 10px;
+            text-align: center;
+        }}
+        .dca-result-title {{
+            font-size: 10px;
+            color: var(--footer-text);
+            margin-bottom: 2px;
+        }}
+        .dca-result-value {{
+            font-size: 14px;
+            font-weight: 700;
+            font-family: "SFMono-Regular", Consolas, monospace;
+        }}
+        .dca-chart-box {{
+            height: 230px;
+            width: 100%;
+            position: relative;
+            background: var(--card-bg);
+            border-radius: 8px;
+            padding: 8px;
+            border: 1px solid var(--border);
+            box-sizing: border-box;
         }}
     </style>
 </head>
@@ -1609,15 +1781,86 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
     <div class="footer-note">
         <div class="footer-left">
             <p><strong>使用提示：</strong> 列宽可拖拽调整，点击表头排序。涨幅数据基于可获取的历史净值，若区间内无对应日期数据则显示“-”。</p>
-            <p><span style="color: #1a73e8;">👉 点击基金行可展开/收起持仓与净值走势图；左半边三个季度持仓等宽排列，鼠标进入走势图显示十字线、时间、净值和区间涨幅。</span></p>
+            <p><span style="color: #1a73e8;">👉 点击基金行可展开/收起持仓与净值走势图；点击行内「📊 定投」可立即测算并回溯模拟定投收益。</span></p>
         </div>
         <div class="footer-right" title="静态页面生成与更新时间">
             <span>⏱️ 数据更新于: <strong>{update_time_str}</strong></span>
         </div>
     </div>
+
+    <!-- 智能定投测算弹窗 -->
+    <div class="modal-overlay" id="dcaModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="dcaModalTitle">📊 智能定投/回测测算小工具</h3>
+                <button class="modal-close" id="closeDcaModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="dca-controls">
+                    <div class="dca-field">
+                        <label>定投频次</label>
+                        <select id="dcaFreq">
+                            <option value="daily">每日定投</option>
+                            <option value="weekly">每周定投</option>
+                            <option value="biweekly">每两周定投</option>
+                            <option value="monthly" selected>每月定投</option>
+                        </select>
+                    </div>
+                    <div class="dca-field" id="dcaDayField">
+                        <label id="dcaDayLabel">扣款日 (每月几号)</label>
+                        <select id="dcaDaySelect"></select>
+                    </div>
+                    <div class="dca-field">
+                        <label>每期金额 (元)</label>
+                        <input type="number" id="dcaAmount" value="1000" min="10" step="100">
+                    </div>
+                    <div class="dca-field">
+                        <label>测算周期</label>
+                        <select id="dcaRange">
+                            <option value="half">近半年</option>
+                            <option value="year" selected>近一年</option>
+                            <option value="ytd">今年以来</option>
+                            <option value="all">全部历史序列</option>
+                        </select>
+                    </div>
+                    <button class="dca-run-btn" id="dcaRunBtn">🚀 开始测算模拟收益</button>
+                </div>
+
+                <div class="dca-results-grid">
+                    <div class="dca-result-card">
+                        <div class="dca-result-title">累计投入期数 / 本金</div>
+                        <div class="dca-result-value" id="resTotalInvest">--</div>
+                    </div>
+                    <div class="dca-result-card">
+                        <div class="dca-result-title">定投期末总资产</div>
+                        <div class="dca-result-value" id="resTotalAsset" style="color: var(--link-color);">--</div>
+                    </div>
+                    <div class="dca-result-card">
+                        <div class="dca-result-title">总收益额 (元)</div>
+                        <div class="dca-result-value" id="resProfit">--</div>
+                    </div>
+                    <div class="dca-result-card">
+                        <div class="dca-result-title">定投总收益率</div>
+                        <div class="dca-result-value" id="resReturnRate">--</div>
+                    </div>
+                    <div class="dca-result-card">
+                        <div class="dca-result-title">持仓均价 / 最新价</div>
+                        <div class="dca-result-value" id="resAvgPrice">--</div>
+                    </div>
+                </div>
+
+                <div class="dca-chart-box">
+                    <canvas id="dcaChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         var fundNavData = {json.dumps(nav_data_json, ensure_ascii=False)};
+        var fundNames = {json.dumps(fund_names_json, ensure_ascii=False)};
 
+        // 主题切换
         (function() {{
             const toggle = document.getElementById('themeToggle');
             const currentTheme = localStorage.getItem('theme') || 'light';
@@ -1630,6 +1873,255 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                 localStorage.setItem('theme', next);
                 toggle.textContent = next === 'dark' ? '☀️ 亮色' : '🌓 暗色';
             }});
+        }})();
+
+        // 智能定投回测小工具交互与计算逻辑
+        (function() {{
+            let currentDcaCode = null;
+            let dcaChartInstance = null;
+
+            const modal = document.getElementById('dcaModal');
+            const closeBtn = document.getElementById('closeDcaModal');
+            const modalTitle = document.getElementById('dcaModalTitle');
+            const freqSelect = document.getElementById('dcaFreq');
+            const daySelect = document.getElementById('dcaDaySelect');
+            const dayLabel = document.getElementById('dcaDayLabel');
+            const dayField = document.getElementById('dcaDayField');
+            const amountInput = document.getElementById('dcaAmount');
+            const rangeSelect = document.getElementById('dcaRange');
+            const runBtn = document.getElementById('dcaRunBtn');
+
+            function populateDays(freq) {{
+                daySelect.innerHTML = '';
+                if (freq === 'daily') {{
+                    dayField.style.display = 'none';
+                }} else if (freq === 'weekly' || freq === 'biweekly') {{
+                    dayField.style.display = 'flex';
+                    dayLabel.textContent = freq === 'weekly' ? '扣款日 (每周几)' : '扣款日 (每两周周几)';
+                    const weeks = ['周一', '周二', '周三', '周四', '周五'];
+                    weeks.forEach((w, i) => {{
+                        const opt = document.createElement('option');
+                        opt.value = i + 1; // 1 to 5
+                        opt.textContent = w;
+                        if (i === 0) opt.selected = true;
+                        daySelect.appendChild(opt);
+                    }});
+                }} else {{
+                    dayField.style.display = 'flex';
+                    dayLabel.textContent = '扣款日 (每月几号)';
+                    for (let i = 1; i <= 28; i++) {{
+                        const opt = document.createElement('option');
+                        opt.value = i;
+                        opt.textContent = i + ' 号';
+                        if (i === 1) opt.selected = true;
+                        daySelect.appendChild(opt);
+                    }}
+                }}
+            }}
+
+            populateDays('monthly');
+
+            freqSelect.addEventListener('change', function() {{
+                populateDays(this.value);
+            }});
+
+            // 打开弹窗
+            window.openDcaModal = function(code) {{
+                currentDcaCode = code;
+                const name = fundNames[code] || code;
+                modalTitle.textContent = `📊 定投测算: [${{code}}] ${{name}}`;
+                modal.classList.add('show');
+                runBacktest();
+            }};
+
+            closeBtn.addEventListener('click', function() {{
+                modal.classList.remove('show');
+            }});
+
+            modal.addEventListener('click', function(e) {{
+                if (e.target === modal) modal.classList.remove('show');
+            }});
+
+            runBtn.addEventListener('click', runBacktest);
+
+            function runBacktest() {{
+                if (!currentDcaCode || !fundNavData[currentDcaCode]) return;
+                const raw = fundNavData[currentDcaCode];
+                if (!raw.dates || raw.dates.length < 2) return;
+
+                const freq = freqSelect.value;
+                const targetDay = parseInt(daySelect.value) || 1;
+                const perAmount = parseFloat(amountInput.value) || 1000;
+                const range = rangeSelect.value;
+
+                // 筛选回测时间区间
+                const allDates = raw.dates;
+                const allNavs = raw.navs;
+                const latestDate = new Date(allDates[allDates.length - 1]);
+                let startDate = new Date(latestDate);
+
+                if (range === 'half') {{
+                    startDate.setMonth(latestDate.getMonth() - 6);
+                }} else if (range === 'year') {{
+                    startDate.setFullYear(latestDate.getFullYear() - 1);
+                }} else if (range === 'ytd') {{
+                    startDate = new Date(latestDate.getFullYear(), 0, 1);
+                }} else {{
+                    startDate = new Date(allDates[0]);
+                }}
+
+                const filtered = [];
+                for (let i = 0; i < allDates.length; i++) {{
+                    const d = new Date(allDates[i]);
+                    if (d >= startDate) {{
+                        filtered.push({{ date: allDates[i], dt: d, nav: allNavs[i] }});
+                    }}
+                }}
+
+                if (filtered.length < 2) return;
+
+                // 模拟扣款执行
+                let totalInvest = 0;
+                let totalShares = 0;
+                let investCount = 0;
+                let lastInvestKey = '';
+
+                const timelineDates = [];
+                const timelineCost = [];
+                const timelineValue = [];
+
+                filtered.forEach(item => {{
+                    let shouldBuy = false;
+                    const dayOfWeek = item.dt.getDay(); // 0 is Sun, 1-5 Mon-Fri
+                    const dayOfMonth = item.dt.getDate();
+
+                    if (freq === 'daily') {{
+                        // 每日定投（每个有效交易日扣款）
+                        shouldBuy = true;
+                    }} else if (freq === 'weekly') {{
+                        // 每周定投
+                        const oneJan = new Date(item.dt.getFullYear(), 0, 1);
+                        const weekNum = Math.ceil((((item.dt - oneJan) / 86400000) + oneJan.getDay() + 1) / 7);
+                        const weekKey = `${{item.dt.getFullYear()}}-W${{weekNum}}`;
+                        if (dayOfWeek >= targetDay && lastInvestKey !== weekKey) {{
+                            shouldBuy = true;
+                            lastInvestKey = weekKey;
+                        }}
+                    }} else if (freq === 'biweekly') {{
+                        // 每两周定投（隔周扣款）
+                        const oneJan = new Date(item.dt.getFullYear(), 0, 1);
+                        const weekNum = Math.ceil((((item.dt - oneJan) / 86400000) + oneJan.getDay() + 1) / 7);
+                        const biweekBlock = Math.floor(weekNum / 2);
+                        const biweekKey = `${{item.dt.getFullYear()}}-BW${{biweekBlock}}`;
+                        if (dayOfWeek >= targetDay && lastInvestKey !== biweekKey) {{
+                            shouldBuy = true;
+                            lastInvestKey = biweekKey;
+                        }}
+                    }} else {{
+                        // 每月定投
+                        const monthKey = `${{item.dt.getFullYear()}}-${{item.dt.getMonth() + 1}}`;
+                        if (dayOfMonth >= targetDay && lastInvestKey !== monthKey) {{
+                            shouldBuy = true;
+                            lastInvestKey = monthKey;
+                        }}
+                    }}
+
+                    if (shouldBuy) {{
+                        const buyShares = perAmount / item.nav;
+                        totalShares += buyShares;
+                        totalInvest += perAmount;
+                        investCount++;
+                    }}
+
+                    const currentVal = totalShares * item.nav;
+                    timelineDates.push(item.date);
+                    timelineCost.push(Number(totalInvest.toFixed(2)));
+                    timelineValue.push(Number(currentVal.toFixed(2)));
+                }});
+
+                const latestItem = filtered[filtered.length - 1];
+                const finalAsset = totalShares * latestItem.nav;
+                const profit = finalAsset - totalInvest;
+                const returnRate = totalInvest > 0 ? (profit / totalInvest) * 100 : 0;
+                const avgPrice = totalShares > 0 ? totalInvest / totalShares : 0;
+
+                // 渲染结果面板
+                document.getElementById('resTotalInvest').innerHTML = `${{investCount}} 期 / <strong>${{totalInvest.toLocaleString()}}</strong> 元`;
+                document.getElementById('resTotalAsset').innerHTML = `<strong>${{finalAsset.toFixed(2)}}</strong> 元`;
+                
+                const profitElem = document.getElementById('resProfit');
+                profitElem.textContent = `${{profit >= 0 ? '+' : ''}}${{profit.toFixed(2)}}`;
+                profitElem.style.color = profit >= 0 ? '#d93025' : '#188038';
+
+                const rateElem = document.getElementById('resReturnRate');
+                rateElem.textContent = `${{returnRate >= 0 ? '+' : ''}}${{returnRate.toFixed(2)}}%`;
+                rateElem.style.color = returnRate >= 0 ? '#d93025' : '#188038';
+
+                document.getElementById('resAvgPrice').innerHTML = `${{avgPrice.toFixed(4)}} / ${{latestItem.nav.toFixed(4)}}`;
+
+                // 绘制/刷新曲线
+                const ctx = document.getElementById('dcaChart').getContext('2d');
+                if (dcaChartInstance) {{
+                    dcaChartInstance.destroy();
+                }}
+
+                dcaChartInstance = new Chart(ctx, {{
+                    type: 'line',
+                    data: {{
+                        labels: timelineDates,
+                        datasets: [
+                            {{
+                                label: '总资产 (元)',
+                                data: timelineValue,
+                                borderColor: '#1a73e8',
+                                backgroundColor: 'rgba(26, 115, 232, 0.08)',
+                                fill: true,
+                                pointRadius: 0,
+                                borderWidth: 2,
+                                tension: 0.1
+                            }},
+                            {{
+                                label: '累计本金 (元)',
+                                data: timelineCost,
+                                borderColor: '#e67e22',
+                                borderDash: [4, 4],
+                                pointRadius: 0,
+                                borderWidth: 1.5,
+                                fill: false
+                            }}
+                        ]
+                    }},
+                    options: {{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {{ mode: 'index', intersect: false }},
+                        plugins: {{
+                            legend: {{
+                                display: true,
+                                position: 'top',
+                                labels: {{ font: {{ size: 10 }}, boxWidth: 12 }}
+                            }},
+                            tooltip: {{
+                                callbacks: {{
+                                    label: function(ctx) {{
+                                        return `${{ctx.dataset.label}}: ${{Number(ctx.parsed.y).toLocaleString()}} 元`;
+                                    }}
+                                }}
+                            }}
+                        }},
+                        scales: {{
+                            x: {{
+                                ticks: {{ maxTicksLimit: 8, font: {{ size: 9 }} }},
+                                grid: {{ display: false }}
+                            }},
+                            y: {{
+                                ticks: {{ font: {{ size: 9 }} }},
+                                grid: {{ color: 'rgba(0,0,0,0.05)' }}
+                            }}
+                        }}
+                    }}
+                }});
+            }}
         }})();
 
         document.addEventListener('DOMContentLoaded', function() {{
@@ -1893,6 +2385,15 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         document.addEventListener('DOMContentLoaded', function() {{
             const table = document.getElementById('fundTable');
             table.addEventListener('click', function(e) {{
+                // 若点击的是定投按钮，触发测算弹窗并阻止行折叠
+                const dcaBtn = e.target.closest('.dca-btn');
+                if (dcaBtn) {{
+                    e.stopPropagation();
+                    const code = dcaBtn.dataset.code;
+                    window.openDcaModal(code);
+                    return;
+                }}
+
                 const target = e.target.closest('tr.fund-row');
                 if (!target) return;
                 if (e.target.tagName === 'A') return;
