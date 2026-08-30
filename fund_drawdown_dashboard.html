@@ -227,9 +227,76 @@
             -webkit-box-orient:vertical;
             overflow:hidden;
         }
+        
+        /* 全局定投筛选卡片 */
+        .global-dca-filter-card {
+            background: var(--table-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            font-size: 12px;
+            align-self: flex-end;
+            transition: all 0.3s ease;
+        }
+        .global-dca-filter-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .global-dca-filter-title {
+            font-weight: 600;
+            color: var(--link-color);
+        }
+        #gDcaToggleIcon {
+            font-size: 10px;
+            color: var(--footer-text);
+            transition: transform 0.2s;
+        }
+        .global-dca-filter-body {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .global-dca-filter-card.collapsed .global-dca-filter-body {
+            display: none;
+        }
+        .global-dca-filter-card.collapsed #gDcaToggleIcon {
+            transform: rotate(-90deg);
+        }
+        .global-dca-filter-card select {
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid var(--input-border);
+            background: var(--input-bg);
+            color: var(--text);
+            font-size: 11px;
+            outline: none;
+        }
+        .global-dca-filter-card button {
+            background: var(--btn-active-bg);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .global-dca-filter-card button:hover { opacity: 0.9; }
+
         .table-container { 
             width:100%; 
-            height: calc(100vh - 315px); 
+            height: calc(100vh - 365px); 
             overflow-y: auto; 
             overflow-x: scroll; 
             box-sizing:border-box; 
@@ -260,7 +327,7 @@
         }
         table { 
             width:100%; 
-            min-width:2350px; 
+            min-width:2450px; 
             border-collapse:collapse; 
             font-size:12px; 
             text-align:right; 
@@ -305,7 +372,8 @@
         th:nth-child(17), td:nth-child(17),
         th:nth-child(18), td:nth-child(18),
         th:nth-child(19), td:nth-child(19),
-        th:nth-child(20), td:nth-child(20) { width: 80px; white-space: nowrap; }
+        th:nth-child(20), td:nth-child(20),
+        th:nth-child(21), td:nth-child(21) { width: 80px; white-space: nowrap; }
         th { 
             background-color: var(--header-bg);
             color: var(--header-text);
@@ -435,7 +503,6 @@
             font-weight: normal;
         }
 
-        /* --- 新增：特定资产最新净值高亮样式 --- */
         .highlight-special-nav {
             font-weight: bold;
             color: #d93025;
@@ -844,30 +911,56 @@
             </div>
         </section>
     </div>
+    
+    <!-- 新增：全局定投筛选卡片 (带折叠功能) -->
+    <div class="global-dca-filter-card" id="gDcaCard">
+        <div class="global-dca-filter-header" id="gDcaToggleBtn">
+            <span class="global-dca-filter-title">📊 动态定投参数配置</span>
+            <span id="gDcaToggleIcon">▼</span>
+        </div>
+        <div class="global-dca-filter-body" id="gDcaBody">
+            <select id="gDcaFreq">
+                <option value="daily">每日定投</option>
+                <option value="weekly">每周定投</option>
+                <option value="biweekly">双周定投</option>
+                <option value="monthly" selected>每月定投</option>
+            </select>
+            <select id="gDcaDaySelect"></select>
+            <select id="gDcaRange">
+                <option value="half">近半年内</option>
+                <option value="year" selected>近一年内</option>
+                <option value="ytd">今年以来</option>
+                <option value="all">统计区间全序列</option>
+            </select>
+            <button id="gDcaApplyBtn">计算并刷新排序</button>
+        </div>
+    </div>
+
     <div class="table-container">
         <table id="fundTable">
             <thead>
                 <tr>
-                    <th data-col="0">代码 <span class="sort-icon">⇅</span></th>
-                    <th data-col="1">基金名称 / 赎回费率阶梯 <span class="sort-icon">⇅</span></th>
-                    <th data-col="2">最新规模 <span class="sort-icon">⇅</span></th>
-                    <th data-col="3">运作费(管/托/销) <span class="sort-icon">⇅</span></th>
-                    <th data-col="4">申购费率 <span class="sort-icon">⇅</span></th>
-                    <th data-col="5">申购状态/限额 <span class="sort-icon">⇅</span></th>
-                    <th data-col="6">最高净值 <span class="sort-icon">⇅</span></th>
-                    <th data-col="7">最低净值 <span class="sort-icon">⇅</span></th>
-                    <th data-col="8">最新净值 <span class="sort-icon">⇅</span></th>
-                    <th data-col="9">最大回撤 <span class="sort-icon">⇅</span></th>
-                    <th data-col="10">自低点反弹 <span class="sort-icon">⇅</span></th>
-                    <th data-col="11">修复程度 <span class="sort-icon">⇅</span></th>
-                    <th data-col="12">修复时间 <span class="sort-icon">⇅</span></th>
-                    <th data-col="13">今日涨幅 (基准周五: 2026-08-28) <span class="sort-icon">⇅</span></th>
-                    <th data-col="14">近一周 <span class="sort-icon">⇅</span></th>
-                    <th data-col="15">近一月 <span class="sort-icon">⇅</span></th>
-                    <th data-col="16">近三月 <span class="sort-icon">⇅</span></th>
-                    <th data-col="17">近半年 <span class="sort-icon">⇅</span></th>
-                    <th data-col="18">近一年 <span class="sort-icon">⇅</span></th>
-                    <th data-col="19">今年内 <span class="sort-icon">⇅</span></th>
+                    <th data-col="0" onclick="sortTable(0)">代码 <span class="sort-icon">⇅</span></th>
+                    <th data-col="1" onclick="sortTable(1)">基金名称 / 赎回费率阶梯 <span class="sort-icon">⇅</span></th>
+                    <th data-col="2" onclick="sortTable(2)">最新规模 <span class="sort-icon">⇅</span></th>
+                    <th data-col="3" onclick="sortTable(3)">运作费(管/托/销) <span class="sort-icon">⇅</span></th>
+                    <th data-col="4" onclick="sortTable(4)">申购费率 <span class="sort-icon">⇅</span></th>
+                    <th data-col="5" onclick="sortTable(5)">申购状态/限额 <span class="sort-icon">⇅</span></th>
+                    <th data-col="6" onclick="sortTable(6)">最高净值 <span class="sort-icon">⇅</span></th>
+                    <th data-col="7" onclick="sortTable(7)">最低净值 <span class="sort-icon">⇅</span></th>
+                    <th data-col="8" onclick="sortTable(8)">最新净值 <span class="sort-icon">⇅</span></th>
+                    <th data-col="9" onclick="sortTable(9)">最大回撤 <span class="sort-icon">⇅</span></th>
+                    <th data-col="10" onclick="sortTable(10)">自低点反弹 <span class="sort-icon">⇅</span></th>
+                    <th data-col="11" onclick="sortTable(11)">修复程度 <span class="sort-icon">⇅</span></th>
+                    <th data-col="12" onclick="sortTable(12)">修复时间 <span class="sort-icon">⇅</span></th>
+                    <th data-col="13" onclick="sortTable(13)">今日涨幅 (基准周五: 2026-08-28) <span class="sort-icon">⇅</span></th>
+                    <th data-col="14" onclick="sortTable(14)">近一周 <span class="sort-icon">⇅</span></th>
+                    <th data-col="15" onclick="sortTable(15)">近一月 <span class="sort-icon">⇅</span></th>
+                    <th data-col="16" onclick="sortTable(16)">近三月 <span class="sort-icon">⇅</span></th>
+                    <th data-col="17" onclick="sortTable(17)">近半年 <span class="sort-icon">⇅</span></th>
+                    <th data-col="18" onclick="sortTable(18)">近一年 <span class="sort-icon">⇅</span></th>
+                    <th data-col="19" onclick="sortTable(19)">今年内 <span class="sort-icon">⇅</span></th>
+                    <th data-col="20" onclick="sortTable(20)"><span id="dcaHeaderTitle">月定投</span>收益 <span class="sort-icon">⇅</span></th>
                 </tr>
             </thead>
             <tbody>
@@ -917,10 +1010,11 @@
             <td data-val="39.89528795811519" class="gain-positive">39.90%</td>
             <td data-val="93.90420899854865" class="gain-positive">93.90%</td>
             <td data-val="61.93939393939396" class="gain-positive">61.94%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="002891">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -1209,10 +1303,11 @@
             <td data-val="31.757146704628525" class="gain-positive">31.76%</td>
             <td data-val="56.4055720484129" class="gain-positive">56.41%</td>
             <td data-val="37.5025095362377" class="gain-positive">37.50%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="014002">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -1501,10 +1596,11 @@
             <td data-val="32.012827768345595" class="gain-positive">32.01%</td>
             <td data-val="57.07487879332018" class="gain-positive">57.07%</td>
             <td data-val="37.864460204885745" class="gain-positive">37.86%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="006555">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -1793,10 +1889,11 @@
             <td data-val="35.48668069971692" class="gain-positive">35.49%</td>
             <td data-val="84.57431029368139" class="gain-positive">84.57%</td>
             <td data-val="51.52818930876326" class="gain-positive">51.53%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="012922">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -2085,10 +2182,11 @@
             <td data-val="35.849258414147165" class="gain-positive">35.85%</td>
             <td data-val="85.53342747236694" class="gain-positive">85.53%</td>
             <td data-val="52.06529113620944" class="gain-positive">52.07%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="012920">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -2377,10 +2475,11 @@
             <td data-val="35.01853083721373" class="gain-positive">35.02%</td>
             <td data-val="79.62073324905184" class="gain-positive">79.62%</td>
             <td data-val="59.14869784374124" class="gain-positive">59.15%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="021662">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -2669,10 +2768,11 @@
             <td data-val="35.28694101637653" class="gain-positive">35.29%</td>
             <td data-val="80.48704144234382" class="gain-positive">80.49%</td>
             <td data-val="59.65776940967993" class="gain-positive">59.66%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="457001">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -2961,10 +3061,11 @@
             <td data-val="41.43026004728132" class="gain-positive">41.43%</td>
             <td data-val="100.75503355704699" class="gain-positive">100.76%</td>
             <td data-val="67.57703081232494" class="gain-positive">67.58%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="539002">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -3253,10 +3354,11 @@
             <td data-val="41.127098321342935" class="gain-positive">41.13%</td>
             <td data-val="100.0" class="gain-positive">100.00%</td>
             <td data-val="67.18750000000003" class="gain-positive">67.19%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="018147">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -3545,10 +3647,11 @@
             <td data-val="30.613990745421326" class="gain-positive">30.61%</td>
             <td data-val="68.41313612434195" class="gain-positive">68.41%</td>
             <td data-val="52.53275208319141" class="gain-positive">52.53%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="021842">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -3837,10 +3940,11 @@
             <td data-val="30.894261803985223" class="gain-positive">30.89%</td>
             <td data-val="69.15852836126581" class="gain-positive">69.16%</td>
             <td data-val="52.9666854884246" class="gain-positive">52.97%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="006373">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -4129,10 +4233,11 @@
             <td data-val="30.378490996577213" class="gain-positive">30.38%</td>
             <td data-val="57.48696746359876" class="gain-positive">57.49%</td>
             <td data-val="37.28388613214937" class="gain-positive">37.28%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="018036">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -4421,10 +4526,11 @@
             <td data-val="30.822620851459014" class="gain-positive">30.82%</td>
             <td data-val="58.56042654028435" class="gain-positive">58.56%</td>
             <td data-val="37.92836897706777" class="gain-positive">37.93%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="501226">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -4713,10 +4819,11 @@
             <td data-val="18.570213971942763" class="gain-positive">18.57%</td>
             <td data-val="45.91507542069928" class="gain-positive">45.92%</td>
             <td data-val="28.819952274651683" class="gain-positive">28.82%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="008254">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -5005,10 +5112,11 @@
             <td data-val="18.79621311588695" class="gain-positive">18.80%</td>
             <td data-val="46.48091342876619" class="gain-positive">46.48%</td>
             <td data-val="29.148824280670137" class="gain-positive">29.15%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="008253">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -5297,10 +5405,11 @@
             <td data-val="49.68639821859342" class="gain-positive">49.69%</td>
             <td data-val="90.6997635933806" class="gain-positive">90.70%</td>
             <td data-val="58.56036482289577" class="gain-positive">58.56%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="017731">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -5589,10 +5698,11 @@
             <td data-val="50.12026239067053" class="gain-positive">50.12%</td>
             <td data-val="91.86306474149978" class="gain-positive">91.86%</td>
             <td data-val="59.18154416879202" class="gain-positive">59.18%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="017730">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -5881,10 +5991,11 @@
             <td data-val="29.794079794079774" class="gain-positive">29.79%</td>
             <td data-val="80.7926243677572" class="gain-positive">80.79%</td>
             <td data-val="52.94372528841465" class="gain-positive">52.94%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="016665">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -6173,10 +6284,11 @@
             <td data-val="29.98222667821171" class="gain-positive">29.98%</td>
             <td data-val="81.40304013229027" class="gain-positive">81.40%</td>
             <td data-val="53.26992315546239" class="gain-positive">53.27%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="016664">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -6465,10 +6577,11 @@
             <td data-val="18.398345153664298" class="gain-positive">18.40%</td>
             <td data-val="49.39965694682675" class="gain-positive">49.40%</td>
             <td data-val="33.74057013151746" class="gain-positive">33.74%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="018230">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -6757,10 +6870,11 @@
             <td data-val="18.69273416982782" class="gain-positive">18.69%</td>
             <td data-val="50.173521376356774" class="gain-positive">50.17%</td>
             <td data-val="34.18222603417562" class="gain-positive">34.18%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="018229">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -7049,10 +7163,11 @@
             <td data-val="26.6104170047055" class="gain-positive">26.61%</td>
             <td data-val="44.87896581335438" class="gain-positive">44.88%</td>
             <td data-val="35.50403750976818" class="gain-positive">35.50%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="021277">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -7341,10 +7456,11 @@
             <td data-val="27.004634180592603" class="gain-positive">27.00%</td>
             <td data-val="45.83736466252015" class="gain-positive">45.84%</td>
             <td data-val="36.08477891704822" class="gain-positive">36.08%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="270023">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -7633,10 +7749,11 @@
             <td data-val="12.10887710209283" class="gain-positive">12.11%</td>
             <td data-val="40.626128217030264" class="gain-positive">40.63%</td>
             <td data-val="26.96032780778541" class="gain-positive">26.96%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="005698">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -7925,10 +8042,11 @@
             <td data-val="11.71634974674085" class="gain-positive">11.72%</td>
             <td data-val="39.47750362844702" class="gain-positive">39.48%</td>
             <td data-val="26.22197204240546" class="gain-positive">26.22%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="024239">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -8217,10 +8335,11 @@
             <td data-val="25.348516570494816" class="gain-positive">25.35%</td>
             <td data-val="34.76995717579883" class="gain-positive">34.77%</td>
             <td data-val="22.907069897856978" class="gain-positive">22.91%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="501312">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         <div>暂无持仓数据</div>
@@ -8287,10 +8406,11 @@
             <td data-val="25.158203426454694" class="gain-positive">25.16%</td>
             <td data-val="34.35877609632168" class="gain-positive">34.36%</td>
             <td data-val="22.65920435637574" class="gain-positive">22.66%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="017204">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         <div>暂无持仓数据</div>
@@ -8357,10 +8477,11 @@
             <td data-val="20.835162423178243" class="gain-positive">20.84%</td>
             <td data-val="41.66881111682965" class="gain-positive">41.67%</td>
             <td data-val="24.173903236720417" class="gain-positive">24.17%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="017654">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -8649,10 +8770,11 @@
             <td data-val="21.36580603167715" class="gain-positive">21.37%</td>
             <td data-val="42.45240975361302" class="gain-positive">42.45%</td>
             <td data-val="24.74215309137535" class="gain-positive">24.74%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="017653">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -8941,10 +9063,11 @@
             <td data-val="43.36537671514256" class="gain-positive">43.37%</td>
             <td data-val="59.0514098201264" class="gain-positive">59.05%</td>
             <td data-val="42.21250237713603" class="gain-positive">42.21%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="022184">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -9233,10 +9356,11 @@
             <td data-val="43.97211778588874" class="gain-positive">43.97%</td>
             <td data-val="59.901246609162115" class="gain-positive">59.90%</td>
             <td data-val="42.87426128162532" class="gain-positive">42.87%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="100055">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -9525,10 +9649,11 @@
             <td data-val="13.223383890443241" class="gain-positive">13.22%</td>
             <td data-val="10.55355859094178" class="gain-positive">10.55%</td>
             <td data-val="5.237465212829062" class="gain-positive">5.24%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="017437">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -9817,10 +9942,11 @@
             <td data-val="13.4404426754684" class="gain-positive">13.44%</td>
             <td data-val="10.989219736904587" class="gain-positive">10.99%</td>
             <td data-val="5.512415349887134" class="gain-positive">5.51%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="017436">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -10109,10 +10235,11 @@
             <td data-val="4.491298527443099" class="gain-positive">4.49%</td>
             <td data-val="-5.713595458114396" class="gain-negative">-5.71%</td>
             <td data-val="-8.547158758055073" class="gain-negative">-8.55%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="017145">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -10401,10 +10528,11 @@
             <td data-val="4.689673445055309" class="gain-positive">4.69%</td>
             <td data-val="-5.336607570675611" class="gain-negative">-5.34%</td>
             <td data-val="-8.307710158380232" class="gain-negative">-8.31%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="017144">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -10693,10 +10821,11 @@
             <td data-val="28.18787803974818" class="gain-positive">28.19%</td>
             <td data-val="29.21669881167177" class="gain-positive">29.22%</td>
             <td data-val="18.247551810521536" class="gain-positive">18.25%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="016702">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -10985,10 +11114,11 @@
             <td data-val="28.41836113478631" class="gain-positive">28.42%</td>
             <td data-val="29.745356132365618" class="gain-positive">29.75%</td>
             <td data-val="18.545577160840732" class="gain-positive">18.55%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="016701">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -11277,10 +11407,11 @@
             <td data-val="15.419307654802527" class="gain-positive">15.42%</td>
             <td data-val="40.823914336704334" class="gain-positive">40.82%</td>
             <td data-val="20.386497997584385" class="gain-positive">20.39%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="016823">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -11569,10 +11700,11 @@
             <td data-val="15.764947954490438" class="gain-positive">15.76%</td>
             <td data-val="41.65432464454977" class="gain-positive">41.65%</td>
             <td data-val="20.863082074935235" class="gain-positive">20.86%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="164212">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -11861,10 +11993,11 @@
             <td data-val="9.42639390292821" class="gain-positive">9.43%</td>
             <td data-val="35.32864820173624" class="gain-positive">35.33%</td>
             <td data-val="28.689362371255612" class="gain-positive">28.69%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="019156">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -12153,10 +12286,11 @@
             <td data-val="9.705532813944284" class="gain-positive">9.71%</td>
             <td data-val="36.06288896167702" class="gain-positive">36.06%</td>
             <td data-val="29.146587906109133" class="gain-positive">29.15%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="019155">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -12445,10 +12579,11 @@
             <td data-val="40.48089591567854" class="gain-positive">40.48%</td>
             <td data-val="78.98681055155876" class="gain-positive">78.99%</td>
             <td data-val="52.59391771019679" class="gain-positive">52.59%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="016668">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         <div>暂无持仓数据</div>
@@ -12515,10 +12650,11 @@
             <td data-val="40.74831512897978" class="gain-positive">40.75%</td>
             <td data-val="79.60854092526691" class="gain-positive">79.61%</td>
             <td data-val="52.98575325856321" class="gain-positive">52.99%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="501225">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         <div>暂无持仓数据</div>
@@ -12585,10 +12721,11 @@
             <td data-val="22.2828784119107" class="gain-positive">22.28%</td>
             <td data-val="24.29199394681849" class="gain-positive">24.29%</td>
             <td data-val="17.15799483765794" class="gain-positive">17.16%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="015202">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -12877,10 +13014,11 @@
             <td data-val="22.645466067519294" class="gain-positive">22.65%</td>
             <td data-val="25.03993985527675" class="gain-positive">25.04%</td>
             <td data-val="17.628077620121086" class="gain-positive">17.63%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="001668">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -13169,10 +13307,11 @@
             <td data-val="15.080953247225759" class="gain-positive">15.08%</td>
             <td data-val="19.133709981167613" class="gain-positive">19.13%</td>
             <td data-val="10.8851884312007" class="gain-positive">10.89%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="000043">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -13461,10 +13600,11 @@
             <td data-val="7.441059729329069" class="gain-positive">7.44%</td>
             <td data-val="17.19874804381847" class="gain-positive">17.20%</td>
             <td data-val="16.084530329647627" class="gain-positive">16.08%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="007280">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -13753,10 +13893,11 @@
             <td data-val="7.231295466589582" class="gain-positive">7.23%</td>
             <td data-val="16.72959932871827" class="gain-positive">16.73%</td>
             <td data-val="15.77633289986995" class="gain-positive">15.78%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="019449">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -14045,10 +14186,11 @@
             <td data-val="38.66907889561868" class="gain-positive">38.67%</td>
             <td data-val="70.05466237942125" class="gain-positive">70.05%</td>
             <td data-val="40.94555339391841" class="gain-positive">40.95%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="022365">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -14337,10 +14479,11 @@
             <td data-val="45.525772157001064" class="gain-positive">45.53%</td>
             <td data-val="89.59858207240623" class="gain-positive">89.60%</td>
             <td data-val="57.9055273085124" class="gain-positive">57.91%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="540010">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -14629,10 +14772,11 @@
             <td data-val="23.040867145158938" class="gain-positive">23.04%</td>
             <td data-val="61.57471227518996" class="gain-positive">61.57%</td>
             <td data-val="37.19512195121952" class="gain-positive">37.20%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="002112">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -14921,10 +15065,11 @@
             <td data-val="46.254355400696866" class="gain-positive">46.25%</td>
             <td data-val="90.29714679938894" class="gain-positive">90.30%</td>
             <td data-val="71.12154916470953" class="gain-positive">71.12%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="011892">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -15213,10 +15358,11 @@
             <td data-val="75.9329140461216" class="gain-positive">75.93%</td>
             <td data-val="120.72593371909521" class="gain-positive">120.73%</td>
             <td data-val="83.6323851203501" class="gain-positive">83.63%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="021528">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -15505,10 +15651,11 @@
             <td data-val="25.3441448236847" class="gain-positive">25.34%</td>
             <td data-val="35.77775508119701" class="gain-positive">35.78%</td>
             <td data-val="31.09160832265061" class="gain-positive">31.09%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="009645">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -15797,10 +15944,11 @@
             <td data-val="52.392499891742105" class="gain-positive">52.39%</td>
             <td data-val="122.22783531194747" class="gain-positive">122.23%</td>
             <td data-val="83.83743404899965" class="gain-positive">83.84%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="011370">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -16089,10 +16237,11 @@
             <td data-val="37.27978783860579" class="gain-positive">37.28%</td>
             <td data-val="88.19710446017011" class="gain-positive">88.20%</td>
             <td data-val="65.95866491097499" class="gain-positive">65.96%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="011452">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -16381,10 +16530,11 @@
             <td data-val="44.52155625657204" class="gain-positive">44.52%</td>
             <td data-val="80.96115865701121" class="gain-positive">80.96%</td>
             <td data-val="58.8534442903375" class="gain-positive">58.85%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="016371">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -16673,10 +16823,11 @@
             <td data-val="43.24988481032099" class="gain-positive">43.25%</td>
             <td data-val="61.87087816730301" class="gain-positive">61.87%</td>
             <td data-val="47.07296881775533" class="gain-positive">47.07%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="001956">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -16965,10 +17116,11 @@
             <td data-val="34.80011933174223" class="gain-positive">34.80%</td>
             <td data-val="46.11156022635405" class="gain-positive">46.11%</td>
             <td data-val="42.97919468396487" class="gain-positive">42.98%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="016234">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -17257,10 +17409,11 @@
             <td data-val="43.1655960028551" class="gain-positive">43.17%</td>
             <td data-val="54.27362753581386" class="gain-positive">54.27%</td>
             <td data-val="34.76106491979507" class="gain-positive">34.76%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="016173">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -17549,10 +17702,11 @@
             <td data-val="35.61055804183029" class="gain-positive">35.61%</td>
             <td data-val="58.047118932727784" class="gain-positive">58.05%</td>
             <td data-val="49.28614518399355" class="gain-positive">49.29%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="006616">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -17841,10 +17995,11 @@
             <td data-val="40.05757307351638" class="gain-positive">40.06%</td>
             <td data-val="90.25417355993379" class="gain-positive">90.25%</td>
             <td data-val="50.79270473238764" class="gain-positive">50.79%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="018291">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -18133,10 +18288,11 @@
             <td data-val="39.01353521449873" class="gain-positive">39.01%</td>
             <td data-val="65.99824676747754" class="gain-positive">66.00%</td>
             <td data-val="44.97344370544043" class="gain-positive">44.97%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="020661">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -18425,10 +18581,11 @@
             <td data-val="33.3079558431671" class="gain-positive">33.31%</td>
             <td data-val="59.950411066162076" class="gain-positive">59.95%</td>
             <td data-val="51.09714003944772" class="gain-positive">51.10%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="017462">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -18717,10 +18874,11 @@
             <td data-val="50.89757296270885" class="gain-positive">50.90%</td>
             <td data-val="91.28200979004004" class="gain-positive">91.28%</td>
             <td data-val="71.07967291410378" class="gain-positive">71.08%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="001438">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -19009,10 +19167,11 @@
             <td data-val="54.9296953465015" class="gain-positive">54.93%</td>
             <td data-val="56.27691008864497" class="gain-positive">56.28%</td>
             <td data-val="64.00283512004961" class="gain-positive">64.00%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="008984">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -19301,10 +19460,11 @@
             <td data-val="38.41920960480238" class="gain-positive">38.42%</td>
             <td data-val="69.59852896107877" class="gain-positive">69.60%</td>
             <td data-val="49.1644204851752" class="gain-positive">49.16%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="180031">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -19593,10 +19753,11 @@
             <td data-val="67.78678432177303" class="gain-positive">67.79%</td>
             <td data-val="149.59932839807678" class="gain-positive">149.60%</td>
             <td data-val="91.36362306544572" class="gain-positive">91.36%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="004320">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -19885,10 +20046,11 @@
             <td data-val="-9999" class="">-</td>
             <td data-val="-9999" class="">-</td>
             <td data-val="-9999" class="">-</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="027063">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -20103,10 +20265,11 @@
             <td data-val="47.56174225415357" class="gain-positive">47.56%</td>
             <td data-val="-9999" class="">-</td>
             <td data-val="54.02137232845894" class="gain-positive">54.02%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="025500">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -20395,10 +20558,11 @@
             <td data-val="57.87192118226601" class="gain-positive">57.87%</td>
             <td data-val="-9999" class="">-</td>
             <td data-val="80.5182125422456" class="gain-positive">80.52%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="025209">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -20687,10 +20851,11 @@
             <td data-val="59.712056623501965" class="gain-positive">59.71%</td>
             <td data-val="66.48780078812777" class="gain-positive">66.49%</td>
             <td data-val="77.9460525136661" class="gain-positive">77.95%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="018816">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -20979,10 +21144,11 @@
             <td data-val="28.935260491704252" class="gain-positive">28.94%</td>
             <td data-val="69.54714905579662" class="gain-positive">69.55%</td>
             <td data-val="44.758674667362385" class="gain-positive">44.76%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="014320">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -21271,10 +21437,11 @@
             <td data-val="67.57987668161437" class="gain-positive">67.58%</td>
             <td data-val="-9999" class="">-</td>
             <td data-val="89.95314113255499" class="gain-positive">89.95%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="024418">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -21563,10 +21730,11 @@
             <td data-val="65.56844547563804" class="gain-positive">65.57%</td>
             <td data-val="122.72159800249689" class="gain-positive">122.72%</td>
             <td data-val="85.84716124711657" class="gain-positive">85.85%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="024975">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         <div>暂无持仓数据</div>
@@ -21633,10 +21801,11 @@
             <td data-val="61.14316448269119" class="gain-positive">61.14%</td>
             <td data-val="119.12898936170215" class="gain-positive">119.13%</td>
             <td data-val="81.14213476970431" class="gain-positive">81.14%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="020640">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -21871,10 +22040,11 @@
             <td data-val="60.64931430170726" class="gain-positive">60.65%</td>
             <td data-val="119.94022530462107" class="gain-positive">119.94%</td>
             <td data-val="81.61108650256281" class="gain-positive">81.61%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="019633">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         <div>暂无持仓数据</div>
@@ -21941,10 +22111,11 @@
             <td data-val="72.58771929824563" class="gain-positive">72.59%</td>
             <td data-val="90.50154918667701" class="gain-positive">90.50%</td>
             <td data-val="91.35382221357713" class="gain-positive">91.35%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="024424">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -22233,10 +22404,11 @@
             <td data-val="78.81575469204334" class="gain-positive">78.82%</td>
             <td data-val="157.18956733328264" class="gain-positive">157.19%</td>
             <td data-val="110.57776117544513" class="gain-positive">110.58%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="017811">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -22525,10 +22697,11 @@
             <td data-val="73.62859958392643" class="gain-positive">73.63%</td>
             <td data-val="159.00367496937528" class="gain-positive">159.00%</td>
             <td data-val="104.89049680211897" class="gain-positive">104.89%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="013841">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -22817,10 +22990,11 @@
             <td data-val="61.71987912232295" class="gain-positive">61.72%</td>
             <td data-val="137.3752470951256" class="gain-positive">137.38%</td>
             <td data-val="94.66234382413413" class="gain-positive">94.66%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="007491">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -23109,10 +23283,11 @@
             <td data-val="37.89583668220544" class="gain-positive">37.90%</td>
             <td data-val="57.12257887265901" class="gain-positive">57.12%</td>
             <td data-val="47.669664758789864" class="gain-positive">47.67%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="020629">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -23401,10 +23576,11 @@
             <td data-val="32.633550167553715" class="gain-positive">32.63%</td>
             <td data-val="68.83507935512199" class="gain-positive">68.84%</td>
             <td data-val="48.671490913108315" class="gain-positive">48.67%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="017747">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -23693,10 +23869,11 @@
             <td data-val="58.87031816351189" class="gain-positive">58.87%</td>
             <td data-val="-9999" class="">-</td>
             <td data-val="-9999" class="">-</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="026633">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -23911,10 +24088,11 @@
             <td data-val="71.41873278236915" class="gain-positive">71.42%</td>
             <td data-val="121.24444444444444" class="gain-positive">121.24%</td>
             <td data-val="90.87423312883433" class="gain-positive">90.87%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="162214">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -24203,10 +24381,11 @@
             <td data-val="62.300143345462565" class="gain-positive">62.30%</td>
             <td data-val="85.32531713305424" class="gain-positive">85.33%</td>
             <td data-val="73.76778230328789" class="gain-positive">73.77%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="007343">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -24495,10 +24674,11 @@
             <td data-val="46.67787114845938" class="gain-positive">46.68%</td>
             <td data-val="86.53462524935878" class="gain-positive">86.53%</td>
             <td data-val="57.70389109745815" class="gain-positive">57.70%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="018777">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -24787,10 +24967,11 @@
             <td data-val="11.249780277728938" class="gain-positive">11.25%</td>
             <td data-val="38.29849224269795" class="gain-positive">38.30%</td>
             <td data-val="22.33103537143226" class="gain-positive">22.33%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="024663">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -24895,10 +25076,11 @@
             <td data-val="10.566950011697717" class="gain-positive">10.57%</td>
             <td data-val="-9999" class="">-</td>
             <td data-val="21.08634383807326" class="gain-positive">21.09%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="024726">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -25039,10 +25221,11 @@
             <td data-val="60.19672687187314" class="gain-positive">60.20%</td>
             <td data-val="24.88927084021948" class="gain-positive">24.89%</td>
             <td data-val="32.58474278896764" class="gain-positive">32.58%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="023286">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -25331,10 +25514,11 @@
             <td data-val="10.94928478543562" class="gain-positive">10.95%</td>
             <td data-val="39.093576785132036" class="gain-positive">39.09%</td>
             <td data-val="21.885714285714286" class="gain-positive">21.89%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="023408">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         <div>暂无持仓数据</div>
@@ -25401,10 +25585,11 @@
             <td data-val="10.93724663531701" class="gain-positive">10.94%</td>
             <td data-val="-9999" class="">-</td>
             <td data-val="21.45393218533642" class="gain-positive">21.45%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="025506">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -25571,10 +25756,11 @@
             <td data-val="10.975209325233969" class="gain-positive">10.98%</td>
             <td data-val="-9999" class="">-</td>
             <td data-val="21.51910112359552" class="gain-positive">21.52%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="025493">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         <div>暂无持仓数据</div>
@@ -25641,10 +25827,11 @@
             <td data-val="5.654393564356441" class="gain-positive">5.65%</td>
             <td data-val="-9999" class="">-</td>
             <td data-val="15.82294581531416" class="gain-positive">15.82%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="025653">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -25859,10 +26046,11 @@
             <td data-val="17.548249577164587" class="gain-positive">17.55%</td>
             <td data-val="41.20905118428011" class="gain-positive">41.21%</td>
             <td data-val="24.487792908845552" class="gain-positive">24.49%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="005963">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -26151,10 +26339,11 @@
             <td data-val="24.632139251736042" class="gain-positive">24.63%</td>
             <td data-val="20.482034600029554" class="gain-positive">20.48%</td>
             <td data-val="21.213293267085163" class="gain-positive">21.21%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="014162">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -26443,10 +26632,11 @@
             <td data-val="13.082182944136234" class="gain-positive">13.08%</td>
             <td data-val="19.08967391304348" class="gain-positive">19.09%</td>
             <td data-val="13.235579096957562" class="gain-positive">13.24%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="011840">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -26735,10 +26925,11 @@
             <td data-val="-8.01452108349624" class="gain-negative">-8.01%</td>
             <td data-val="-9999" class="">-</td>
             <td data-val="-0.20197939810139287" class="gain-negative">-0.20%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="024412">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -27027,10 +27218,11 @@
             <td data-val="-8.18005808325266" class="gain-negative">-8.18%</td>
             <td data-val="-7.425782838552253" class="gain-negative">-7.43%</td>
             <td data-val="-0.09655051347317034" class="gain-negative">-0.10%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="024775">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -27319,10 +27511,11 @@
             <td data-val="-7.684341342170676" class="gain-negative">-7.68%</td>
             <td data-val="-9999" class="">-</td>
             <td data-val="-9999" class="">-</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="026613">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         <div>暂无持仓数据</div>
@@ -27389,10 +27582,11 @@
             <td data-val="-7.404483738553824" class="gain-negative">-7.40%</td>
             <td data-val="-6.719681908548713" class="gain-negative">-6.72%</td>
             <td data-val="0.5399845718693674" class="gain-positive">0.54%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="023551">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         <div>暂无持仓数据</div>
@@ -27459,10 +27653,11 @@
             <td data-val="-8.470411576001647" class="gain-negative">-8.47%</td>
             <td data-val="-8.263784375427552" class="gain-negative">-8.26%</td>
             <td data-val="-0.3714710252600395" class="gain-negative">-0.37%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="024561">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -27697,10 +27892,11 @@
             <td data-val="-12.022353118864215" class="gain-negative">-12.02%</td>
             <td data-val="-9999" class="">-</td>
             <td data-val="10.520823451285466" class="gain-positive">10.52%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="025857">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -27915,10 +28111,11 @@
             <td data-val="-12.20155117351852" class="gain-negative">-12.20%</td>
             <td data-val="26.74716428832784" class="gain-positive">26.75%</td>
             <td data-val="8.189143606721228" class="gain-positive">8.19%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="023639">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         <div>暂无持仓数据</div>
@@ -27985,10 +28182,11 @@
             <td data-val="-29.759731249543563" class="gain-negative">-29.76%</td>
             <td data-val="-19.77646175661023" class="gain-negative">-19.78%</td>
             <td data-val="-6.074218750000004" class="gain-negative">-6.07%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="023675">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -28277,10 +28475,11 @@
             <td data-val="-3.9983318563311276" class="gain-negative">-4.00%</td>
             <td data-val="19.043309631544926" class="gain-positive">19.04%</td>
             <td data-val="7.125821650863817" class="gain-positive">7.13%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="019411">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -28569,10 +28768,11 @@
             <td data-val="-5.712593549776567" class="gain-negative">-5.71%</td>
             <td data-val="40.86606783751172" class="gain-positive">40.87%</td>
             <td data-val="22.572968432841023" class="gain-positive">22.57%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="167002">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -28861,10 +29061,11 @@
             <td data-val="-3.6721271542536904" class="gain-negative">-3.67%</td>
             <td data-val="33.30524186752064" class="gain-positive">33.31%</td>
             <td data-val="8.02431195793214" class="gain-positive">8.02%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="020425">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -29153,10 +29354,11 @@
             <td data-val="-10.4064039408867" class="gain-negative">-10.41%</td>
             <td data-val="49.53751284686538" class="gain-positive">49.54%</td>
             <td data-val="9.728506787330327" class="gain-positive">9.73%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="002164">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -29445,10 +29647,11 @@
             <td data-val="-24.15621640988893" class="gain-negative">-24.16%</td>
             <td data-val="-6.385989739961085" class="gain-negative">-6.39%</td>
             <td data-val="-12.579499463120513" class="gain-negative">-12.58%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="017133">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -29737,10 +29940,11 @@
             <td data-val="-23.378773125608554" class="gain-negative">-23.38%</td>
             <td data-val="-11.633913531723739" class="gain-negative">-11.63%</td>
             <td data-val="-10.037727220761406" class="gain-negative">-10.04%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="017042">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -30029,10 +30233,11 @@
             <td data-val="-9.534206695778746" class="gain-negative">-9.53%</td>
             <td data-val="-9999" class="">-</td>
             <td data-val="-9999" class="">-</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="026681">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -30247,10 +30452,11 @@
             <td data-val="-10.365853658536594" class="gain-negative">-10.37%</td>
             <td data-val="-15.309932785660951" class="gain-negative">-15.31%</td>
             <td data-val="-7.157894736842108" class="gain-negative">-7.16%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="016387">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -30539,10 +30745,11 @@
             <td data-val="-12.1617581103304" class="gain-negative">-12.16%</td>
             <td data-val="-9999" class="">-</td>
             <td data-val="9.812167087188106" class="gain-positive">9.81%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="025833">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -30757,10 +30964,11 @@
             <td data-val="10.75601374570445" class="gain-positive">10.76%</td>
             <td data-val="27.84609282030941" class="gain-positive">27.85%</td>
             <td data-val="35.47709121479612" class="gain-positive">35.48%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="011172">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -31049,10 +31257,11 @@
             <td data-val="-7.172439069085579" class="gain-negative">-7.17%</td>
             <td data-val="43.9090909090909" class="gain-positive">43.91%</td>
             <td data-val="27.225236085995586" class="gain-positive">27.23%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="001665">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -31341,10 +31550,11 @@
             <td data-val="-16.45033702857779" class="gain-negative">-16.45%</td>
             <td data-val="27.047861075815316" class="gain-positive">27.05%</td>
             <td data-val="6.754929176453839" class="gain-positive">6.75%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="018919">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -31633,10 +31843,11 @@
             <td data-val="-20.42708160900514" class="gain-negative">-20.43%</td>
             <td data-val="-16.511318242343552" class="gain-negative">-16.51%</td>
             <td data-val="-29.208188110549315" class="gain-negative">-29.21%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="016531">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -31925,10 +32136,11 @@
             <td data-val="-4.971965699208447" class="gain-negative">-4.97%</td>
             <td data-val="-6.224572823433682" class="gain-negative">-6.22%</td>
             <td data-val="-5.772218134249041" class="gain-negative">-5.77%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="018345">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -32217,10 +32429,11 @@
             <td data-val="-4.087826929286398" class="gain-negative">-4.09%</td>
             <td data-val="-4.9350316840555575" class="gain-negative">-4.94%</td>
             <td data-val="-4.84366991286519" class="gain-negative">-4.84%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="020482">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -32365,10 +32578,11 @@
             <td data-val="-21.045880189849054" class="gain-negative">-21.05%</td>
             <td data-val="-14.664017007117113" class="gain-negative">-14.66%</td>
             <td data-val="-25.652278949911423" class="gain-negative">-25.65%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="018125">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -32657,10 +32871,11 @@
             <td data-val="-26.377328577090775" class="gain-negative">-26.38%</td>
             <td data-val="-29.812960513886267" class="gain-negative">-29.81%</td>
             <td data-val="-34.04935203266466" class="gain-negative">-34.05%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="007519">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -32949,10 +33164,11 @@
             <td data-val="-14.981617647058831" class="gain-negative">-14.98%</td>
             <td data-val="-6.9268654345178255" class="gain-negative">-6.93%</td>
             <td data-val="-19.693854238062592" class="gain-negative">-19.69%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="014243">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -33241,10 +33457,11 @@
             <td data-val="21.98907809431576" class="gain-positive">21.99%</td>
             <td data-val="51.65206340712996" class="gain-positive">51.65%</td>
             <td data-val="27.522497187851513" class="gain-positive">27.52%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="018957">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -33533,10 +33750,11 @@
             <td data-val="-22.733553619705617" class="gain-negative">-22.73%</td>
             <td data-val="-21.497894158579022" class="gain-negative">-21.50%</td>
             <td data-val="-31.57222665602554" class="gain-negative">-31.57%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="003835">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -33825,10 +34043,11 @@
             <td data-val="-18.4598082793338" class="gain-negative">-18.46%</td>
             <td data-val="-21.067910834629345" class="gain-negative">-21.07%</td>
             <td data-val="-24.01437269188542" class="gain-negative">-24.01%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="014939">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -34117,10 +34336,11 @@
             <td data-val="-11.179550354173085" class="gain-negative">-11.18%</td>
             <td data-val="2.926481084939314" class="gain-positive">2.93%</td>
             <td data-val="-12.466803247590875" class="gain-negative">-12.47%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="008998">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -34409,10 +34629,11 @@
             <td data-val="-15.690158981724533" class="gain-negative">-15.69%</td>
             <td data-val="-17.54419956405909" class="gain-negative">-17.54%</td>
             <td data-val="-20.553507257198866" class="gain-negative">-20.55%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="004233">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -34701,10 +34922,11 @@
             <td data-val="-14.063794531897267" class="gain-negative">-14.06%</td>
             <td data-val="-11.779715075483733" class="gain-negative">-11.78%</td>
             <td data-val="-26.82539682539682" class="gain-negative">-26.83%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="008182">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -34993,10 +35215,11 @@
             <td data-val="-24.711596842744378" class="gain-negative">-24.71%</td>
             <td data-val="-11.88630490956072" class="gain-negative">-11.89%</td>
             <td data-val="-28.646160284578357" class="gain-negative">-28.65%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="017968">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -35285,10 +35508,11 @@
             <td data-val="-14.52306489444879" class="gain-negative">-14.52%</td>
             <td data-val="-9999" class="">-</td>
             <td data-val="-18.505404398061863" class="gain-negative">-18.51%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="024648">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -35577,10 +35801,11 @@
             <td data-val="-11.664214965185838" class="gain-negative">-11.66%</td>
             <td data-val="28.090782400955618" class="gain-positive">28.09%</td>
             <td data-val="3.9634357470972548" class="gain-positive">3.96%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="XAU">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         <div>暂无持仓数据</div>
@@ -35647,10 +35872,11 @@
             <td data-val="-15.458544839255506" class="gain-negative">-15.46%</td>
             <td data-val="26.905590409184434" class="gain-positive">26.91%</td>
             <td data-val="2.221858504848817" class="gain-positive">2.22%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="AUM">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         <div>暂无持仓数据</div>
@@ -35717,10 +35943,11 @@
             <td data-val="-18.487241798298914" class="gain-negative">-18.49%</td>
             <td data-val="64.66617574864995" class="gain-positive">64.67%</td>
             <td data-val="-5.454161088013532" class="gain-negative">-5.45%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="XAG">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         <div>暂无持仓数据</div>
@@ -35787,10 +36014,11 @@
             <td data-val="14.475109016945176" class="gain-positive">14.48%</td>
             <td data-val="-28.108216845762037" class="gain-negative">-28.11%</td>
             <td data-val="-11.94186699901304" class="gain-negative">-11.94%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="BTC">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         <div>暂无持仓数据</div>
@@ -35857,10 +36085,11 @@
             <td data-val="23.94946540246117" class="gain-positive">23.95%</td>
             <td data-val="-43.807988659487386" class="gain-negative">-43.81%</td>
             <td data-val="-18.191925277695486" class="gain-negative">-18.19%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="ETH">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         <div>暂无持仓数据</div>
@@ -35927,10 +36156,11 @@
             <td data-val="21.432677934920097" class="gain-positive">21.43%</td>
             <td data-val="-47.89837197829304" class="gain-negative">-47.90%</td>
             <td data-val="-16.776989755713167" class="gain-negative">-16.78%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="SOL">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         <div>暂无持仓数据</div>
@@ -35997,10 +36227,11 @@
             <td data-val="9.315613359429275" class="gain-positive">9.32%</td>
             <td data-val="-19.654292343387468" class="gain-negative">-19.65%</td>
             <td data-val="-19.87644466039634" class="gain-negative">-19.88%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="BNB">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         <div>暂无持仓数据</div>
@@ -36067,10 +36298,11 @@
             <td data-val="19.066859562451334" class="gain-positive">19.07%</td>
             <td data-val="25.701045830914172" class="gain-positive">25.70%</td>
             <td data-val="16.568742833941343" class="gain-positive">16.57%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="NDX">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         <div>暂无持仓数据</div>
@@ -36137,10 +36369,11 @@
             <td data-val="13.131560802501529" class="gain-positive">13.13%</td>
             <td data-val="19.37228592571463" class="gain-positive">19.37%</td>
             <td data-val="12.65444160397342" class="gain-positive">12.65%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="SPX">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         <div>暂无持仓数据</div>
@@ -36207,10 +36440,11 @@
             <td data-val="51.926638389390064" class="gain-positive">51.93%</td>
             <td data-val="107.3292026740584" class="gain-positive">107.33%</td>
             <td data-val="68.89257844927779" class="gain-positive">68.89%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="SOXX">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         <div>暂无持仓数据</div>
@@ -36277,10 +36511,11 @@
             <td data-val="108.42381130662675" class="gain-positive">108.42%</td>
             <td data-val="327.5729646697389" class="gain-positive">327.57%</td>
             <td data-val="164.9060195098739" class="gain-positive">164.91%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="SOXL">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="21" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         <div>暂无持仓数据</div>
@@ -36304,7 +36539,7 @@
         
                 
         <tr id="empty-row" style="display:none;">
-            <td colspan="20" style="text-align:center; padding:30px; color: var(--footer-text);">
+            <td colspan="21" style="text-align:center; padding:30px; color: var(--footer-text);">
                 该分类暂无基金，敬请期待
             </td>
         </tr>
@@ -36315,10 +36550,10 @@
     <div class="footer-note">
         <div class="footer-left">
             <p><strong>使用提示：</strong> 列宽可拖拽调整，点击表头排序。涨幅数据基于可获取的历史净值，若区间内无对应日期数据则显示“-”。</p>
-            <p><span style="color: #1a73e8;">👉 点击基金行可展开/收起持仓与净值走势图；点击行内「📊 定投」可立即测算并回溯模拟定投收益。</span></p>
+            <p><span style="color: #1a73e8;">👉 点击表格上方卡片可全局刷新右侧的动态定投数据列；点击行内「📊 定投」可呼出单个基金的历史回测图表弹窗。</span></p>
         </div>
         <div class="footer-right" title="静态页面生成与更新时间">
-            <span>⏱️ 数据更新于: <strong>2026-08-30 21:40</strong></span>
+            <span>⏱️ 数据更新于: <strong>2026-08-30 22:36</strong></span>
         </div>
     </div>
 
@@ -36351,13 +36586,13 @@
                     <div class="dca-field">
                         <label>测算周期</label>
                         <select id="dcaRange">
-                            <option value="half">近半年</option>
-                            <option value="year" selected>近一年</option>
+                            <option value="half">近半年内</option>
+                            <option value="year" selected>近一年内</option>
                             <option value="ytd">今年以来</option>
-                            <option value="all">全部历史序列</option>
+                            <option value="all">统计区间全序列</option>
                         </select>
                     </div>
-                    <button class="dca-run-btn" id="dcaRunBtn">🚀 开始测算模拟收益</button>
+                    <button class="dca-run-btn" id="dcaRunBtn">🚀 刷新测算图表</button>
                 </div>
 
                 <div class="dca-results-grid">
@@ -36409,245 +36644,260 @@
             });
         })();
 
-        // 智能定投回测小工具交互与计算逻辑
-        (function() {
-            let currentDcaCode = null;
-            let dcaChartInstance = null;
+        // 核心定投算法抽取 (公用)
+        function computeDCA(code, freq, targetDay, perAmount, range) {
+            const raw = fundNavData[code];
+            if (!raw || !raw.dates || raw.dates.length < 2) return null;
 
+            const allDates = raw.dates;
+            const allNavs = raw.navs;
+            const latestDate = new Date(allDates[allDates.length - 1]);
+            let startDate = new Date(latestDate);
+
+            if (range === 'half') {
+                startDate.setMonth(latestDate.getMonth() - 6);
+            } else if (range === 'year') {
+                startDate.setFullYear(latestDate.getFullYear() - 1);
+            } else if (range === 'ytd') {
+                startDate = new Date(latestDate.getFullYear(), 0, 1);
+            } else {
+                startDate = new Date(allDates[0]);
+            }
+
+            const filtered = [];
+            for (let i = 0; i < allDates.length; i++) {
+                const d = new Date(allDates[i]);
+                if (d >= startDate) {
+                    filtered.push({ date: allDates[i], dt: d, nav: allNavs[i] });
+                }
+            }
+
+            if (filtered.length < 2) return null;
+
+            let totalInvest = 0;
+            let totalShares = 0;
+            let investCount = 0;
+            let lastInvestKey = '';
+
+            const timelineDates = [];
+            const timelineCost = [];
+            const timelineValue = [];
+
+            filtered.forEach(item => {
+                let shouldBuy = false;
+                const dayOfWeek = item.dt.getDay(); // 0 is Sun, 1-5 Mon-Fri
+                const dayOfMonth = item.dt.getDate();
+
+                if (freq === 'daily') {
+                    shouldBuy = true;
+                } else if (freq === 'weekly') {
+                    const oneJan = new Date(item.dt.getFullYear(), 0, 1);
+                    const weekNum = Math.ceil((((item.dt - oneJan) / 86400000) + oneJan.getDay() + 1) / 7);
+                    const weekKey = `${item.dt.getFullYear()}-W${weekNum}`;
+                    if (dayOfWeek >= targetDay && lastInvestKey !== weekKey) {
+                        shouldBuy = true;
+                        lastInvestKey = weekKey;
+                    }
+                } else if (freq === 'biweekly') {
+                    const oneJan = new Date(item.dt.getFullYear(), 0, 1);
+                    const weekNum = Math.ceil((((item.dt - oneJan) / 86400000) + oneJan.getDay() + 1) / 7);
+                    const biweekBlock = Math.floor(weekNum / 2);
+                    const biweekKey = `${item.dt.getFullYear()}-BW${biweekBlock}`;
+                    if (dayOfWeek >= targetDay && lastInvestKey !== biweekKey) {
+                        shouldBuy = true;
+                        lastInvestKey = biweekKey;
+                    }
+                } else {
+                    const monthKey = `${item.dt.getFullYear()}-${item.dt.getMonth() + 1}`;
+                    if (dayOfMonth >= targetDay && lastInvestKey !== monthKey) {
+                        shouldBuy = true;
+                        lastInvestKey = monthKey;
+                    }
+                }
+
+                if (shouldBuy) {
+                    const buyShares = perAmount / item.nav;
+                    totalShares += buyShares;
+                    totalInvest += perAmount;
+                    investCount++;
+                }
+
+                const currentVal = totalShares * item.nav;
+                timelineDates.push(item.date);
+                timelineCost.push(Number(totalInvest.toFixed(2)));
+                timelineValue.push(Number(currentVal.toFixed(2)));
+            });
+
+            const latestItem = filtered[filtered.length - 1];
+            const finalAsset = totalShares * latestItem.nav;
+            const profit = finalAsset - totalInvest;
+            const returnRate = totalInvest > 0 ? (profit / totalInvest) * 100 : 0;
+            const avgPrice = totalShares > 0 ? totalInvest / totalShares : 0;
+
+            return {
+                investCount, totalInvest, finalAsset, profit, returnRate, avgPrice,
+                latestNav: latestItem.nav, timelineDates, timelineCost, timelineValue
+            };
+        }
+
+        // 动态填充日期选项工具函数
+        function buildDayOptions(freqSelectId, daySelectId, labelId) {
+            const freq = document.getElementById(freqSelectId).value;
+            const daySelect = document.getElementById(daySelectId);
+            const label = document.getElementById(labelId);
+            
+            daySelect.innerHTML = '';
+            if (freq === 'daily') {
+                if (label) label.parentElement.style.display = 'none';
+                else daySelect.style.display = 'none';
+            } else if (freq === 'weekly' || freq === 'biweekly') {
+                if (label) {
+                    label.parentElement.style.display = 'flex';
+                    label.textContent = freq === 'weekly' ? '扣款日 (每周几)' : '扣款日 (每两周周几)';
+                } else {
+                    daySelect.style.display = 'inline-block';
+                }
+                const weeks = ['周一', '周二', '周三', '周四', '周五'];
+                weeks.forEach((w, i) => {
+                    const opt = document.createElement('option');
+                    opt.value = i + 1; opt.textContent = w;
+                    if (i === 0) opt.selected = true;
+                    daySelect.appendChild(opt);
+                });
+            } else {
+                if (label) {
+                    label.parentElement.style.display = 'flex';
+                    label.textContent = '扣款日 (每月几号)';
+                } else {
+                    daySelect.style.display = 'inline-block';
+                }
+                for (let i = 1; i <= 28; i++) {
+                    const opt = document.createElement('option');
+                    opt.value = i; opt.textContent = i + ' 号';
+                    if (i === 1) opt.selected = true;
+                    daySelect.appendChild(opt);
+                }
+            }
+        }
+
+        // 初始化全表 DCA 测算逻辑
+        function updateTableDca() {
+            const freq = document.getElementById('gDcaFreq').value;
+            const targetDay = parseInt(document.getElementById('gDcaDaySelect').value) || 1;
+            const range = document.getElementById('gDcaRange').value;
+
+            // 更新表头文本
+            const headerTitle = document.getElementById('dcaHeaderTitle');
+            if (headerTitle) {
+                const map = {'daily':'日','weekly':'周','biweekly':'双周','monthly':'月'};
+                headerTitle.textContent = map[freq] + '定投';
+            }
+
+            document.querySelectorAll('#fundTable tbody tr.fund-row').forEach(row => {
+                const code = row.getAttribute('data-code');
+                const res = computeDCA(code, freq, targetDay, 1000, range);
+                const dcaCell = row.querySelector('.dca-col');
+                
+                if (dcaCell) {
+                    if (res && res.returnRate !== undefined) {
+                        const rate = res.returnRate;
+                        dcaCell.setAttribute('data-val', rate);
+                        const sign = rate > 0 ? '+' : '';
+                        const colorClass = rate > 0 ? 'gain-positive' : (rate < 0 ? 'gain-negative' : '');
+                        dcaCell.className = `dca-col ${colorClass}`;
+                        dcaCell.innerHTML = `${sign}${rate.toFixed(2)}%`;
+                    } else {
+                        dcaCell.setAttribute('data-val', -9999);
+                        dcaCell.className = 'dca-col';
+                        dcaCell.innerHTML = '--';
+                    }
+                }
+            });
+
+            // 触发排序 (如果是定投列)
+            if (currentSortCol === 20) {
+                isAscending = !isAscending; // 取反回溯状态，保持原定顺序
+                sortTable(20);
+            }
+        }
+
+        // 定投弹窗逻辑与全局筛选卡片折叠逻辑
+        let currentDcaCode = null;
+        let dcaChartInstance = null;
+
+        (function() {
             const modal = document.getElementById('dcaModal');
             const closeBtn = document.getElementById('closeDcaModal');
             const modalTitle = document.getElementById('dcaModalTitle');
             const freqSelect = document.getElementById('dcaFreq');
-            const daySelect = document.getElementById('dcaDaySelect');
-            const dayLabel = document.getElementById('dcaDayLabel');
-            const dayField = document.getElementById('dcaDayField');
-            const amountInput = document.getElementById('dcaAmount');
-            const rangeSelect = document.getElementById('dcaRange');
             const runBtn = document.getElementById('dcaRunBtn');
 
-            function populateDays(freq) {
-                daySelect.innerHTML = '';
-                if (freq === 'daily') {
-                    dayField.style.display = 'none';
-                } else if (freq === 'weekly' || freq === 'biweekly') {
-                    dayField.style.display = 'flex';
-                    dayLabel.textContent = freq === 'weekly' ? '扣款日 (每周几)' : '扣款日 (每两周周几)';
-                    const weeks = ['周一', '周二', '周三', '周四', '周五'];
-                    weeks.forEach((w, i) => {
-                        const opt = document.createElement('option');
-                        opt.value = i + 1; // 1 to 5
-                        opt.textContent = w;
-                        if (i === 0) opt.selected = true;
-                        daySelect.appendChild(opt);
-                    });
-                } else {
-                    dayField.style.display = 'flex';
-                    dayLabel.textContent = '扣款日 (每月几号)';
-                    for (let i = 1; i <= 28; i++) {
-                        const opt = document.createElement('option');
-                        opt.value = i;
-                        opt.textContent = i + ' 号';
-                        if (i === 1) opt.selected = true;
-                        daySelect.appendChild(opt);
-                    }
-                }
-            }
+            buildDayOptions('dcaFreq', 'dcaDaySelect', 'dcaDayLabel');
+            freqSelect.addEventListener('change', () => buildDayOptions('dcaFreq', 'dcaDaySelect', 'dcaDayLabel'));
 
-            populateDays('monthly');
+            // 全局表单事件绑定
+            buildDayOptions('gDcaFreq', 'gDcaDaySelect', null);
+            document.getElementById('gDcaFreq').addEventListener('change', () => buildDayOptions('gDcaFreq', 'gDcaDaySelect', null));
+            document.getElementById('gDcaApplyBtn').addEventListener('click', updateTableDca);
 
-            freqSelect.addEventListener('change', function() {
-                populateDays(this.value);
+            // 全局卡片折叠/展开事件
+            document.getElementById('gDcaToggleBtn').addEventListener('click', function() {
+                document.getElementById('gDcaCard').classList.toggle('collapsed');
             });
 
-            // 打开弹窗
             window.openDcaModal = function(code) {
                 currentDcaCode = code;
                 const name = fundNames[code] || code;
                 modalTitle.textContent = `📊 定投测算: [${code}] ${name}`;
                 modal.classList.add('show');
-                runBacktest();
+                runBacktestModal();
             };
 
-            closeBtn.addEventListener('click', function() {
-                modal.classList.remove('show');
-            });
+            closeBtn.addEventListener('click', () => modal.classList.remove('show'));
+            modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('show'); });
+            runBtn.addEventListener('click', runBacktestModal);
 
-            modal.addEventListener('click', function(e) {
-                if (e.target === modal) modal.classList.remove('show');
-            });
-
-            runBtn.addEventListener('click', runBacktest);
-
-            function runBacktest() {
-                if (!currentDcaCode || !fundNavData[currentDcaCode]) return;
-                const raw = fundNavData[currentDcaCode];
-                if (!raw.dates || raw.dates.length < 2) return;
-
+            function runBacktestModal() {
+                if (!currentDcaCode) return;
                 const freq = freqSelect.value;
-                const targetDay = parseInt(daySelect.value) || 1;
-                const perAmount = parseFloat(amountInput.value) || 1000;
-                const range = rangeSelect.value;
+                const targetDay = parseInt(document.getElementById('dcaDaySelect').value) || 1;
+                const perAmount = parseFloat(document.getElementById('dcaAmount').value) || 1000;
+                const range = document.getElementById('dcaRange').value;
 
-                // 筛选回测时间区间
-                const allDates = raw.dates;
-                const allNavs = raw.navs;
-                const latestDate = new Date(allDates[allDates.length - 1]);
-                let startDate = new Date(latestDate);
+                const res = computeDCA(currentDcaCode, freq, targetDay, perAmount, range);
+                if (!res) return;
 
-                if (range === 'half') {
-                    startDate.setMonth(latestDate.getMonth() - 6);
-                } else if (range === 'year') {
-                    startDate.setFullYear(latestDate.getFullYear() - 1);
-                } else if (range === 'ytd') {
-                    startDate = new Date(latestDate.getFullYear(), 0, 1);
-                } else {
-                    startDate = new Date(allDates[0]);
-                }
-
-                const filtered = [];
-                for (let i = 0; i < allDates.length; i++) {
-                    const d = new Date(allDates[i]);
-                    if (d >= startDate) {
-                        filtered.push({ date: allDates[i], dt: d, nav: allNavs[i] });
-                    }
-                }
-
-                if (filtered.length < 2) return;
-
-                // 模拟扣款执行
-                let totalInvest = 0;
-                let totalShares = 0;
-                let investCount = 0;
-                let lastInvestKey = '';
-
-                const timelineDates = [];
-                const timelineCost = [];
-                const timelineValue = [];
-
-                filtered.forEach(item => {
-                    let shouldBuy = false;
-                    const dayOfWeek = item.dt.getDay(); // 0 is Sun, 1-5 Mon-Fri
-                    const dayOfMonth = item.dt.getDate();
-
-                    if (freq === 'daily') {
-                        shouldBuy = true;
-                    } else if (freq === 'weekly') {
-                        const oneJan = new Date(item.dt.getFullYear(), 0, 1);
-                        const weekNum = Math.ceil((((item.dt - oneJan) / 86400000) + oneJan.getDay() + 1) / 7);
-                        const weekKey = `${item.dt.getFullYear()}-W${weekNum}`;
-                        if (dayOfWeek >= targetDay && lastInvestKey !== weekKey) {
-                            shouldBuy = true;
-                            lastInvestKey = weekKey;
-                        }
-                    } else if (freq === 'biweekly') {
-                        const oneJan = new Date(item.dt.getFullYear(), 0, 1);
-                        const weekNum = Math.ceil((((item.dt - oneJan) / 86400000) + oneJan.getDay() + 1) / 7);
-                        const biweekBlock = Math.floor(weekNum / 2);
-                        const biweekKey = `${item.dt.getFullYear()}-BW${biweekBlock}`;
-                        if (dayOfWeek >= targetDay && lastInvestKey !== biweekKey) {
-                            shouldBuy = true;
-                            lastInvestKey = biweekKey;
-                        }
-                    } else {
-                        const monthKey = `${item.dt.getFullYear()}-${item.dt.getMonth() + 1}`;
-                        if (dayOfMonth >= targetDay && lastInvestKey !== monthKey) {
-                            shouldBuy = true;
-                            lastInvestKey = monthKey;
-                        }
-                    }
-
-                    if (shouldBuy) {
-                        const buyShares = perAmount / item.nav;
-                        totalShares += buyShares;
-                        totalInvest += perAmount;
-                        investCount++;
-                    }
-
-                    const currentVal = totalShares * item.nav;
-                    timelineDates.push(item.date);
-                    timelineCost.push(Number(totalInvest.toFixed(2)));
-                    timelineValue.push(Number(currentVal.toFixed(2)));
-                });
-
-                const latestItem = filtered[filtered.length - 1];
-                const finalAsset = totalShares * latestItem.nav;
-                const profit = finalAsset - totalInvest;
-                const returnRate = totalInvest > 0 ? (profit / totalInvest) * 100 : 0;
-                const avgPrice = totalShares > 0 ? totalInvest / totalShares : 0;
-
-                // 渲染结果面板
-                document.getElementById('resTotalInvest').innerHTML = `${investCount} 期 / <strong>${totalInvest.toLocaleString()}</strong> 元`;
-                document.getElementById('resTotalAsset').innerHTML = `<strong>${finalAsset.toFixed(2)}</strong> 元`;
+                document.getElementById('resTotalInvest').innerHTML = `${res.investCount} 期 / <strong>${res.totalInvest.toLocaleString()}</strong> 元`;
+                document.getElementById('resTotalAsset').innerHTML = `<strong>${res.finalAsset.toFixed(2)}</strong> 元`;
                 
                 const profitElem = document.getElementById('resProfit');
-                profitElem.textContent = `${profit >= 0 ? '+' : ''}${profit.toFixed(2)}`;
-                profitElem.style.color = profit >= 0 ? '#d93025' : '#188038';
+                profitElem.textContent = `${res.profit >= 0 ? '+' : ''}${res.profit.toFixed(2)}`;
+                profitElem.style.color = res.profit >= 0 ? '#d93025' : '#188038';
 
                 const rateElem = document.getElementById('resReturnRate');
-                rateElem.textContent = `${returnRate >= 0 ? '+' : ''}${returnRate.toFixed(2)}%`;
-                rateElem.style.color = returnRate >= 0 ? '#d93025' : '#188038';
+                rateElem.textContent = `${res.returnRate >= 0 ? '+' : ''}${res.returnRate.toFixed(2)}%`;
+                rateElem.style.color = res.returnRate >= 0 ? '#d93025' : '#188038';
 
-                document.getElementById('resAvgPrice').innerHTML = `${avgPrice.toFixed(4)} / ${latestItem.nav.toFixed(4)}`;
+                document.getElementById('resAvgPrice').innerHTML = `${res.avgPrice.toFixed(4)} / ${res.latestNav.toFixed(4)}`;
 
-                // 绘制/刷新曲线
                 const ctx = document.getElementById('dcaChart').getContext('2d');
-                if (dcaChartInstance) {
-                    dcaChartInstance.destroy();
-                }
+                if (dcaChartInstance) dcaChartInstance.destroy();
 
                 dcaChartInstance = new Chart(ctx, {
                     type: 'line',
                     data: {
-                        labels: timelineDates,
+                        labels: res.timelineDates,
                         datasets: [
-                            {
-                                label: '总资产 (元)',
-                                data: timelineValue,
-                                borderColor: '#1a73e8',
-                                backgroundColor: 'rgba(26, 115, 232, 0.08)',
-                                fill: true,
-                                pointRadius: 0,
-                                borderWidth: 2,
-                                tension: 0.1
-                            },
-                            {
-                                label: '累计本金 (元)',
-                                data: timelineCost,
-                                borderColor: '#e67e22',
-                                borderDash: [4, 4],
-                                pointRadius: 0,
-                                borderWidth: 1.5,
-                                fill: false
-                            }
+                            { label: '总资产 (元)', data: res.timelineValue, borderColor: '#1a73e8', backgroundColor: 'rgba(26, 115, 232, 0.08)', fill: true, pointRadius: 0, borderWidth: 2, tension: 0.1 },
+                            { label: '累计本金 (元)', data: res.timelineCost, borderColor: '#e67e22', borderDash: [4, 4], pointRadius: 0, borderWidth: 1.5, fill: false }
                         ]
                     },
                     options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        interaction: { mode: 'index', intersect: false },
-                        plugins: {
-                            legend: {
-                                display: true,
-                                position: 'top',
-                                labels: { font: { size: 10 }, boxWidth: 12 }
-                            },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(ctx) {
-                                        return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toLocaleString()} 元`;
-                                    }
-                                }
-                            }
-                        },
+                        responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+                        plugins: { legend: { display: true, position: 'top', labels: { font: { size: 10 }, boxWidth: 12 } } },
                         scales: {
-                            x: {
-                                ticks: { maxTicksLimit: 8, font: { size: 9 } },
-                                grid: { display: false }
-                            },
-                            y: {
-                                ticks: { font: { size: 9 } },
-                                grid: { color: 'rgba(0,0,0,0.05)' }
-                            }
+                            x: { ticks: { maxTicksLimit: 8, font: { size: 9 } }, grid: { display: false } },
+                            y: { ticks: { font: { size: 9 } }, grid: { color: 'rgba(0,0,0,0.05)' } }
                         }
                     }
                 });
@@ -36661,6 +36911,10 @@
             const allRows = document.querySelectorAll('#fundTable tbody tr:not(#empty-row)');
             let currentGroup = 'all';
             let searchKeyword = '';
+            
+            // 初次加载计算定投数据
+            updateTableDca();
+
             function applyFilters() {
                 let hasVisible = false;
                 const keyword = searchKeyword.trim().toLowerCase();
@@ -36943,49 +37197,6 @@
             });
         });
 
-        document.addEventListener("DOMContentLoaded", function () {
-            const table = document.getElementById("fundTable");
-            const headers = table.querySelectorAll("th");
-            headers.forEach((th, idx) => {
-                th.addEventListener("click", function(e) {
-                    if (th.classList.contains("is-resizing") || window._isDragging) return;
-                    sortTable(idx);
-                });
-                const resizer = document.createElement("div");
-                resizer.classList.add("resizer");
-                th.appendChild(resizer);
-                let x = 0, w = 0;
-                resizer.addEventListener("mousedown", function (e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    window._isDragging = true;
-                    x = e.clientX;
-                    w = th.getBoundingClientRect().width;
-                    th.style.width = w + "px";
-                    th.classList.add("resizing");
-                    th.classList.add("is-resizing");
-                    function mouseMoveHandler(e) {
-                        const dx = e.clientX - x;
-                        const newWidth = Math.max(40, w + dx);
-                        th.style.width = newWidth + "px";
-                    }
-                    function mouseUpHandler(e) {
-                        th.classList.remove("resizing");
-                        document.removeEventListener("mousemove", mouseMoveHandler);
-                        document.removeEventListener("mouseup", mouseUpHandler);
-                        const finalWidth = th.getBoundingClientRect().width;
-                        th.style.width = finalWidth + "px";
-                        setTimeout(() => {
-                            window._isDragging = false;
-                            th.classList.remove("is-resizing");
-                        }, 50);
-                    }
-                    document.addEventListener("mousemove", mouseMoveHandler);
-                    document.addEventListener("mouseup", mouseUpHandler);
-                });
-            });
-        });
-
         let currentSortCol = -1;
         let isAscending = true;
 
@@ -37051,6 +37262,46 @@
                 }
             });
         }
+
+        // Resizer logic
+        document.addEventListener("DOMContentLoaded", function () {
+            const table = document.getElementById("fundTable");
+            const headers = table.querySelectorAll("th");
+            headers.forEach((th, idx) => {
+                const resizer = document.createElement("div");
+                resizer.classList.add("resizer");
+                th.appendChild(resizer);
+                let x = 0, w = 0;
+                resizer.addEventListener("mousedown", function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window._isDragging = true;
+                    x = e.clientX;
+                    w = th.getBoundingClientRect().width;
+                    th.style.width = w + "px";
+                    th.classList.add("resizing");
+                    th.classList.add("is-resizing");
+                    function mouseMoveHandler(e) {
+                        const dx = e.clientX - x;
+                        const newWidth = Math.max(40, w + dx);
+                        th.style.width = newWidth + "px";
+                    }
+                    function mouseUpHandler(e) {
+                        th.classList.remove("resizing");
+                        document.removeEventListener("mousemove", mouseMoveHandler);
+                        document.removeEventListener("mouseup", mouseUpHandler);
+                        const finalWidth = th.getBoundingClientRect().width;
+                        th.style.width = finalWidth + "px";
+                        setTimeout(() => {
+                            window._isDragging = false;
+                            th.classList.remove("is-resizing");
+                        }, 50);
+                    }
+                    document.addEventListener("mousemove", mouseMoveHandler);
+                    document.addEventListener("mouseup", mouseUpHandler);
+                });
+            });
+        });
     </script>
 </body>
 </html>

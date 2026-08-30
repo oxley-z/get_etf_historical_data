@@ -644,7 +644,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
     INDEX_SET_LOCAL = {"NDX", "SPX", "SOXX", "SOXL"}
     PRECIOUS_METALS_LOCAL = {"XAU", "AUM", "XAG"}
     CRYPTO_LOCAL = {"BTC", "ETH", "SOL", "BNB"}
-    col_count = 20
+    col_count = 21
 
     def date_to_label(date_str):
         if 'Q' in date_str:
@@ -760,8 +760,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             group = "index"
         else:
             group = "qdii"
-            
-        # [需求优化] 如果是贵金属、加密货币或指数，最新净值高亮
+
         nav_display_html = f'<span class="highlight-special-nav">{r["latest_nav"]:.4f}</span>' if group in ["metals", "crypto", "index"] else f'{r["latest_nav"]:.4f}'
 
         holdings_history = r.get('holdings', [])
@@ -777,6 +776,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             today_gain_class = ''
             today_data_val = -9999
 
+        # 定投收益数据默认留空（-9999），页面加载后由 JS 全局自动填充并保持状态一致
         rows_html += f"""
         <tr data-group="{group}" class="fund-row" data-code="{r['code']}">
             <td class="code" data-val="{r['code']}">{r['code']}</td>
@@ -823,6 +823,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             <td data-val="{r['half_year_gain'] if r['half_year_gain'] is not None else -9999}" class="{gain_class(r['half_year_gain'])}">{format_gain(r['half_year_gain'])}</td>
             <td data-val="{r['year_gain'] if r['year_gain'] is not None else -9999}" class="{gain_class(r['year_gain'])}">{format_gain(r['year_gain'])}</td>
             <td data-val="{r['ytd_gain'] if r['ytd_gain'] is not None else -9999}" class="{gain_class(r['ytd_gain'])}">{format_gain(r['ytd_gain'])}</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         """
 
@@ -1207,9 +1208,52 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             -webkit-box-orient:vertical;
             overflow:hidden;
         }}
+        
+        /* 全局定投筛选卡片 */
+        .global-dca-filter-card {{
+            background: var(--table-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            font-size: 12px;
+            /* 新增下方这行属性，使卡片在整个纵向页面结构中靠右侧贴边 */
+            align-self: flex-end;
+        }}
+        .global-dca-filter-title {{
+            font-weight: 600;
+            color: var(--link-color);
+        }}
+        .global-dca-filter-card select {{
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid var(--input-border);
+            background: var(--input-bg);
+            color: var(--text);
+            font-size: 11px;
+            outline: none;
+        }}
+        .global-dca-filter-card button {{
+            background: var(--btn-active-bg);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }}
+        .global-dca-filter-card button:hover {{ opacity: 0.9; }}
+
         .table-container {{ 
             width:100%; 
-            height: calc(100vh - 315px); 
+            height: calc(100vh - 365px); 
             overflow-y: auto; 
             overflow-x: scroll; 
             box-sizing:border-box; 
@@ -1240,7 +1284,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         }}
         table {{ 
             width:100%; 
-            min-width:2350px; 
+            min-width:2450px; 
             border-collapse:collapse; 
             font-size:12px; 
             text-align:right; 
@@ -1285,7 +1329,8 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         th:nth-child(17), td:nth-child(17),
         th:nth-child(18), td:nth-child(18),
         th:nth-child(19), td:nth-child(19),
-        th:nth-child(20), td:nth-child(20) {{ width: 80px; white-space: nowrap; }}
+        th:nth-child(20), td:nth-child(20),
+        th:nth-child(21), td:nth-child(21) {{ width: 80px; white-space: nowrap; }}
         th {{ 
             background-color: var(--header-bg);
             color: var(--header-text);
@@ -1415,7 +1460,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             font-weight: normal;
         }}
 
-        /* --- 新增：特定资产最新净值高亮样式 --- */
         .highlight-special-nav {{
             font-weight: bold;
             color: #d93025;
@@ -1799,30 +1843,51 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             </div>
         </section>
     </div>
+    
+    <!-- 新增：全局定投筛选卡片 -->
+    <div class="global-dca-filter-card">
+        <span class="global-dca-filter-title">📊 动态定投参数配置:</span>
+        <select id="gDcaFreq">
+            <option value="daily">每日定投</option>
+            <option value="weekly">每周定投</option>
+            <option value="biweekly">双周定投</option>
+            <option value="monthly" selected>每月定投</option>
+        </select>
+        <select id="gDcaDaySelect"></select>
+        <select id="gDcaRange">
+            <option value="half">近半年内</option>
+            <option value="year" selected>近一年内</option>
+            <option value="ytd">今年以来</option>
+            <option value="all">统计区间全序列</option>
+        </select>
+        <button id="gDcaApplyBtn">计算并刷新排序</button>
+    </div>
+
     <div class="table-container">
         <table id="fundTable">
             <thead>
                 <tr>
-                    <th data-col="0">代码 <span class="sort-icon">⇅</span></th>
-                    <th data-col="1">基金名称 / 赎回费率阶梯 <span class="sort-icon">⇅</span></th>
-                    <th data-col="2">最新规模 <span class="sort-icon">⇅</span></th>
-                    <th data-col="3">运作费(管/托/销) <span class="sort-icon">⇅</span></th>
-                    <th data-col="4">申购费率 <span class="sort-icon">⇅</span></th>
-                    <th data-col="5">申购状态/限额 <span class="sort-icon">⇅</span></th>
-                    <th data-col="6">最高净值 <span class="sort-icon">⇅</span></th>
-                    <th data-col="7">最低净值 <span class="sort-icon">⇅</span></th>
-                    <th data-col="8">最新净值 <span class="sort-icon">⇅</span></th>
-                    <th data-col="9">最大回撤 <span class="sort-icon">⇅</span></th>
-                    <th data-col="10">自低点反弹 <span class="sort-icon">⇅</span></th>
-                    <th data-col="11">修复程度 <span class="sort-icon">⇅</span></th>
-                    <th data-col="12">修复时间 <span class="sort-icon">⇅</span></th>
-                    <th data-col="13">{col_today_title} <span class="sort-icon">⇅</span></th>
-                    <th data-col="14">近一周 <span class="sort-icon">⇅</span></th>
-                    <th data-col="15">近一月 <span class="sort-icon">⇅</span></th>
-                    <th data-col="16">近三月 <span class="sort-icon">⇅</span></th>
-                    <th data-col="17">近半年 <span class="sort-icon">⇅</span></th>
-                    <th data-col="18">近一年 <span class="sort-icon">⇅</span></th>
-                    <th data-col="19">今年内 <span class="sort-icon">⇅</span></th>
+                    <th data-col="0" onclick="sortTable(0)">代码 <span class="sort-icon">⇅</span></th>
+                    <th data-col="1" onclick="sortTable(1)">基金名称 / 赎回费率阶梯 <span class="sort-icon">⇅</span></th>
+                    <th data-col="2" onclick="sortTable(2)">最新规模 <span class="sort-icon">⇅</span></th>
+                    <th data-col="3" onclick="sortTable(3)">运作费(管/托/销) <span class="sort-icon">⇅</span></th>
+                    <th data-col="4" onclick="sortTable(4)">申购费率 <span class="sort-icon">⇅</span></th>
+                    <th data-col="5" onclick="sortTable(5)">申购状态/限额 <span class="sort-icon">⇅</span></th>
+                    <th data-col="6" onclick="sortTable(6)">最高净值 <span class="sort-icon">⇅</span></th>
+                    <th data-col="7" onclick="sortTable(7)">最低净值 <span class="sort-icon">⇅</span></th>
+                    <th data-col="8" onclick="sortTable(8)">最新净值 <span class="sort-icon">⇅</span></th>
+                    <th data-col="9" onclick="sortTable(9)">最大回撤 <span class="sort-icon">⇅</span></th>
+                    <th data-col="10" onclick="sortTable(10)">自低点反弹 <span class="sort-icon">⇅</span></th>
+                    <th data-col="11" onclick="sortTable(11)">修复程度 <span class="sort-icon">⇅</span></th>
+                    <th data-col="12" onclick="sortTable(12)">修复时间 <span class="sort-icon">⇅</span></th>
+                    <th data-col="13" onclick="sortTable(13)">{col_today_title} <span class="sort-icon">⇅</span></th>
+                    <th data-col="14" onclick="sortTable(14)">近一周 <span class="sort-icon">⇅</span></th>
+                    <th data-col="15" onclick="sortTable(15)">近一月 <span class="sort-icon">⇅</span></th>
+                    <th data-col="16" onclick="sortTable(16)">近三月 <span class="sort-icon">⇅</span></th>
+                    <th data-col="17" onclick="sortTable(17)">近半年 <span class="sort-icon">⇅</span></th>
+                    <th data-col="18" onclick="sortTable(18)">近一年 <span class="sort-icon">⇅</span></th>
+                    <th data-col="19" onclick="sortTable(19)">今年内 <span class="sort-icon">⇅</span></th>
+                    <th data-col="20" onclick="sortTable(20)"><span id="dcaHeaderTitle">月定投</span>收益 <span class="sort-icon">⇅</span></th>
                 </tr>
             </thead>
             <tbody>
@@ -1834,7 +1899,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
     <div class="footer-note">
         <div class="footer-left">
             <p><strong>使用提示：</strong> 列宽可拖拽调整，点击表头排序。涨幅数据基于可获取的历史净值，若区间内无对应日期数据则显示“-”。</p>
-            <p><span style="color: #1a73e8;">👉 点击基金行可展开/收起持仓与净值走势图；点击行内「📊 定投」可立即测算并回溯模拟定投收益。</span></p>
+            <p><span style="color: #1a73e8;">👉 点击表格上方卡片可全局刷新右侧的动态定投数据列；点击行内「📊 定投」可呼出单个基金的历史回测图表弹窗。</span></p>
         </div>
         <div class="footer-right" title="静态页面生成与更新时间">
             <span>⏱️ 数据更新于: <strong>{update_time_str}</strong></span>
@@ -1870,13 +1935,13 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                     <div class="dca-field">
                         <label>测算周期</label>
                         <select id="dcaRange">
-                            <option value="half">近半年</option>
-                            <option value="year" selected>近一年</option>
+                            <option value="half">近半年内</option>
+                            <option value="year" selected>近一年内</option>
                             <option value="ytd">今年以来</option>
-                            <option value="all">全部历史序列</option>
+                            <option value="all">统计区间全序列</option>
                         </select>
                     </div>
-                    <button class="dca-run-btn" id="dcaRunBtn">🚀 开始测算模拟收益</button>
+                    <button class="dca-run-btn" id="dcaRunBtn">🚀 刷新测算图表</button>
                 </div>
 
                 <div class="dca-results-grid">
@@ -1928,245 +1993,255 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             }});
         }})();
 
-        // 智能定投回测小工具交互与计算逻辑
-        (function() {{
-            let currentDcaCode = null;
-            let dcaChartInstance = null;
+        // 核心定投算法抽取 (公用)
+        function computeDCA(code, freq, targetDay, perAmount, range) {{
+            const raw = fundNavData[code];
+            if (!raw || !raw.dates || raw.dates.length < 2) return null;
 
+            const allDates = raw.dates;
+            const allNavs = raw.navs;
+            const latestDate = new Date(allDates[allDates.length - 1]);
+            let startDate = new Date(latestDate);
+
+            if (range === 'half') {{
+                startDate.setMonth(latestDate.getMonth() - 6);
+            }} else if (range === 'year') {{
+                startDate.setFullYear(latestDate.getFullYear() - 1);
+            }} else if (range === 'ytd') {{
+                startDate = new Date(latestDate.getFullYear(), 0, 1);
+            }} else {{
+                startDate = new Date(allDates[0]);
+            }}
+
+            const filtered = [];
+            for (let i = 0; i < allDates.length; i++) {{
+                const d = new Date(allDates[i]);
+                if (d >= startDate) {{
+                    filtered.push({{ date: allDates[i], dt: d, nav: allNavs[i] }});
+                }}
+            }}
+
+            if (filtered.length < 2) return null;
+
+            let totalInvest = 0;
+            let totalShares = 0;
+            let investCount = 0;
+            let lastInvestKey = '';
+
+            const timelineDates = [];
+            const timelineCost = [];
+            const timelineValue = [];
+
+            filtered.forEach(item => {{
+                let shouldBuy = false;
+                const dayOfWeek = item.dt.getDay(); // 0 is Sun, 1-5 Mon-Fri
+                const dayOfMonth = item.dt.getDate();
+
+                if (freq === 'daily') {{
+                    shouldBuy = true;
+                }} else if (freq === 'weekly') {{
+                    const oneJan = new Date(item.dt.getFullYear(), 0, 1);
+                    const weekNum = Math.ceil((((item.dt - oneJan) / 86400000) + oneJan.getDay() + 1) / 7);
+                    const weekKey = `${{item.dt.getFullYear()}}-W${{weekNum}}`;
+                    if (dayOfWeek >= targetDay && lastInvestKey !== weekKey) {{
+                        shouldBuy = true;
+                        lastInvestKey = weekKey;
+                    }}
+                }} else if (freq === 'biweekly') {{
+                    const oneJan = new Date(item.dt.getFullYear(), 0, 1);
+                    const weekNum = Math.ceil((((item.dt - oneJan) / 86400000) + oneJan.getDay() + 1) / 7);
+                    const biweekBlock = Math.floor(weekNum / 2);
+                    const biweekKey = `${{item.dt.getFullYear()}}-BW${{biweekBlock}}`;
+                    if (dayOfWeek >= targetDay && lastInvestKey !== biweekKey) {{
+                        shouldBuy = true;
+                        lastInvestKey = biweekKey;
+                    }}
+                }} else {{
+                    const monthKey = `${{item.dt.getFullYear()}}-${{item.dt.getMonth() + 1}}`;
+                    if (dayOfMonth >= targetDay && lastInvestKey !== monthKey) {{
+                        shouldBuy = true;
+                        lastInvestKey = monthKey;
+                    }}
+                }}
+
+                if (shouldBuy) {{
+                    const buyShares = perAmount / item.nav;
+                    totalShares += buyShares;
+                    totalInvest += perAmount;
+                    investCount++;
+                }}
+
+                const currentVal = totalShares * item.nav;
+                timelineDates.push(item.date);
+                timelineCost.push(Number(totalInvest.toFixed(2)));
+                timelineValue.push(Number(currentVal.toFixed(2)));
+            }});
+
+            const latestItem = filtered[filtered.length - 1];
+            const finalAsset = totalShares * latestItem.nav;
+            const profit = finalAsset - totalInvest;
+            const returnRate = totalInvest > 0 ? (profit / totalInvest) * 100 : 0;
+            const avgPrice = totalShares > 0 ? totalInvest / totalShares : 0;
+
+            return {{
+                investCount, totalInvest, finalAsset, profit, returnRate, avgPrice,
+                latestNav: latestItem.nav, timelineDates, timelineCost, timelineValue
+            }};
+        }}
+
+        // 动态填充日期选项工具函数
+        function buildDayOptions(freqSelectId, daySelectId, labelId) {{
+            const freq = document.getElementById(freqSelectId).value;
+            const daySelect = document.getElementById(daySelectId);
+            const label = document.getElementById(labelId);
+            
+            daySelect.innerHTML = '';
+            if (freq === 'daily') {{
+                if (label) label.parentElement.style.display = 'none';
+                else daySelect.style.display = 'none';
+            }} else if (freq === 'weekly' || freq === 'biweekly') {{
+                if (label) {{
+                    label.parentElement.style.display = 'flex';
+                    label.textContent = freq === 'weekly' ? '扣款日 (每周几)' : '扣款日 (每两周周几)';
+                }} else {{
+                    daySelect.style.display = 'inline-block';
+                }}
+                const weeks = ['周一', '周二', '周三', '周四', '周五'];
+                weeks.forEach((w, i) => {{
+                    const opt = document.createElement('option');
+                    opt.value = i + 1; opt.textContent = w;
+                    if (i === 0) opt.selected = true;
+                    daySelect.appendChild(opt);
+                }});
+            }} else {{
+                if (label) {{
+                    label.parentElement.style.display = 'flex';
+                    label.textContent = '扣款日 (每月几号)';
+                }} else {{
+                    daySelect.style.display = 'inline-block';
+                }}
+                for (let i = 1; i <= 28; i++) {{
+                    const opt = document.createElement('option');
+                    opt.value = i; opt.textContent = i + ' 号';
+                    if (i === 1) opt.selected = true;
+                    daySelect.appendChild(opt);
+                }}
+            }}
+        }}
+
+        // 初始化全表 DCA 测算逻辑
+        function updateTableDca() {{
+            const freq = document.getElementById('gDcaFreq').value;
+            const targetDay = parseInt(document.getElementById('gDcaDaySelect').value) || 1;
+            const range = document.getElementById('gDcaRange').value;
+
+            // 更新表头文本
+            const headerTitle = document.getElementById('dcaHeaderTitle');
+            if (headerTitle) {{
+                const map = {{'daily':'日','weekly':'周','biweekly':'双周','monthly':'月'}};
+                headerTitle.textContent = map[freq] + '定投';
+            }}
+
+            document.querySelectorAll('#fundTable tbody tr.fund-row').forEach(row => {{
+                const code = row.getAttribute('data-code');
+                const res = computeDCA(code, freq, targetDay, 1000, range);
+                const dcaCell = row.querySelector('.dca-col');
+                
+                if (dcaCell) {{
+                    if (res && res.returnRate !== undefined) {{
+                        const rate = res.returnRate;
+                        dcaCell.setAttribute('data-val', rate);
+                        const sign = rate > 0 ? '+' : '';
+                        const colorClass = rate > 0 ? 'gain-positive' : (rate < 0 ? 'gain-negative' : '');
+                        dcaCell.className = `dca-col ${{colorClass}}`;
+                        dcaCell.innerHTML = `${{sign}}${{rate.toFixed(2)}}%`;
+                    }} else {{
+                        dcaCell.setAttribute('data-val', -9999);
+                        dcaCell.className = 'dca-col';
+                        dcaCell.innerHTML = '--';
+                    }}
+                }}
+            }});
+
+            // 触发排序 (如果是定投列)
+            if (currentSortCol === 20) {{
+                isAscending = !isAscending; // 取反回溯状态，保持原定顺序
+                sortTable(20);
+            }}
+        }}
+
+        // 定投弹窗逻辑
+        let currentDcaCode = null;
+        let dcaChartInstance = null;
+
+        (function() {{
             const modal = document.getElementById('dcaModal');
             const closeBtn = document.getElementById('closeDcaModal');
             const modalTitle = document.getElementById('dcaModalTitle');
             const freqSelect = document.getElementById('dcaFreq');
-            const daySelect = document.getElementById('dcaDaySelect');
-            const dayLabel = document.getElementById('dcaDayLabel');
-            const dayField = document.getElementById('dcaDayField');
-            const amountInput = document.getElementById('dcaAmount');
-            const rangeSelect = document.getElementById('dcaRange');
             const runBtn = document.getElementById('dcaRunBtn');
 
-            function populateDays(freq) {{
-                daySelect.innerHTML = '';
-                if (freq === 'daily') {{
-                    dayField.style.display = 'none';
-                }} else if (freq === 'weekly' || freq === 'biweekly') {{
-                    dayField.style.display = 'flex';
-                    dayLabel.textContent = freq === 'weekly' ? '扣款日 (每周几)' : '扣款日 (每两周周几)';
-                    const weeks = ['周一', '周二', '周三', '周四', '周五'];
-                    weeks.forEach((w, i) => {{
-                        const opt = document.createElement('option');
-                        opt.value = i + 1; // 1 to 5
-                        opt.textContent = w;
-                        if (i === 0) opt.selected = true;
-                        daySelect.appendChild(opt);
-                    }});
-                }} else {{
-                    dayField.style.display = 'flex';
-                    dayLabel.textContent = '扣款日 (每月几号)';
-                    for (let i = 1; i <= 28; i++) {{
-                        const opt = document.createElement('option');
-                        opt.value = i;
-                        opt.textContent = i + ' 号';
-                        if (i === 1) opt.selected = true;
-                        daySelect.appendChild(opt);
-                    }}
-                }}
-            }}
+            buildDayOptions('dcaFreq', 'dcaDaySelect', 'dcaDayLabel');
+            freqSelect.addEventListener('change', () => buildDayOptions('dcaFreq', 'dcaDaySelect', 'dcaDayLabel'));
 
-            populateDays('monthly');
+            // 全局表单事件绑定
+            buildDayOptions('gDcaFreq', 'gDcaDaySelect', null);
+            document.getElementById('gDcaFreq').addEventListener('change', () => buildDayOptions('gDcaFreq', 'gDcaDaySelect', null));
+            document.getElementById('gDcaApplyBtn').addEventListener('click', updateTableDca);
 
-            freqSelect.addEventListener('change', function() {{
-                populateDays(this.value);
-            }});
-
-            // 打开弹窗
             window.openDcaModal = function(code) {{
                 currentDcaCode = code;
                 const name = fundNames[code] || code;
                 modalTitle.textContent = `📊 定投测算: [${{code}}] ${{name}}`;
                 modal.classList.add('show');
-                runBacktest();
+                runBacktestModal();
             }};
 
-            closeBtn.addEventListener('click', function() {{
-                modal.classList.remove('show');
-            }});
+            closeBtn.addEventListener('click', () => modal.classList.remove('show'));
+            modal.addEventListener('click', (e) => {{ if (e.target === modal) modal.classList.remove('show'); }});
+            runBtn.addEventListener('click', runBacktestModal);
 
-            modal.addEventListener('click', function(e) {{
-                if (e.target === modal) modal.classList.remove('show');
-            }});
-
-            runBtn.addEventListener('click', runBacktest);
-
-            function runBacktest() {{
-                if (!currentDcaCode || !fundNavData[currentDcaCode]) return;
-                const raw = fundNavData[currentDcaCode];
-                if (!raw.dates || raw.dates.length < 2) return;
-
+            function runBacktestModal() {{
+                if (!currentDcaCode) return;
                 const freq = freqSelect.value;
-                const targetDay = parseInt(daySelect.value) || 1;
-                const perAmount = parseFloat(amountInput.value) || 1000;
-                const range = rangeSelect.value;
+                const targetDay = parseInt(document.getElementById('dcaDaySelect').value) || 1;
+                const perAmount = parseFloat(document.getElementById('dcaAmount').value) || 1000;
+                const range = document.getElementById('dcaRange').value;
 
-                // 筛选回测时间区间
-                const allDates = raw.dates;
-                const allNavs = raw.navs;
-                const latestDate = new Date(allDates[allDates.length - 1]);
-                let startDate = new Date(latestDate);
+                const res = computeDCA(currentDcaCode, freq, targetDay, perAmount, range);
+                if (!res) return;
 
-                if (range === 'half') {{
-                    startDate.setMonth(latestDate.getMonth() - 6);
-                }} else if (range === 'year') {{
-                    startDate.setFullYear(latestDate.getFullYear() - 1);
-                }} else if (range === 'ytd') {{
-                    startDate = new Date(latestDate.getFullYear(), 0, 1);
-                }} else {{
-                    startDate = new Date(allDates[0]);
-                }}
-
-                const filtered = [];
-                for (let i = 0; i < allDates.length; i++) {{
-                    const d = new Date(allDates[i]);
-                    if (d >= startDate) {{
-                        filtered.push({{ date: allDates[i], dt: d, nav: allNavs[i] }});
-                    }}
-                }}
-
-                if (filtered.length < 2) return;
-
-                // 模拟扣款执行
-                let totalInvest = 0;
-                let totalShares = 0;
-                let investCount = 0;
-                let lastInvestKey = '';
-
-                const timelineDates = [];
-                const timelineCost = [];
-                const timelineValue = [];
-
-                filtered.forEach(item => {{
-                    let shouldBuy = false;
-                    const dayOfWeek = item.dt.getDay(); // 0 is Sun, 1-5 Mon-Fri
-                    const dayOfMonth = item.dt.getDate();
-
-                    if (freq === 'daily') {{
-                        shouldBuy = true;
-                    }} else if (freq === 'weekly') {{
-                        const oneJan = new Date(item.dt.getFullYear(), 0, 1);
-                        const weekNum = Math.ceil((((item.dt - oneJan) / 86400000) + oneJan.getDay() + 1) / 7);
-                        const weekKey = `${{item.dt.getFullYear()}}-W${{weekNum}}`;
-                        if (dayOfWeek >= targetDay && lastInvestKey !== weekKey) {{
-                            shouldBuy = true;
-                            lastInvestKey = weekKey;
-                        }}
-                    }} else if (freq === 'biweekly') {{
-                        const oneJan = new Date(item.dt.getFullYear(), 0, 1);
-                        const weekNum = Math.ceil((((item.dt - oneJan) / 86400000) + oneJan.getDay() + 1) / 7);
-                        const biweekBlock = Math.floor(weekNum / 2);
-                        const biweekKey = `${{item.dt.getFullYear()}}-BW${{biweekBlock}}`;
-                        if (dayOfWeek >= targetDay && lastInvestKey !== biweekKey) {{
-                            shouldBuy = true;
-                            lastInvestKey = biweekKey;
-                        }}
-                    }} else {{
-                        const monthKey = `${{item.dt.getFullYear()}}-${{item.dt.getMonth() + 1}}`;
-                        if (dayOfMonth >= targetDay && lastInvestKey !== monthKey) {{
-                            shouldBuy = true;
-                            lastInvestKey = monthKey;
-                        }}
-                    }}
-
-                    if (shouldBuy) {{
-                        const buyShares = perAmount / item.nav;
-                        totalShares += buyShares;
-                        totalInvest += perAmount;
-                        investCount++;
-                    }}
-
-                    const currentVal = totalShares * item.nav;
-                    timelineDates.push(item.date);
-                    timelineCost.push(Number(totalInvest.toFixed(2)));
-                    timelineValue.push(Number(currentVal.toFixed(2)));
-                }});
-
-                const latestItem = filtered[filtered.length - 1];
-                const finalAsset = totalShares * latestItem.nav;
-                const profit = finalAsset - totalInvest;
-                const returnRate = totalInvest > 0 ? (profit / totalInvest) * 100 : 0;
-                const avgPrice = totalShares > 0 ? totalInvest / totalShares : 0;
-
-                // 渲染结果面板
-                document.getElementById('resTotalInvest').innerHTML = `${{investCount}} 期 / <strong>${{totalInvest.toLocaleString()}}</strong> 元`;
-                document.getElementById('resTotalAsset').innerHTML = `<strong>${{finalAsset.toFixed(2)}}</strong> 元`;
+                document.getElementById('resTotalInvest').innerHTML = `${{res.investCount}} 期 / <strong>${{res.totalInvest.toLocaleString()}}</strong> 元`;
+                document.getElementById('resTotalAsset').innerHTML = `<strong>${{res.finalAsset.toFixed(2)}}</strong> 元`;
                 
                 const profitElem = document.getElementById('resProfit');
-                profitElem.textContent = `${{profit >= 0 ? '+' : ''}}${{profit.toFixed(2)}}`;
-                profitElem.style.color = profit >= 0 ? '#d93025' : '#188038';
+                profitElem.textContent = `${{res.profit >= 0 ? '+' : ''}}${{res.profit.toFixed(2)}}`;
+                profitElem.style.color = res.profit >= 0 ? '#d93025' : '#188038';
 
                 const rateElem = document.getElementById('resReturnRate');
-                rateElem.textContent = `${{returnRate >= 0 ? '+' : ''}}${{returnRate.toFixed(2)}}%`;
-                rateElem.style.color = returnRate >= 0 ? '#d93025' : '#188038';
+                rateElem.textContent = `${{res.returnRate >= 0 ? '+' : ''}}${{res.returnRate.toFixed(2)}}%`;
+                rateElem.style.color = res.returnRate >= 0 ? '#d93025' : '#188038';
 
-                document.getElementById('resAvgPrice').innerHTML = `${{avgPrice.toFixed(4)}} / ${{latestItem.nav.toFixed(4)}}`;
+                document.getElementById('resAvgPrice').innerHTML = `${{res.avgPrice.toFixed(4)}} / ${{res.latestNav.toFixed(4)}}`;
 
-                // 绘制/刷新曲线
                 const ctx = document.getElementById('dcaChart').getContext('2d');
-                if (dcaChartInstance) {{
-                    dcaChartInstance.destroy();
-                }}
+                if (dcaChartInstance) dcaChartInstance.destroy();
 
                 dcaChartInstance = new Chart(ctx, {{
                     type: 'line',
                     data: {{
-                        labels: timelineDates,
+                        labels: res.timelineDates,
                         datasets: [
-                            {{
-                                label: '总资产 (元)',
-                                data: timelineValue,
-                                borderColor: '#1a73e8',
-                                backgroundColor: 'rgba(26, 115, 232, 0.08)',
-                                fill: true,
-                                pointRadius: 0,
-                                borderWidth: 2,
-                                tension: 0.1
-                            }},
-                            {{
-                                label: '累计本金 (元)',
-                                data: timelineCost,
-                                borderColor: '#e67e22',
-                                borderDash: [4, 4],
-                                pointRadius: 0,
-                                borderWidth: 1.5,
-                                fill: false
-                            }}
+                            {{ label: '总资产 (元)', data: res.timelineValue, borderColor: '#1a73e8', backgroundColor: 'rgba(26, 115, 232, 0.08)', fill: true, pointRadius: 0, borderWidth: 2, tension: 0.1 }},
+                            {{ label: '累计本金 (元)', data: res.timelineCost, borderColor: '#e67e22', borderDash: [4, 4], pointRadius: 0, borderWidth: 1.5, fill: false }}
                         ]
                     }},
                     options: {{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        interaction: {{ mode: 'index', intersect: false }},
-                        plugins: {{
-                            legend: {{
-                                display: true,
-                                position: 'top',
-                                labels: {{ font: {{ size: 10 }}, boxWidth: 12 }}
-                            }},
-                            tooltip: {{
-                                callbacks: {{
-                                    label: function(ctx) {{
-                                        return `${{ctx.dataset.label}}: ${{Number(ctx.parsed.y).toLocaleString()}} 元`;
-                                    }}
-                                }}
-                            }}
-                        }},
+                        responsive: true, maintainAspectRatio: false, interaction: {{ mode: 'index', intersect: false }},
+                        plugins: {{ legend: {{ display: true, position: 'top', labels: {{ font: {{ size: 10 }}, boxWidth: 12 }} }} }},
                         scales: {{
-                            x: {{
-                                ticks: {{ maxTicksLimit: 8, font: {{ size: 9 }} }},
-                                grid: {{ display: false }}
-                            }},
-                            y: {{
-                                ticks: {{ font: {{ size: 9 }} }},
-                                grid: {{ color: 'rgba(0,0,0,0.05)' }}
-                            }}
+                            x: {{ ticks: {{ maxTicksLimit: 8, font: {{ size: 9 }} }}, grid: {{ display: false }} }},
+                            y: {{ ticks: {{ font: {{ size: 9 }} }}, grid: {{ color: 'rgba(0,0,0,0.05)' }} }}
                         }}
                     }}
                 }});
@@ -2180,6 +2255,10 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             const allRows = document.querySelectorAll('#fundTable tbody tr:not(#empty-row)');
             let currentGroup = 'all';
             let searchKeyword = '';
+            
+            // 初次加载计算定投数据
+            updateTableDca();
+
             function applyFilters() {{
                 let hasVisible = false;
                 const keyword = searchKeyword.trim().toLowerCase();
@@ -2462,49 +2541,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             }});
         }});
 
-        document.addEventListener("DOMContentLoaded", function () {{
-            const table = document.getElementById("fundTable");
-            const headers = table.querySelectorAll("th");
-            headers.forEach((th, idx) => {{
-                th.addEventListener("click", function(e) {{
-                    if (th.classList.contains("is-resizing") || window._isDragging) return;
-                    sortTable(idx);
-                }});
-                const resizer = document.createElement("div");
-                resizer.classList.add("resizer");
-                th.appendChild(resizer);
-                let x = 0, w = 0;
-                resizer.addEventListener("mousedown", function (e) {{
-                    e.preventDefault();
-                    e.stopPropagation();
-                    window._isDragging = true;
-                    x = e.clientX;
-                    w = th.getBoundingClientRect().width;
-                    th.style.width = w + "px";
-                    th.classList.add("resizing");
-                    th.classList.add("is-resizing");
-                    function mouseMoveHandler(e) {{
-                        const dx = e.clientX - x;
-                        const newWidth = Math.max(40, w + dx);
-                        th.style.width = newWidth + "px";
-                    }}
-                    function mouseUpHandler(e) {{
-                        th.classList.remove("resizing");
-                        document.removeEventListener("mousemove", mouseMoveHandler);
-                        document.removeEventListener("mouseup", mouseUpHandler);
-                        const finalWidth = th.getBoundingClientRect().width;
-                        th.style.width = finalWidth + "px";
-                        setTimeout(() => {{
-                            window._isDragging = false;
-                            th.classList.remove("is-resizing");
-                        }}, 50);
-                    }}
-                    document.addEventListener("mousemove", mouseMoveHandler);
-                    document.addEventListener("mouseup", mouseUpHandler);
-                }});
-            }});
-        }});
-
         let currentSortCol = -1;
         let isAscending = true;
 
@@ -2570,6 +2606,46 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                 }}
             }});
         }}
+
+        // Resizer logic
+        document.addEventListener("DOMContentLoaded", function () {{
+            const table = document.getElementById("fundTable");
+            const headers = table.querySelectorAll("th");
+            headers.forEach((th, idx) => {{
+                const resizer = document.createElement("div");
+                resizer.classList.add("resizer");
+                th.appendChild(resizer);
+                let x = 0, w = 0;
+                resizer.addEventListener("mousedown", function (e) {{
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window._isDragging = true;
+                    x = e.clientX;
+                    w = th.getBoundingClientRect().width;
+                    th.style.width = w + "px";
+                    th.classList.add("resizing");
+                    th.classList.add("is-resizing");
+                    function mouseMoveHandler(e) {{
+                        const dx = e.clientX - x;
+                        const newWidth = Math.max(40, w + dx);
+                        th.style.width = newWidth + "px";
+                    }}
+                    function mouseUpHandler(e) {{
+                        th.classList.remove("resizing");
+                        document.removeEventListener("mousemove", mouseMoveHandler);
+                        document.removeEventListener("mouseup", mouseUpHandler);
+                        const finalWidth = th.getBoundingClientRect().width;
+                        th.style.width = finalWidth + "px";
+                        setTimeout(() => {{
+                            window._isDragging = false;
+                            th.classList.remove("is-resizing");
+                        }}, 50);
+                    }}
+                    document.addEventListener("mousemove", mouseMoveHandler);
+                    document.addEventListener("mouseup", mouseUpHandler);
+                }});
+            }});
+        }});
     </script>
 </body>
 </html>
