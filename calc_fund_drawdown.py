@@ -59,7 +59,7 @@ QDII_CODES = {
     "019155", "016668", "501225", "015202", "001668", "000043", "007280", "019449"
 }
 
-# ============= 指数定义 =============
+# 指数定义
 INDEX_SYMBOLS = ["NDX", "SPX", "SOXX", "SOXL"]
 INDEX_NAMES = {
     "NDX": "纳斯达克100指数",
@@ -73,7 +73,6 @@ SINA_INDEX_MAP = {
     "NDX": ".NDX",
     "SPX": ".INX",
 }
-# ====================================
 
 CACHE_DIR = "cache"
 HOLDINGS_CACHE_DIR = os.path.join(CACHE_DIR, "holdings")
@@ -89,7 +88,6 @@ def get_direct_opener():
 
 def fetch_holdings(opener, code):
     """获取基金前十大持仓（最近四个季度）"""
-    print(f"\n[DEBUG] 开始获取基金 {code} 的持仓数据")
     cache_file = os.path.join(HOLDINGS_CACHE_DIR, f"{code}_holdings.json")
 
     if os.path.exists(cache_file):
@@ -98,18 +96,15 @@ def fetch_holdings(opener, code):
                 data = json.load(f)
             if isinstance(data, list) and len(data) >= 2 and 'date' in data[0]:
                 if any(len(p['holdings']) > 0 for p in data):
-                    print(f"[DEBUG] 使用缓存数据，共 {len(data)} 个报告期")
                     return data
                 else:
-                    print("[DEBUG] 缓存数据为空，重新获取")
                     os.remove(cache_file)
         except Exception:
             try:
                 os.remove(cache_file)
-            except:
+            except Exception:
                 pass
 
-    print("[DEBUG] 尝试使用 akshare 获取多年度数据...")
     try:
         current_year = datetime.now().year
         years = [str(current_year - i) for i in range(3)]
@@ -119,9 +114,8 @@ def fetch_holdings(opener, code):
                 df = ak.fund_portfolio_hold_em(symbol=code, date=year)
                 if df is not None and not df.empty:
                     all_dfs.append(df)
-                    print(f"[DEBUG] 获取 {year} 年数据成功，行数: {len(df)}")
-            except Exception as e:
-                print(f"[DEBUG] akshare {year} 年失败: {e}")
+            except Exception:
+                pass
 
         if all_dfs:
             combined = pd.concat(all_dfs, ignore_index=True)
@@ -138,7 +132,6 @@ def fetch_holdings(opener, code):
                             lambda x: f"{x[:4]}Q{(int(x[5:7])-1)//3 + 1}" if isinstance(x, str) and len(x)>=7 else None
                         )
                     else:
-                        print("[DEBUG] 无法确定季度列，akshare 数据无效")
                         raise ValueError("缺少季度信息")
 
             quarters = sorted(combined['季度'].unique(), reverse=True)[:4]
@@ -166,12 +159,11 @@ def fetch_holdings(opener, code):
                         holdings.append({'name': name, 'ratio': round(ratio, 2)})
                 result.append({'date': q, 'holdings': holdings})
             if result:
-                print(f"[DEBUG] akshare 获取成功，共 {len(result)} 个季度")
                 with open(cache_file, 'w', encoding='utf-8') as f:
                     json.dump(result, f, ensure_ascii=False, indent=2)
                 return result
-    except Exception as e:
-        print(f"[DEBUG] akshare 主方法失败: {e}")
+    except Exception:
+        pass
 
     return []
 
@@ -486,15 +478,13 @@ def analyze_fund_metrics(valid_data, end_date, cutoff_date, is_qdii=False):
     latest_nav = data_all[-1]["nav"]
     latest_date = data_all[-1]["date"]
 
-    # ==================== 优化点：今日涨幅逻辑（支持周末回溯周五） ====================
     now = datetime.now()
     today_str = now.strftime("%Y-%m-%d")
-    weekday = now.weekday()  # 0=周一, 4=周五, 5=周六, 6=周日
+    weekday = now.weekday()
 
-    # 计算最近的一个工作日（如果是周末，则回溯到周五）
-    if weekday == 5:  # 周六
+    if weekday == 5:
         target_friday = (now - timedelta(days=1)).strftime("%Y-%m-%d")
-    elif weekday == 6:  # 周日
+    elif weekday == 6:
         target_friday = (now - timedelta(days=2)).strftime("%Y-%m-%d")
     else:
         target_friday = today_str
@@ -503,15 +493,11 @@ def analyze_fund_metrics(valid_data, end_date, cutoff_date, is_qdii=False):
     today_gain = None
 
     if is_qdii:
-        # QDII 基金：由于时差和披露延迟，直接显示最新更新的相对涨跌幅
         if len(data_all) >= 2:
             prev_nav = data_all[-2]["nav"]
             if prev_nav and prev_nav > 0:
                 today_gain = ((latest_nav / prev_nav) - 1) * 100.0
     else:
-        # 非 QDII / 指数：
-        # 如果是周末，只要最新数据在周五或以前，并且有历史点位，则展示该最新交易日（周五）的涨跌幅；
-        # 如果是工作日，若当天已更新或最新日期匹配当天，则正常计算。
         if is_weekend:
             if len(data_all) >= 2 and latest_date <= target_friday:
                 prev_nav = data_all[-2]["nav"]
@@ -523,11 +509,9 @@ def analyze_fund_metrics(valid_data, end_date, cutoff_date, is_qdii=False):
                 if prev_nav and prev_nav > 0:
                     today_gain = ((latest_nav / prev_nav) - 1) * 100.0
             elif len(data_all) >= 2:
-                # 兜底支持最新已有数据计算
                 prev_nav = data_all[-2]["nav"]
                 if prev_nav and prev_nav > 0:
                     today_gain = ((latest_nav / prev_nav) - 1) * 100.0
-    # =================================================================================
 
     max_drawdown = 0.0
     peak_nav = data_cutoff[0]["nav"]
@@ -653,7 +637,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             month = int(month)
             quarter = (month - 1) // 3 + 1
             return f"{year}Q{quarter}"
-        except:
+        except Exception:
             return date_str
 
     def quarter_to_end_date(date_str):
@@ -942,8 +926,10 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         </div>
         """
 
-    # 如果是周末，在表头清晰提示以周五为基准
     now_dt = datetime.now()
+    # 生成精确到分钟的更新时间
+    update_time_str = now_dt.strftime("%Y-%m-%d %H:%M")
+
     if now_dt.weekday() == 5:
         fri_dt = (now_dt - timedelta(days=1)).strftime("%Y-%m-%d")
         col_today_title = f"今日涨幅 (基准周五: {fri_dt})"
@@ -1008,21 +994,22 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             background-color: var(--bg);
             color: var(--text);
             margin: 0; 
-            padding: 16px 24px; 
+            padding: 14px 20px; 
             height: 100vh;
             overflow: hidden;
             display: flex;
             flex-direction: column;
             justify-content: flex-start;
+            box-sizing: border-box;
             transition: background-color 0.3s, color 0.3s;
         }}
         .top-wrapper {{
             display:grid;
             grid-template-columns:minmax(0, 1fr) minmax(0, 1fr);
-            gap:16px;
-            height:238px;
-            flex:0 0 238px;
-            margin-bottom:14px;
+            gap:14px;
+            height:220px;
+            flex:0 0 220px;
+            margin-bottom:10px;
             min-height:0;
         }}
         .top-left, .top-right {{
@@ -1035,16 +1022,16 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             box-sizing:border-box;
         }}
         .top-left {{
-            padding:14px 16px;
+            padding:12px 14px;
             display:flex;
             flex-direction:column;
             overflow:hidden;
         }}
         .top-right {{
-            padding:14px;
+            padding:12px;
             display:flex;
             flex-direction:column;
-            gap:10px;
+            gap:8px;
             overflow:hidden;
         }}
         .theme-toggle {{
@@ -1053,46 +1040,47 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             color:var(--text);
             border:1px solid var(--border);
             border-radius:18px;
-            padding:4px 12px;
-            font-size:12px;
+            padding:3px 10px;
+            font-size:11px;
             cursor:pointer;
             flex:0 0 auto;
         }}
         .theme-toggle:hover {{ opacity:0.82; }}
-        .header {{ text-align:left; margin:0 0 8px 0; }}
+        .header {{ text-align:left; margin:0 0 6px 0; }}
         .header-top {{
             display:flex;
             align-items:center;
-            margin-bottom:3px;
+            margin-bottom:2px;
         }}
         .header-top h2 {{
             color:#1a73e8;
             margin:0;
-            font-size:20px;
-            line-height:1.25;
+            font-size:18px;
+            line-height:1.2;
         }}
-        .header p {{ color:var(--footer-text); font-size:11px; margin:2px 0; line-height:1.35; }}
+        .header p {{ color:var(--footer-text); font-size:11px; margin:2px 0; line-height:1.3; }}
         .header-info {{
             border:1px solid #e3e7eb;
-            border-radius:8px;
+            border-radius:6px;
             background:var(--hover-bg);
-            padding:7px 10px;
-            margin-bottom:8px;
+            padding:5px 8px;
+            margin-bottom:6px;
             overflow:hidden;
+            font-size:11px;
         }}
-        .header-info p {{ margin:2px 0; }}
+        .header-info p {{ margin:1px 0; }}
         .group-tabs {{
             display:grid;
-            grid-template-columns:minmax(0,1fr) 250px;
-            gap:10px;
+            grid-template-columns:minmax(0,1fr) 230px;
+            gap:8px;
             align-items:center;
             margin-top:auto;
-            min-height:42px;
+            min-height:36px;
         }}
         .group-buttons {{
             display:flex;
             flex-wrap:wrap;
-            gap:6px;
+            gap:5px;
             align-content:center;
             min-width:0;
         }}
@@ -1100,9 +1088,9 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             background:var(--btn-bg);
             color:var(--btn-text);
             border:1px solid var(--border);
-            border-radius:18px;
-            padding:4px 12px;
-            font-size:12px;
+            border-radius:16px;
+            padding:3px 10px;
+            font-size:11px;
             cursor:pointer;
             transition:all .2s;
             font-weight:500;
@@ -1121,13 +1109,13 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         .search-container input {{
             width:100%;
             max-width:none;
-            height:34px;
-            padding:5px 13px;
-            border-radius:18px;
+            height:30px;
+            padding:4px 12px;
+            border-radius:16px;
             border:1px solid #35a853;
             background:var(--input-bg);
             color:var(--text);
-            font-size:13px;
+            font-size:12px;
             outline:none;
             box-sizing:border-box;
             box-shadow:0 0 0 2px rgba(52,168,83,.08);
@@ -1137,17 +1125,17 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         .friend-cards-wrapper {{
             display:grid;
             grid-template-columns:repeat(3,minmax(0,1fr));
-            gap:9px;
+            gap:8px;
             width:100%;
             min-height:0;
             flex:1;
         }}
         .friend-card {{
             min-width:0;
-            min-height:70px;
+            min-height:64px;
             background:var(--card-bg);
-            border-radius:8px;
-            padding:10px 11px;
+            border-radius:6px;
+            padding:8px 10px;
             box-shadow:var(--card-shadow);
             border:1px solid var(--border);
             box-sizing:border-box;
@@ -1162,7 +1150,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             color:var(--link-color);
             text-decoration:none;
             font-weight:650;
-            font-size:14px;
+            font-size:13px;
             display:block;
             white-space:nowrap;
             overflow:hidden;
@@ -1170,11 +1158,11 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         }}
         .friend-card a:hover {{ text-decoration:underline; }}
         .friend-card .friend-desc {{
-            font-size:11px;
+            font-size:10px;
             color:var(--footer-text);
             display:block;
-            margin-top:4px;
-            line-height:1.35;
+            margin-top:3px;
+            line-height:1.3;
             display:-webkit-box;
             -webkit-line-clamp:2;
             -webkit-box-orient:vertical;
@@ -1182,22 +1170,23 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         }}
         .table-container {{ 
             width:100%; 
-            height: calc(100vh - 286px); 
+            height: calc(100vh - 315px); 
             overflow-y: auto; 
             overflow-x: scroll; 
             box-sizing:border-box; 
             background: var(--table-bg);
             border-radius:12px; 
             box-shadow:0 4px 15px rgba(0,0,0,0.08); 
-            padding:12px; 
+            padding:10px; 
             border:1px solid var(--border);
             flex: 1 1 auto;
             min-height: 0;
+            margin-bottom: 8px;
             transition: background 0.3s, border-color 0.3s;
         }}
         .table-container::-webkit-scrollbar {{
-            height: 14px;
-            width: 10px;
+            height: 12px;
+            width: 8px;
         }}
         .table-container::-webkit-scrollbar-track {{
             background: var(--progress-track);
@@ -1270,8 +1259,8 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             word-break: keep-all;
             overflow-wrap: anywhere;
             line-height: 1.25;
-            height: 46px;
-            min-height: 46px;
+            height: 42px;
+            min-height: 42px;
             vertical-align: middle;
             position: relative; 
         }}
@@ -1519,19 +1508,41 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             }}
             .search-container input {{ max-width: 100%; }}
         }}
+        
+        /* 底部信息栏：两端对齐，左侧说明 + 右侧更新时间 */
         .footer-note {{ 
-            margin-top: 4px; 
-            font-size: 12px; 
+            margin-top: 0; 
+            font-size: 11px; 
             color: var(--footer-text);
             line-height: 1.35; 
             background: var(--footer-bg);
-            padding: 7px 12px; 
+            padding: 6px 12px; 
             border-radius: 6px; 
             border: 1px solid var(--border);
             flex-shrink: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            box-sizing: border-box;
             transition: background 0.3s, color 0.3s, border-color 0.3s;
         }}
-        .footer-note p {{ margin: 2px 0; }}
+        .footer-left {{ flex: 1; min-width: 0; }}
+        .footer-left p {{ margin: 1px 0; }}
+        .footer-right {{
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--link-color);
+            background: var(--hover-bg);
+            padding: 3px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            white-space: nowrap;
+        }}
     </style>
 </head>
 <body>
@@ -1596,8 +1607,13 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         </table>
     </div>
     <div class="footer-note">
-        <p><strong>使用提示：</strong> 列宽可拖拽调整，点击表头排序。涨幅数据基于可获取的历史净值，若区间内无对应日期数据则显示“-”。<br>
-        <span style="color: #1a73e8;">👉 点击基金行可展开/收起持仓与净值走势图；左半边三个季度持仓等宽排列，鼠标进入走势图显示十字线、时间、净值和区间涨幅。每个季度标题右侧显示「截止至：YYYY-MM-DD」，底部显示「前十大合计」占比。</span></p>
+        <div class="footer-left">
+            <p><strong>使用提示：</strong> 列宽可拖拽调整，点击表头排序。涨幅数据基于可获取的历史净值，若区间内无对应日期数据则显示“-”。</p>
+            <p><span style="color: #1a73e8;">👉 点击基金行可展开/收起持仓与净值走势图；左半边三个季度持仓等宽排列，鼠标进入走势图显示十字线、时间、净值和区间涨幅。</span></p>
+        </div>
+        <div class="footer-right" title="静态页面生成与更新时间">
+            <span>⏱️ 数据更新于: <strong>{update_time_str}</strong></span>
+        </div>
     </div>
     <script>
         var fundNavData = {json.dumps(nav_data_json, ensure_ascii=False)};
@@ -1814,6 +1830,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                                 }},
                                 label: function(context) {{
                                     const values = context.dataset.data;
+                                    const index = context.dataIndex;
                                     const value = Number(context.parsed.y);
                                     const firstValue = Number(values[0]);
                                     if (Number.isFinite(firstValue) && firstValue !== 0) {{
@@ -2013,7 +2030,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
     return os.path.abspath(filename)
 
 def fetch_index_data(symbol, start_date, end_date):
-    """获取指数/ETF历史数据"""
     df = None
     close_col = None
     date_col = None
@@ -2021,7 +2037,6 @@ def fetch_index_data(symbol, start_date, end_date):
     try:
         if symbol in SINA_INDEX_MAP:
             sina_symbol = SINA_INDEX_MAP[symbol]
-            print(f"[指数] 尝试 ak.index_us_stock_sina(symbol='{sina_symbol}') ...")
             df = ak.index_us_stock_sina(symbol=sina_symbol)
             if df is not None and not df.empty:
                 date_col = 'date' if 'date' in df.columns else df.columns[0]
@@ -2035,7 +2050,6 @@ def fetch_index_data(symbol, start_date, end_date):
                     close_col = df.columns[4] if len(df.columns) > 4 else df.columns[-1]
 
         elif symbol == "SOXL":
-            print(f"[指数] 尝试获取 SOXL (ETF) ...")
             for try_symbol in ["105.SOXL", "SOXL", "106.SOXL"]:
                 try:
                     df = ak.stock_us_hist(
@@ -2046,16 +2060,14 @@ def fetch_index_data(symbol, start_date, end_date):
                         adjust=""
                     )
                     if df is not None and not df.empty:
-                        print(f"[指数] SOXL 使用 stock_us_hist({try_symbol}) 成功")
                         break
                 except Exception:
                     continue
             if df is None or df.empty:
                 try:
                     df = ak.stock_us_daily(symbol="SOXL", adjust="")
-                    print("[指数] SOXL 使用 stock_us_daily 成功")
-                except Exception as e:
-                    print(f"[指数] SOXL stock_us_daily 失败: {e}")
+                except Exception:
+                    pass
 
             if df is not None and not df.empty:
                 date_col = '日期' if '日期' in df.columns else ('date' if 'date' in df.columns else df.columns[0])
@@ -2067,7 +2079,6 @@ def fetch_index_data(symbol, start_date, end_date):
                             break
 
         elif symbol == "SOXX":
-            print(f"[指数] 尝试获取 SOXX (iShares 半导体ETF) ...")
             for try_symbol in ["105.SOXX", "SOXX", "106.SOXX"]:
                 try:
                     df = ak.stock_us_hist(
@@ -2078,16 +2089,14 @@ def fetch_index_data(symbol, start_date, end_date):
                         adjust=""
                     )
                     if df is not None and not df.empty:
-                        print(f"[指数] SOXX 使用 stock_us_hist({try_symbol}) 成功")
                         break
                 except Exception:
                     continue
             if df is None or df.empty:
                 try:
                     df = ak.stock_us_daily(symbol="SOXX", adjust="")
-                    print("[指数] SOXX 使用 stock_us_daily 成功")
-                except Exception as e:
-                    print(f"[指数] SOXX stock_us_daily 失败: {e}")
+                except Exception:
+                    pass
 
             if df is not None and not df.empty:
                 date_col = '日期' if '日期' in df.columns else ('date' if 'date' in df.columns else df.columns[0])
@@ -2099,7 +2108,6 @@ def fetch_index_data(symbol, start_date, end_date):
                             break
 
         if df is None or df.empty:
-            print(f"[指数] {symbol} 无有效数据返回")
             return None
 
         df = df.copy()
@@ -2111,7 +2119,6 @@ def fetch_index_data(symbol, start_date, end_date):
         df = df.loc[mask].sort_values('date_str')
 
         if df.empty:
-            print(f"[指数] {symbol} 在 {start_date} ~ {end_date} 无数据")
             return None
 
         data = []
@@ -2124,14 +2131,11 @@ def fetch_index_data(symbol, start_date, end_date):
                 continue
 
         if not data:
-            print(f"[指数] {symbol} 转换后无有效数据点")
             return None
 
-        print(f"[指数] {symbol} 成功获取 {len(data)} 个数据点")
         return data
 
-    except Exception as e:
-        print(f"[指数] {symbol} 获取过程异常: {e}")
+    except Exception:
         return None
 
 def main():
