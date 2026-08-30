@@ -23,14 +23,14 @@ DEFAULT_FUNDS = [
     "017730", "016665", "016664", "018230", "018229", "021277", "270023", "005698",
     "024239", "501312", "017204", "017654", "017653", "022184", "100055", "017437",
     "017436", "017145", "017144", "016702", "016701", "016823", "164212", "019156",
-    "019155", "016668", "501225", "015202", "001668", "000043",
+    "019155", "016668", "501225", "015202", "001668", "000043", "007280", "019449",
     # CPO 组
     "022365", "540010", "002112", "011892", "021528",
     "009645", "011370", "011452", "016371", "001956",
     "016234", "016173", "006616", "018291", "020661",
-    "017462", "001438", "008984", "180031", "004320",
+    "017462", "001438", "008984", "180031", "004320", "027063",
     # 存储芯片组
-    "025500", "025209", "018816", "014320", "027063",
+    "025500", "025209", "018816", "014320",
     # 半导体材料设备组
     "024418", "024975", "020640", "019633", "024424",
     "017811", "013841", "007491", "020629", "017747",
@@ -49,14 +49,14 @@ DEFAULT_FUNDS = [
     "004233", "008182", "017968", "024648"
 ]
 
-# QDII 基金代码集合（用于判断是否为 QDII）
+# QDII 基金代码集合
 QDII_CODES = {
     "002891", "014002", "006555", "012922", "012920", "021662", "457001", "539002",
     "018147", "021842", "006373", "018036", "501226", "008254", "008253", "017731",
     "017730", "016665", "016664", "018230", "018229", "021277", "270023", "005698",
     "024239", "501312", "017204", "017654", "017653", "022184", "100055", "017437",
     "017436", "017145", "017144", "016702", "016701", "016823", "164212", "019156",
-    "019155", "016668", "501225", "015202", "001668", "000043"
+    "019155", "016668", "501225", "015202", "001668", "000043", "007280", "019449"
 }
 
 # ============= 指数定义 =============
@@ -69,19 +69,16 @@ INDEX_NAMES = {
 }
 INDEX_SET = set(INDEX_SYMBOLS)
 
-# 新浪接口对应的符号映射（仅支持 .NDX / .INX / .DJI / .IXIC）
 SINA_INDEX_MAP = {
     "NDX": ".NDX",
     "SPX": ".INX",
-    # SOXX 和 SOXL 不在新浪美股指数接口中，后面单独处理
 }
-# =========================================
+# ====================================
 
 CACHE_DIR = "cache"
 HOLDINGS_CACHE_DIR = os.path.join(CACHE_DIR, "holdings")
 NAV_CACHE_DIR = os.path.join(CACHE_DIR, "nav")
 
-# 创建缓存目录
 os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(HOLDINGS_CACHE_DIR, exist_ok=True)
 os.makedirs(NAV_CACHE_DIR, exist_ok=True)
@@ -90,55 +87,11 @@ def get_direct_opener():
     proxy_handler = urllib.request.ProxyHandler({})
     return urllib.request.build_opener(proxy_handler)
 
-def extract_holdings_from_df(df):
-    """从DataFrame提取持仓列表（名称+比例）备用"""
-    if df is None or df.empty:
-        return []
-    ratio_col = None
-    for col in df.columns:
-        if '占净值比例' in col or '比例' in col:
-            ratio_col = col
-            break
-    if ratio_col is None:
-        for col in df.columns:
-            if df[col].dtype in ['float64', 'int64'] and '代码' not in col:
-                ratio_col = col
-                break
-    if ratio_col:
-        df = df.sort_values(by=ratio_col, ascending=False)
-    top10 = df.head(10)
-    holdings = []
-    name_col = None
-    for col in df.columns:
-        if '股票名称' in col or '名称' in col or '证券简称' in col:
-            name_col = col
-            break
-    if name_col is None:
-        for col in df.columns:
-            if df[col].dtype == 'object':
-                name_col = col
-                break
-    if name_col is None:
-        name_col = df.columns[0]
-    for _, row in top10.iterrows():
-        name = str(row[name_col]) if pd.notna(row[name_col]) else ''
-        ratio = 0.0
-        if ratio_col:
-            ratio = float(row[ratio_col]) if pd.notna(row[ratio_col]) else 0.0
-        if name and name not in ['nan', 'None', '']:
-            holdings.append({'name': name, 'ratio': ratio})
-    return holdings
-
 def fetch_holdings(opener, code):
-    """
-    获取基金前十大持仓（最近四个季度），优先使用 akshare 多年度数据，
-    失败时降级到原有 API/akshare 方法。
-    返回格式: [{"date": "2026Q2", "holdings": [{"name": "xx", "ratio": 9.9}]}]
-    """
+    """获取基金前十大持仓（最近四个季度）"""
     print(f"\n[DEBUG] 开始获取基金 {code} 的持仓数据")
     cache_file = os.path.join(HOLDINGS_CACHE_DIR, f"{code}_holdings.json")
 
-    # 1. 检查缓存（如果存在且有效，直接返回）
     if os.path.exists(cache_file):
         try:
             with open(cache_file, 'r', encoding='utf-8') as f:
@@ -156,7 +109,6 @@ def fetch_holdings(opener, code):
             except:
                 pass
 
-    # 2. 主要方法：使用 akshare 获取近三年所有季度数据
     print("[DEBUG] 尝试使用 akshare 获取多年度数据...")
     try:
         current_year = datetime.now().year
@@ -221,17 +173,9 @@ def fetch_holdings(opener, code):
     except Exception as e:
         print(f"[DEBUG] akshare 主方法失败: {e}")
 
-    # 3. 降级方案
-    print("[DEBUG] 降级到原有方法...")
-    try:
-        return _fetch_holdings_legacy(opener, code)
-    except NameError:
-        print("[DEBUG] 无备用函数，使用简化后备...")
-        print("[ERROR] 请将原 fetch_holdings 函数重命名为 _fetch_holdings_legacy 并保留")
-        return []
+    return []
 
 def fetch_fund_detail_meta(opener, code):
-    """全面抓取：名称、规模、运作费率（管/托/销）、申购费率（优惠后）、赎回费率、交易状态、限额、持仓"""
     meta = {
         "name": f"基金_{code}",
         "scale": "未知",
@@ -255,7 +199,6 @@ def fetch_fund_detail_meta(opener, code):
         "Accept-Language": "zh-CN,zh;q=0.9"
     }
 
-    # 1. 获取基金主页 HTML
     main_url = f"https://fund.eastmoney.com/{code}.html"
     main_html = None
     try:
@@ -307,7 +250,6 @@ def fetch_fund_detail_meta(opener, code):
                 meta["buy_limit"] = "无限额"
                 meta["buy_limit_val"] = -1
 
-    # 2. 从 pingzhongdata.js 补充
     js_url = f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
     js_content = None
     try:
@@ -370,7 +312,6 @@ def fetch_fund_detail_meta(opener, code):
             if buy_m:
                 meta["fee_purchase"] = buy_m.group(1)
 
-    # 3. 从 F10 页面补充
     f10_url = f"https://fundf10.eastmoney.com/jjfl_{code}.html"
     try:
         req = urllib.request.Request(f10_url, headers=headers)
@@ -424,7 +365,6 @@ def fetch_fund_detail_meta(opener, code):
     except Exception:
         pass
 
-    # 4. 处理缺失值
     if meta["fee_manage"] is None:
         meta["fee_manage"] = "--"
     else:
@@ -440,7 +380,6 @@ def fetch_fund_detail_meta(opener, code):
     else:
         meta["fee_sales"] = f"{float(meta['fee_sales']):.2f}%"
 
-    # 5. 计算运作费合计
     m_val = float(re.search(r'([\d.]+)', meta["fee_manage"]).group(1)) if meta["fee_manage"] != "--" else 0.0
     c_val = float(re.search(r'([\d.]+)', meta["fee_custody"]).group(1)) if meta["fee_custody"] != "--" else 0.0
     s_val = float(re.search(r'([\d.]+)', meta["fee_sales"]).group(1)) if meta["fee_sales"] != "--" else 0.0
@@ -451,13 +390,10 @@ def fetch_fund_detail_meta(opener, code):
     else:
         meta["fee_total"] = "0.00%"
 
-    # 6. 获取前十大持仓（多个季度）
     meta["holdings"] = fetch_holdings(opener, code)
-
     return meta
 
 def fetch_from_eastmoney(opener, code, start_date, end_date):
-    """获取历史净值数据（自动翻页，每页20条），带缓存"""
     cache_file = os.path.join(NAV_CACHE_DIR, f"{code}.json")
     if os.path.exists(cache_file):
         try:
@@ -550,19 +486,48 @@ def analyze_fund_metrics(valid_data, end_date, cutoff_date, is_qdii=False):
     latest_nav = data_all[-1]["nav"]
     latest_date = data_all[-1]["date"]
 
+    # ==================== 优化点：今日涨幅逻辑（支持周末回溯周五） ====================
+    now = datetime.now()
+    today_str = now.strftime("%Y-%m-%d")
+    weekday = now.weekday()  # 0=周一, 4=周五, 5=周六, 6=周日
+
+    # 计算最近的一个工作日（如果是周末，则回溯到周五）
+    if weekday == 5:  # 周六
+        target_friday = (now - timedelta(days=1)).strftime("%Y-%m-%d")
+    elif weekday == 6:  # 周日
+        target_friday = (now - timedelta(days=2)).strftime("%Y-%m-%d")
+    else:
+        target_friday = today_str
+
+    is_weekend = (weekday >= 5)
     today_gain = None
-    today_str = datetime.now().strftime("%Y-%m-%d")
 
     if is_qdii:
+        # QDII 基金：由于时差和披露延迟，直接显示最新更新的相对涨跌幅
         if len(data_all) >= 2:
             prev_nav = data_all[-2]["nav"]
             if prev_nav and prev_nav > 0:
                 today_gain = ((latest_nav / prev_nav) - 1) * 100.0
     else:
-        if latest_date == today_str and len(data_all) >= 2:
-            prev_nav = data_all[-2]["nav"]
-            if prev_nav and prev_nav > 0:
-                today_gain = ((latest_nav / prev_nav) - 1) * 100.0
+        # 非 QDII / 指数：
+        # 如果是周末，只要最新数据在周五或以前，并且有历史点位，则展示该最新交易日（周五）的涨跌幅；
+        # 如果是工作日，若当天已更新或最新日期匹配当天，则正常计算。
+        if is_weekend:
+            if len(data_all) >= 2 and latest_date <= target_friday:
+                prev_nav = data_all[-2]["nav"]
+                if prev_nav and prev_nav > 0:
+                    today_gain = ((latest_nav / prev_nav) - 1) * 100.0
+        else:
+            if latest_date == today_str and len(data_all) >= 2:
+                prev_nav = data_all[-2]["nav"]
+                if prev_nav and prev_nav > 0:
+                    today_gain = ((latest_nav / prev_nav) - 1) * 100.0
+            elif len(data_all) >= 2:
+                # 兜底支持最新已有数据计算
+                prev_nav = data_all[-2]["nav"]
+                if prev_nav and prev_nav > 0:
+                    today_gain = ((latest_nav / prev_nav) - 1) * 100.0
+    # =================================================================================
 
     max_drawdown = 0.0
     peak_nav = data_cutoff[0]["nav"]
@@ -644,11 +609,11 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         "022365", "540010", "002112", "011892", "021528",
         "009645", "011370", "011452", "016371", "001956",
         "016234", "016173", "006616", "018291", "020661",
-        "017462", "001438", "008984", "180031", "004320"
+        "017462", "001438", "008984", "180031", "004320", "027063"
     }
 
     STORAGE_CODES = {
-        "025500", "025209", "018816", "014320", "027063"
+        "025500", "025209", "018816", "014320"
     }
 
     SEMICONDUCTOR_CODES = {
@@ -676,7 +641,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
     }
 
     INDEX_SET_LOCAL = {"NDX", "SPX", "SOXX", "SOXL"}
-
     col_count = 20
 
     def date_to_label(date_str):
@@ -693,20 +657,16 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             return date_str
 
     def quarter_to_end_date(date_str):
-        """将 2026Q2 / 2026-06-30 等转换为截止日 YYYY-MM-DD"""
         if not date_str:
             return ""
-        # 已是完整日期
         if re.match(r'^\d{4}-\d{2}-\d{2}$', str(date_str)):
             return date_str
-        # 处理 2026Q2 形式
         m = re.match(r'^(\d{4})Q([1-4])$', str(date_str), re.I)
         if m:
             year = m.group(1)
             q = int(m.group(2))
             end_map = {1: "03-31", 2: "06-30", 3: "09-30", 4: "12-31"}
             return f"{year}-{end_map[q]}"
-        # 处理 2026年2季度 等中文形式（兜底）
         m2 = re.search(r'(\d{4}).*?([1-4])', str(date_str))
         if m2:
             year = m2.group(1)
@@ -844,7 +804,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         </tr>
         """
 
-        # 持仓展开行（含前十大合计 + 截止日）
         if holdings_history:
             sorted_holdings = sorted(holdings_history, key=lambda x: x['date'], reverse=True)
             display_holdings = sorted_holdings[:3]
@@ -853,8 +812,8 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                 date_str = period['date']
                 holdings_list = period['holdings']
                 label = date_to_label(date_str)
-                end_date = quarter_to_end_date(date_str)
-                end_date_html = f'<span class="quarter-end">截止至：{end_date}</span>' if end_date else ""
+                end_date_str = quarter_to_end_date(date_str)
+                end_date_html = f'<span class="quarter-end">截止至：{end_date_str}</span>' if end_date_str else ""
                 prev_period = sorted_holdings[i+1] if i+1 < len(sorted_holdings) else None
                 prev_holdings_dict = {}
                 if prev_period:
@@ -896,7 +855,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                             <span class="stock-change {change_class}">{change_text}</span>
                         </div>
                         '''
-                    # 前十大合计
                     stocks_html += f'''
                     <div class="stock-item stock-total">
                         <span class="stock-name">前十大合计</span>
@@ -983,6 +941,17 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             <span class="friend-desc">{link['desc']}</span>
         </div>
         """
+
+    # 如果是周末，在表头清晰提示以周五为基准
+    now_dt = datetime.now()
+    if now_dt.weekday() == 5:
+        fri_dt = (now_dt - timedelta(days=1)).strftime("%Y-%m-%d")
+        col_today_title = f"今日涨幅 (基准周五: {fri_dt})"
+    elif now_dt.weekday() == 6:
+        fri_dt = (now_dt - timedelta(days=2)).strftime("%Y-%m-%d")
+        col_today_title = f"今日涨幅 (基准周五: {fri_dt})"
+    else:
+        col_today_title = f"今日涨幅 ({today_str})"
 
     html_content = f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -1611,7 +1580,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                     <th data-col="10">自低点反弹 <span class="sort-icon">⇅</span></th>
                     <th data-col="11">修复程度 <span class="sort-icon">⇅</span></th>
                     <th data-col="12">修复时间 <span class="sort-icon">⇅</span></th>
-                    <th data-col="13">今日涨幅 ({today_str}) <span class="sort-icon">⇅</span></th>
+                    <th data-col="13">{col_today_title} <span class="sort-icon">⇅</span></th>
                     <th data-col="14">近一周 <span class="sort-icon">⇅</span></th>
                     <th data-col="15">近一月 <span class="sort-icon">⇅</span></th>
                     <th data-col="16">近三月 <span class="sort-icon">⇅</span></th>
@@ -2044,9 +2013,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
     return os.path.abspath(filename)
 
 def fetch_index_data(symbol, start_date, end_date):
-    """
-    获取指数/ETF历史数据，统一返回 [{'date': 'YYYY-MM-DD', 'nav': float}, ...]
-    """
+    """获取指数/ETF历史数据"""
     df = None
     close_col = None
     date_col = None
