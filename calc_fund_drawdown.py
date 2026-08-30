@@ -58,6 +58,7 @@ QDII_CODES = {
     "019155", "016668", "501225", "015202", "001668", "000043", "007280", "019449"
 }
 
+# 指数组
 INDEX_SYMBOLS = ["NDX", "SPX", "SOXX", "SOXL"]
 INDEX_NAMES = {
     "NDX": "纳斯达克100指数",
@@ -65,7 +66,27 @@ INDEX_NAMES = {
     "SOXX": "iShares 半导体ETF",
     "SOXL": "三倍做多半导体ETF-Direxion"
 }
+
+# 贵金属组
+PRECIOUS_METALS_SYMBOLS = ["XAU", "AUM", "XAG"]
+PRECIOUS_METALS_NAMES = {
+    "XAU": "伦敦金 (XAU)",
+    "AUM": "黄金连续 (AUM)",
+    "XAG": "伦敦银 (XAG)"
+}
+
+# 加密货币组
+CRYPTO_SYMBOLS = ["BTC", "ETH", "SOL", "BNB"]
+CRYPTO_NAMES = {
+    "BTC": "比特币 (BTC/USDT)",
+    "ETH": "以太坊 (ETH/USDT)",
+    "SOL": "索拉纳 (SOL/USDT)",
+    "BNB": "币安币 (BNB/USDT)"
+}
+
 INDEX_SET = set(INDEX_SYMBOLS)
+PRECIOUS_METALS_SET = set(PRECIOUS_METALS_SYMBOLS)
+CRYPTO_SET = set(CRYPTO_SYMBOLS)
 
 SINA_INDEX_MAP = {
     "NDX": ".NDX",
@@ -621,6 +642,8 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
     }
 
     INDEX_SET_LOCAL = {"NDX", "SPX", "SOXX", "SOXL"}
+    PRECIOUS_METALS_LOCAL = {"XAU", "AUM", "XAG"}
+    CRYPTO_LOCAL = {"BTC", "ETH", "SOL", "BNB"}
     col_count = 20
 
     def date_to_label(date_str):
@@ -672,6 +695,13 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             "SPX":  "https://quote.eastmoney.com/gb/zsSPX.html",
             "SOXX": "https://quote.eastmoney.com/us/SOXX.html",
             "SOXL": "https://quote.eastmoney.com/us/SOXL.html",
+            "XAU":  "https://cn.investing.com/currencies/xau-usd",
+            "AUM":  "https://quote.eastmoney.com/qihuo/aum.html",
+            "XAG":  "https://cn.investing.com/currencies/xag-usd",
+            "BTC":  "https://www.tradingview.com/symbols/BTCUSD/",
+            "ETH":  "https://www.tradingview.com/symbols/ETHUSD/",
+            "SOL":  "https://www.tradingview.com/symbols/SOLUSD/",
+            "BNB":  "https://www.tradingview.com/symbols/BNBUSD/"
         }
         fund_url = INDEX_URL_MAP.get(r['code'], f"https://fund.eastmoney.com/{r['code']}.html")
 
@@ -722,10 +752,17 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             group = "grid"
         elif r['code'] in ROBOT_CODES:
             group = "robot"
+        elif r['code'] in PRECIOUS_METALS_LOCAL:
+            group = "metals"
+        elif r['code'] in CRYPTO_LOCAL:
+            group = "crypto"
         elif r['code'] in INDEX_SET_LOCAL:
             group = "index"
         else:
             group = "qdii"
+            
+        # [需求优化] 如果是贵金属、加密货币或指数，最新净值高亮
+        nav_display_html = f'<span class="highlight-special-nav">{r["latest_nav"]:.4f}</span>' if group in ["metals", "crypto", "index"] else f'{r["latest_nav"]:.4f}'
 
         holdings_history = r.get('holdings', [])
 
@@ -756,7 +793,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             <td data-val="{limit_val}">{r.get('buy_status', '--')}<div class="fee-sub">{limit_display}</div></td>
             <td data-val="{r['max_nav']}">{max_nav_display}</td>
             <td data-val="{r['min_nav']}">{min_nav_display}</td>
-            <td data-val="{r['latest_nav']}">{r['latest_nav']:.4f}</td>
+            <td data-val="{r['latest_nav']}">{nav_display_html}</td>
             <td class="metric-red" data-val="{r['max_drawdown']}">
                 <div class="progress-container progress-text">
                     <div class="progress-bar bar-red" style="width: {max_dd_pct}%;">
@@ -905,6 +942,8 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         ("存储芯片", "storage"),
         ("电网设备", "grid"),
         ("机器人", "robot"),
+        ("贵金属", "metals"),
+        ("加密货币", "crypto"),
         ("指数", "index")
     ]
     buttons_html = ""
@@ -1375,6 +1414,20 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             color: var(--footer-text);
             font-weight: normal;
         }}
+
+        /* --- 新增：特定资产最新净值高亮样式 --- */
+        .highlight-special-nav {{
+            font-weight: bold;
+            color: #d93025;
+            background-color: rgba(217, 48, 37, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }}
+        [data-theme="dark"] .highlight-special-nav {{
+            color: #ff8a65;
+            background-color: rgba(255, 138, 101, 0.15);
+        }}
+
         .fund-row {{ cursor: pointer; }}
         .fund-row .name a {{ pointer-events: auto; cursor: pointer; }}
         .holding-row td {{
@@ -1996,10 +2049,8 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                     const dayOfMonth = item.dt.getDate();
 
                     if (freq === 'daily') {{
-                        // 每日定投（每个有效交易日扣款）
                         shouldBuy = true;
                     }} else if (freq === 'weekly') {{
-                        // 每周定投
                         const oneJan = new Date(item.dt.getFullYear(), 0, 1);
                         const weekNum = Math.ceil((((item.dt - oneJan) / 86400000) + oneJan.getDay() + 1) / 7);
                         const weekKey = `${{item.dt.getFullYear()}}-W${{weekNum}}`;
@@ -2008,7 +2059,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                             lastInvestKey = weekKey;
                         }}
                     }} else if (freq === 'biweekly') {{
-                        // 每两周定投（隔周扣款）
                         const oneJan = new Date(item.dt.getFullYear(), 0, 1);
                         const weekNum = Math.ceil((((item.dt - oneJan) / 86400000) + oneJan.getDay() + 1) / 7);
                         const biweekBlock = Math.floor(weekNum / 2);
@@ -2018,7 +2068,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                             lastInvestKey = biweekKey;
                         }}
                     }} else {{
-                        // 每月定投
                         const monthKey = `${{item.dt.getFullYear()}}-${{item.dt.getMonth() + 1}}`;
                         if (dayOfMonth >= targetDay && lastInvestKey !== monthKey) {{
                             shouldBuy = true;
@@ -2385,7 +2434,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         document.addEventListener('DOMContentLoaded', function() {{
             const table = document.getElementById('fundTable');
             table.addEventListener('click', function(e) {{
-                // 若点击的是定投按钮，触发测算弹窗并阻止行折叠
                 const dcaBtn = e.target.closest('.dca-btn');
                 if (dcaBtn) {{
                     e.stopPropagation();
@@ -2529,6 +2577,121 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
     with open(filename, "w", encoding="utf-8") as f:
         f.write(html_content)
     return os.path.abspath(filename)
+
+def fetch_crypto_data(symbol, start_date, end_date):
+    """获取主要虚拟货币对USDT历史收盘行情"""
+    cache_file = os.path.join(NAV_CACHE_DIR, f"{symbol}.json")
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                cache = json.load(f)
+            if cache.get('start_date', '') <= start_date and cache.get('end_date', '') >= end_date:
+                return cache.get('data', [])
+        except Exception:
+            pass
+
+    pair = f"{symbol}USDT"
+    data = []
+
+    # 1. 币安公用K线接口
+    try:
+        start_ts = int(datetime.strptime(start_date, '%Y-%m-%d').timestamp() * 1000)
+        end_ts = int(datetime.strptime(end_date, '%Y-%m-%d').timestamp() * 1000)
+        url = f"https://api.binance.com/api/v3/klines?symbol={pair}&interval=1d&startTime={start_ts}&endTime={end_ts}&limit=1000"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            klines = json.loads(resp.read().decode('utf-8'))
+            for item in klines:
+                d_str = datetime.fromtimestamp(item[0] / 1000).strftime('%Y-%m-%d')
+                nav = float(item[4])  # 收盘价
+                if nav > 0:
+                    data.append({"date": d_str, "nav": nav})
+    except Exception:
+        data = []
+
+    # 2. akshare/新浪外盘期货兜底
+    if not data and symbol == "BTC":
+        try:
+            df = ak.futures_foreign_hist(symbol="BTC")
+            if df is not None and not df.empty:
+                d_col = 'date' if 'date' in df.columns else df.columns[0]
+                c_col = 'close' if 'close' in df.columns else df.columns[4]
+                df[d_col] = pd.to_datetime(df[d_col]).dt.strftime('%Y-%m-%d')
+                df = df[(df[d_col] >= start_date) & (df[d_col] <= end_date)]
+                for _, row in df.iterrows():
+                    val = float(row[c_col])
+                    if val > 0:
+                        data.append({"date": row[d_col], "nav": val})
+        except Exception:
+            pass
+
+    if data:
+        data = sorted(data, key=lambda x: x['date'])
+        try:
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump({'start_date': start_date, 'end_date': end_date, 'data': data}, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+        return data
+    return None
+
+def fetch_precious_metals_data(symbol, start_date, end_date):
+    """获取贵金属（伦敦金/银现货、国内黄金/白银连续主力期货）历史行情"""
+    cache_file = os.path.join(NAV_CACHE_DIR, f"{symbol}.json")
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                cache = json.load(f)
+            if cache.get('start_date', '') <= start_date and cache.get('end_date', '') >= end_date:
+                return cache.get('data', [])
+        except Exception:
+            pass
+
+    df = None
+    data = []
+    try:
+        # 兼容处理：对外显示AUM，底层接口依然拉取 AU0 行情
+        if symbol == "AUM":
+            df = ak.futures_main_sina(symbol="AU0")
+        elif symbol == "XAU":
+            # 伦敦金现货/COMEX黄金主力
+            for sym in ["GC", "XAU"]:
+                try:
+                    df = ak.futures_foreign_hist(symbol=sym)
+                    if df is not None and not df.empty:
+                        break
+                except Exception:
+                    continue
+        elif symbol == "XAG":
+            # 伦敦银现货/COMEX白银主力
+            for sym in ["SI", "XAG"]:
+                try:
+                    df = ak.futures_foreign_hist(symbol=sym)
+                    if df is not None and not df.empty:
+                        break
+                except Exception:
+                    continue
+
+        if df is not None and not df.empty:
+            d_col = '日期' if '日期' in df.columns else ('date' if 'date' in df.columns else df.columns[0])
+            c_col = '收盘价' if '收盘价' in df.columns else ('close' if 'close' in df.columns else df.columns[4])
+            df[d_col] = pd.to_datetime(df[d_col]).dt.strftime('%Y-%m-%d')
+            df = df[(df[d_col] >= start_date) & (df[d_col] <= end_date)].sort_values(d_col)
+            for _, row in df.iterrows():
+                try:
+                    nav = float(row[c_col])
+                    if nav > 0:
+                        data.append({"date": str(row[d_col]), "nav": nav})
+                except Exception:
+                    continue
+
+        if data:
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump({'start_date': start_date, 'end_date': end_date, 'data': data}, f, ensure_ascii=False, indent=2)
+            return data
+    except Exception:
+        pass
+    return None
 
 def fetch_index_data(symbol, start_date, end_date):
     df = None
@@ -2692,6 +2855,74 @@ def main():
             results.append(res)
             print(f"[{idx}/{len(args.funds)}] {code} - {meta['name']} ... ✅ 完成 (持仓报告期数: {len(res['holdings'])})")
         time.sleep(random.uniform(0.05, 0.1))
+
+    print("\n======== 开始获取贵金属数据 ========")
+    for symbol in PRECIOUS_METALS_SYMBOLS:
+        try:
+            data = fetch_precious_metals_data(symbol, args.start, args.end)
+            if not data:
+                print(f"[贵金属] {symbol} 无数据，跳过")
+                continue
+            meta_name = PRECIOUS_METALS_NAMES.get(symbol, symbol)
+            res = analyze_fund_metrics(data, args.end, cutoff_date, is_qdii=False)
+            if res:
+                res.update({
+                    "code": symbol,
+                    "name": meta_name,
+                    "scale": "--",
+                    "scale_val": -1.0,
+                    "fee_manage": "--",
+                    "fee_custody": "--",
+                    "fee_sales": "--",
+                    "fee_purchase": "--",
+                    "fee_redemption": "--",
+                    "buy_status": "--",
+                    "buy_limit": "--",
+                    "buy_limit_val": -1,
+                    "fee_total": "--",
+                    "fee_val": -1.0,
+                    "holdings": [],
+                    "source": "贵金属行情",
+                    "nav_data": data
+                })
+                results.append(res)
+                print(f"[贵金属] {symbol} - {meta_name} ... ✅ (数据点 {len(data)})")
+        except Exception as e:
+            print(f"[贵金属] {symbol} 获取失败: {e}")
+
+    print("\n======== 开始获取加密货币数据 ========")
+    for symbol in CRYPTO_SYMBOLS:
+        try:
+            data = fetch_crypto_data(symbol, args.start, args.end)
+            if not data:
+                print(f"[加密货币] {symbol} 无数据，跳过")
+                continue
+            meta_name = CRYPTO_NAMES.get(symbol, symbol)
+            res = analyze_fund_metrics(data, args.end, cutoff_date, is_qdii=False)
+            if res:
+                res.update({
+                    "code": symbol,
+                    "name": meta_name,
+                    "scale": "--",
+                    "scale_val": -1.0,
+                    "fee_manage": "--",
+                    "fee_custody": "--",
+                    "fee_sales": "--",
+                    "fee_purchase": "--",
+                    "fee_redemption": "--",
+                    "buy_status": "--",
+                    "buy_limit": "--",
+                    "buy_limit_val": -1,
+                    "fee_total": "--",
+                    "fee_val": -1.0,
+                    "holdings": [],
+                    "source": "现货行情",
+                    "nav_data": data
+                })
+                results.append(res)
+                print(f"[加密货币] {symbol} - {meta_name} ... ✅ (数据点 {len(data)})")
+        except Exception as e:
+            print(f"[加密货币] {symbol} 获取失败: {e}")
 
     print("\n======== 开始获取指数数据 ========")
     for symbol in INDEX_SYMBOLS:
