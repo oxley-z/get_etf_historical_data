@@ -1004,7 +1004,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>场外基金量化与费率规模看板（含多周期涨幅及走势图）</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -1055,8 +1055,8 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             background-color: var(--bg);
             color: var(--text);
             margin: 0; 
-            padding: 14px 20px; 
-            height: 100vh;
+            padding: 24px 32px; 
+            height: 100dvh;
             overflow: hidden;
             display: flex;
             flex-direction: column;
@@ -1065,178 +1065,176 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             transition: background-color 0.3s, color 0.3s;
         }}
         .top-wrapper {{
-            display:grid;
-            grid-template-columns:minmax(0, 1fr) minmax(0, 1fr);
-            gap:14px;
-            height:220px;
-            flex:0 0 220px;
-            margin-bottom:10px;
-            min-height:0;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 14px;
+            flex: 0 0 auto;
+            margin-bottom: 12px;
+            min-height: 0;
         }}
         .top-left, .top-right {{
-            min-width:0;
-            min-height:0;
-            border:1px solid var(--border);
-            border-radius:12px;
-            background:var(--table-bg);
-            box-shadow:0 4px 15px rgba(0,0,0,0.07);
-            box-sizing:border-box;
+            min-width: 0;
+            min-height: 0;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--table-bg);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.07);
+            box-sizing: border-box;
         }}
         .top-left {{
-            padding:12px 14px;
-            display:flex;
-            flex-direction:column;
-            overflow:hidden;
+            padding: 14px 18px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }}
         .top-right {{
-            padding:12px;
-            display:flex;
-            flex-direction:column;
-            gap:8px;
-            overflow:hidden;
+            padding: 14px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            overflow: hidden;
         }}
         .theme-toggle {{
-            align-self:flex-end;
-            background:var(--header-bg);
-            color:var(--text);
-            border:1px solid var(--border);
-            border-radius:18px;
-            padding:3px 10px;
-            font-size:11px;
-            cursor:pointer;
-            flex:0 0 auto;
+            align-self: flex-end;
+            background: var(--header-bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 4px 12px;
+            font-size: 11px;
+            cursor: pointer;
+            flex: 0 0 auto;
         }}
-        .theme-toggle:hover {{ opacity:0.82; }}
-        .header {{ text-align:left; margin:0 0 6px 0; }}
+        .theme-toggle:hover {{ opacity: 0.82; }}
+        .header {{ text-align: left; margin: 0 0 6px 0; }}
         .header-top {{
-            display:flex;
-            align-items:center;
-            margin-bottom:2px;
+            display: flex;
+            align-items: center;
+            margin-bottom: 2px;
         }}
         .header-top h2 {{
-            color:#1a73e8;
-            margin:0;
-            font-size:18px;
-            line-height:1.2;
+            color: #1a73e8;
+            margin: 0;
+            font-size: 18px;
+            line-height: 1.2;
         }}
-        .header p {{ color:var(--footer-text); font-size:11px; margin:2px 0; line-height:1.3; }}
+        .header p {{ color: var(--footer-text); font-size: 11px; margin: 2px 0; line-height: 1.3; }}
         .header-info {{
-            border:1px solid #e3e7eb;
-            border-radius:6px;
-            background:var(--hover-bg);
-            padding:5px 8px;
-            margin-bottom:6px;
-            overflow:hidden;
-            font-size:11px;
+            border: 1px solid #e3e7eb;
+            border-radius: 6px;
+            background: var(--hover-bg);
+            padding: 6px 10px;
+            margin-bottom: 8px;
+            overflow: hidden;
+            font-size: 11px;
         }}
-        .header-info p {{ margin:1px 0; }}
+        .header-info p {{ margin: 1px 0; }}
         .group-tabs {{
-            display:grid;
-            grid-template-columns:minmax(0,1fr) 230px;
-            gap:8px;
-            align-items:center;
-            margin-top:auto;
-            min-height:36px;
+            display: grid;
+            grid-template-columns: minmax(0,1fr) 230px;
+            gap: 8px;
+            align-items: center;
+            margin-top: auto;
+            min-height: 36px;
         }}
         .group-buttons {{
-            display:flex;
-            flex-wrap:wrap;
-            gap:5px;
-            align-content:center;
-            min-width:0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-content: center;
+            min-width: 0;
         }}
         .group-btn {{
-            background:var(--btn-bg);
-            color:var(--btn-text);
-            border:1px solid var(--border);
-            border-radius:16px;
-            padding:3px 10px;
-            font-size:11px;
-            cursor:pointer;
-            transition:all .2s;
-            font-weight:500;
-            white-space:nowrap;
+            background: var(--btn-bg);
+            color: var(--btn-text);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 4px 12px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all .2s;
+            font-weight: 500;
+            white-space: nowrap;
         }}
         .group-btn:hover {{
-            background:var(--btn-active-bg);
-            color:var(--btn-active-text);
+            background: var(--btn-active-bg);
+            color: var(--btn-active-text);
         }}
         .group-btn.active {{
-            background:var(--btn-active-bg);
-            color:var(--btn-active-text);
-            border-color:var(--btn-active-bg);
+            background: var(--btn-active-bg);
+            color: var(--btn-active-text);
+            border-color: var(--btn-active-bg);
         }}
-        .search-container {{ width:100%; }}
+        .search-container {{ width: 100%; }}
         .search-container input {{
-            width:100%;
-            max-width:none;
-            height:30px;
-            padding:4px 12px;
-            border-radius:16px;
-            border:1px solid #35a853;
-            background:var(--input-bg);
-            color:var(--text);
-            font-size:12px;
-            outline:none;
-            box-sizing:border-box;
-            box-shadow:0 0 0 2px rgba(52,168,83,.08);
+            width: 100%;
+            max-width: none;
+            height: 30px;
+            padding: 4px 12px;
+            border-radius: 16px;
+            border: 1px solid #35a853;
+            background: var(--input-bg);
+            color: var(--text);
+            font-size: 12px;
+            outline: none;
+            box-sizing: border-box;
+            box-shadow: 0 0 0 2px rgba(52,168,83,.08);
         }}
-        .search-container input:focus {{ border-color:#188038; box-shadow:0 0 0 3px rgba(52,168,83,.14); }}
-        .search-container input::placeholder {{ color:var(--footer-text); }}
+        .search-container input:focus {{ border-color: #188038; box-shadow: 0 0 0 3px rgba(52,168,83,.14); }}
+        .search-container input::placeholder {{ color: var(--footer-text); }}
         .friend-cards-wrapper {{
-            display:grid;
-            grid-template-columns:repeat(3,minmax(0,1fr));
-            gap:8px;
-            width:100%;
-            min-height:0;
-            flex:1;
+            display: grid;
+            grid-template-columns: repeat(3,minmax(0,1fr));
+            gap: 10px;
+            width: 100%;
+            min-height: 0;
+            flex: 1;
         }}
         .friend-card {{
-            min-width:0;
-            min-height:64px;
-            background:var(--card-bg);
-            border-radius:6px;
-            padding:8px 10px;
-            box-shadow:var(--card-shadow);
-            border:1px solid var(--border);
-            box-sizing:border-box;
-            overflow:hidden;
-            transition:transform .12s, box-shadow .12s;
+            min-width: 0;
+            min-height: 64px;
+            background: var(--card-bg);
+            border-radius: 6px;
+            padding: 8px 10px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border);
+            box-sizing: border-box;
+            overflow: hidden;
+            transition: transform .12s, box-shadow .12s;
         }}
         .friend-card:hover {{
-            transform:translateY(-1px);
-            box-shadow:0 4px 12px rgba(0,0,0,.12);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,.12);
         }}
         .friend-card a {{
-            color:var(--link-color);
-            text-decoration:none;
-            font-weight:650;
-            font-size:13px;
-            display:block;
-            white-space:nowrap;
-            overflow:hidden;
-            text-overflow:ellipsis;
+            color: var(--link-color);
+            text-decoration: none;
+            font-weight: 650;
+            font-size: 13px;
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }}
-        .friend-card a:hover {{ text-decoration:underline; }}
+        .friend-card a:hover {{ text-decoration: underline; }}
         .friend-card .friend-desc {{
-            font-size:10px;
-            color:var(--footer-text);
-            display:block;
-            margin-top:3px;
-            line-height:1.3;
-            display:-webkit-box;
-            -webkit-line-clamp:2;
-            -webkit-box-orient:vertical;
-            overflow:hidden;
+            font-size: 10px;
+            color: var(--footer-text);
+            display: block;
+            margin-top: 3px;
+            line-height: 1.3;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
         }}
         
-        /* 全局定投筛选卡片 */
         .global-dca-filter-card {{
             background: var(--table-bg);
             border: 1px solid var(--border);
             border-radius: 8px;
-            padding: 8px 12px;
-            margin-bottom: 8px;
+            padding: 8px 14px;
+            margin-bottom: 10px;
             display: flex;
             align-items: center;
             gap: 12px;
@@ -1297,19 +1295,19 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         .global-dca-filter-card button:hover {{ opacity: 0.9; }}
 
         .table-container {{ 
-            width:100%; 
-            height: calc(100vh - 365px); 
+            width: 100%; 
+            flex: 1 1 0; 
+            min-height: 0; 
             overflow-y: auto; 
-            overflow-x: scroll; 
-            box-sizing:border-box; 
+            overflow-x: auto; 
+            -webkit-overflow-scrolling: touch;
+            box-sizing: border-box; 
             background: var(--table-bg);
-            border-radius:12px; 
-            box-shadow:0 4px 15px rgba(0,0,0,0.08); 
-            padding:10px; 
-            border:1px solid var(--border);
-            flex: 1 1 auto;
-            min-height: 0;
-            margin-bottom: 8px;
+            border-radius: 12px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08); 
+            padding: 10px; 
+            border: 1px solid var(--border);
+            margin-bottom: 12px;
             transition: background 0.3s, border-color 0.3s;
         }}
         .table-container::-webkit-scrollbar {{
@@ -1328,20 +1326,20 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             background: #666;
         }}
         table {{ 
-            width:100%; 
-            min-width:2450px; 
-            border-collapse:collapse; 
-            font-size:12px; 
-            text-align:right; 
-            table-layout:fixed; 
+            width: 100%; 
+            min-width: 2450px; 
+            border-collapse: collapse; 
+            font-size: 12px; 
+            text-align: right; 
+            table-layout: fixed; 
         }}
         th, td {{ 
-            padding:6px 8px; 
-            border-bottom:1px solid var(--border);
-            line-height:1.4; 
-            overflow:hidden; 
-            text-overflow:ellipsis; 
-            box-sizing:border-box; 
+            padding: 6px 8px; 
+            border-bottom: 1px solid var(--border);
+            line-height: 1.4; 
+            overflow: hidden; 
+            text-overflow: ellipsis; 
+            box-sizing: border-box; 
             transition: border-color 0.3s;
         }}
         #fundTable thead th {{
@@ -1412,18 +1410,17 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         .sort-icon {{ font-size: 10px; margin-left: 2px; color: var(--footer-text); }}
         .code {{ font-family: "SFMono-Regular", Consolas, monospace; font-weight: bold; color: #1a73e8; }}
         .name a {{ 
-            font-weight:500; 
-            color:#1a73e8; 
-            text-decoration:none; 
-            display:inline-block; 
-            max-width:100%; 
-            overflow:hidden; 
-            text-overflow:ellipsis; 
-            vertical-align:middle; 
+            font-weight: 500; 
+            color: #1a73e8; 
+            text-decoration: none; 
+            display: inline-block; 
+            max-width: 100%; 
+            overflow: hidden; 
+            text-overflow: ellipsis; 
+            vertical-align: middle; 
         }}
         .name a:hover {{ text-decoration: underline; color: #1557b0; }}
         
-        /* 智能定投按钮样式 */
         .dca-btn {{
             background: #e8f0fe;
             color: #1a73e8;
@@ -1454,56 +1451,44 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             color: #202124;
         }}
 
-        .redemption-sub {{ 
-            font-size: 10px; 
-            color: var(--footer-text);
-            font-weight: normal; 
-            margin-top: 2px; 
-        }}
-        .highlight-rate {{
-            color: #d93025;
-            font-weight: bold;
-        }}
+        .redemption-sub {{ font-size: 10px; color: var(--footer-text); font-weight: normal; margin-top: 2px; }}
+        .highlight-rate {{ color: #d93025; font-weight: bold; }}
         .highlight-val {{ font-weight: 600; color: #e67e22; }}
         .fee-sub {{ font-size: 10px; color: var(--footer-text); }}
         .progress-container {{
             background-color: var(--progress-track);
-            border-radius:6px;
-            overflow:hidden;
-            height:20px;
-            width:100%;
-            position:relative;
+            border-radius: 6px;
+            overflow: hidden;
+            height: 20px;
+            width: 100%;
+            position: relative;
             transition: background 0.3s;
         }}
         .progress-bar {{
-            height:100%;
-            border-radius:6px;
-            min-width:42px;
-            display:flex;
-            align-items:center;
-            justify-content:flex-end;
-            padding-right:6px;
-            box-sizing:border-box;
-            transition:width .2s ease;
+            height: 100%;
+            border-radius: 6px;
+            min-width: 42px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 6px;
+            box-sizing: border-box;
+            transition: width .2s ease;
         }}
         .progress-bar span {{
-            color:#fff;
-            font-size:11px;
-            font-weight:600;
-            text-shadow:0 1px 1px rgba(0,0,0,.25);
+            color: #fff;
+            font-size: 11px;
+            font-weight: 600;
+            text-shadow: 0 1px 1px rgba(0,0,0,.25);
         }}
-        .bar-red {{ background-color:#d93025; }}
-        .bar-blue {{ background-color:#1a73e8; }}
-        .bar-green {{ background-color:#188038; }}
+        .bar-red {{ background-color: #d93025; }}
+        .bar-blue {{ background-color: #1a73e8; }}
+        .bar-green {{ background-color: #188038; }}
         .metric-red {{ color: #d93025; font-weight: 600; }}
         .metric-green {{ color: #188038; font-weight: 600; }}
         .gain-positive {{ color: #d93025; font-weight: bold; }}
         .gain-negative {{ color: #188038; font-weight: bold; }}
-        .gain-date {{
-            font-size: 10px;
-            color: var(--footer-text);
-            font-weight: normal;
-        }}
+        .gain-date {{ font-size: 10px; color: var(--footer-text); font-weight: normal; }}
 
         .highlight-special-nav {{
             font-weight: bold;
@@ -1595,15 +1580,8 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             white-space: nowrap;
             text-align: left;
         }}
-        .stock-ratio {{
-            text-align: right;
-            font-weight: 500;
-        }}
-        .stock-change {{
-            text-align: right;
-            font-size: 10px;
-            white-space: nowrap;
-        }}
+        .stock-ratio {{ text-align: right; font-weight: 500; }}
+        .stock-change {{ text-align: right; font-size: 10px; white-space: nowrap; }}
         .change-add {{ color: #d93025; }}
         .change-sub {{ color: #188038; }}
         .change-up {{ color: #d93025; }}
@@ -1615,13 +1593,8 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             border-top: 1px dashed var(--border);
             font-weight: 600;
         }}
-        .stock-total .stock-name {{
-            color: var(--header-text);
-        }}
-        .stock-total .stock-ratio {{
-            color: #e67e22;
-            font-weight: 700;
-        }}
+        .stock-total .stock-name {{ color: var(--header-text); }}
+        .stock-total .stock-ratio {{ color: #e67e22; font-weight: 700; }}
         .chart-container {{
             flex: 0 0 calc(50% - 20px);
             background: var(--card-bg);
@@ -1658,29 +1631,49 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             max-height: 200px;
             flex: 1;
         }}
-        @media (max-width: 1000px) {{
-            .holdings-wrapper {{ gap: 10px; }}
-            .holdings-container {{ gap: 6px; }}
-            .quarter-card {{ padding: 8px 6px; }}
-            .stock-item {{
-                grid-template-columns: minmax(0, 1fr) 48px 56px;
-                font-size: 10px;
-            }}
+
+        /* --- 移动端及中小屏幕核心适配 --- */
+        @media (max-width: 1024px) {{
+            /* 废弃限制高度，释放 body 的纵向滚动能力，防止表格外无法滑动 */
+            body {{ padding: 16px 12px; height: auto; min-height: 100dvh; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; }}
+            .top-wrapper {{ display: flex; flex-direction: column; height: auto; flex: none; gap: 10px; margin-bottom: 12px; }}
+            .top-left, .top-right {{ min-height: auto; padding: 12px; width: 100%; }}
+            .header-top h2 {{ font-size: 16px; white-space: normal; line-height: 1.3; }}
+            .header p, .header-info {{ font-size: 11px; }}
+            .group-tabs {{ display: flex; flex-direction: column; gap: 8px; align-items: stretch; }}
+            .group-buttons {{ justify-content: flex-start; }}
+            .search-container input {{ height: 36px; font-size: 13px; max-width: 100%; }}
+            .friend-cards-wrapper {{ grid-template-columns: repeat(2, 1fr); gap: 8px; }}
+            
+            .global-dca-filter-card {{ flex-direction: column; align-items: stretch; align-self: stretch; padding: 12px; margin-bottom: 12px; }}
+            .global-dca-filter-body {{ flex-direction: column; align-items: stretch; width: 100%; }}
+            .global-dca-filter-card select, .global-dca-filter-card button {{ width: 100%; height: 36px; font-size: 13px; }}
+            
+            /* 表格容器自适应内部高度，允许横向滚动 */
+            .table-container {{ height: auto; flex: none; overflow-y: visible; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 16px; padding: 0; }}
+            #fundTable {{ min-width: 2450px; }}
+            
+            .footer-note {{ flex-direction: column; align-items: stretch; text-align: left; gap: 8px; padding: 12px; margin-bottom: 16px; }}
+            .footer-right {{ justify-content: flex-start; flex-wrap: wrap; }}
+            
+            /* 展开面板容器纵向排布 */
+            .holdings-wrapper {{ flex-direction: column; gap: 12px; }}
+            .holdings-container {{ width: 100%; flex: none; flex-direction: column; gap: 8px; padding: 0 10px; box-sizing: border-box; }}
+            .quarter-card {{ width: 100%; flex: none; padding: 8px 6px; }}
+            .chart-container {{ width: 100%; flex: none; margin: 0; padding: 10px; box-sizing: border-box; }}
+            .chart-container canvas {{ width: 100% !important; }}
+            
+            .stock-item {{ grid-template-columns: minmax(0, 1fr) 48px 56px; font-size: 10px; }}
             .stock-change {{ font-size: 9px; }}
-            .top-wrapper {{
-                grid-template-columns:1fr;
-                height:auto;
-                flex-basis:auto;
-            }}
-            .top-left, .top-right {{ min-height:210px; }}
-            .top-right {{ width:100%; }}
-            .friend-cards-wrapper {{ width: 100%; }}
-            .friend-card {{ min-height:64px; }}
-            .group-tabs {{
-                flex-direction: column;
-                align-items: stretch;
-            }}
-            .search-container input {{ max-width: 100%; }}
+            
+            /* 弹窗及控制台纵向适配 */
+            .modal-card {{ width: 95%; margin: 10px; max-height: 85vh; }}
+            .modal-body {{ padding: 14px 16px; }}
+            .dca-controls {{ grid-template-columns: 1fr; }}
+            .dca-field select, .dca-field input {{ height: 36px; font-size: 13px; }}
+            .dca-results-grid {{ grid-template-columns: 1fr 1fr; gap: 8px; }}
+            .dca-result-card:last-child {{ grid-column: span 2; }}
+            .dca-chart-box {{ height: 210px; }}
         }}
         
         .footer-note {{ 
@@ -1689,7 +1682,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             color: var(--footer-text);
             line-height: 1.35; 
             background: var(--footer-bg);
-            padding: 6px 12px; 
+            padding: 8px 14px; 
             border-radius: 6px; 
             border: 1px solid var(--border);
             flex-shrink: 0;
@@ -1717,7 +1710,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             white-space: nowrap;
         }}
 
-        /* 定投弹窗样式 */
         .modal-overlay {{
             position: fixed;
             top: 0;
@@ -1889,7 +1881,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         </section>
     </div>
     
-    <!-- 全局定投筛选卡片 (带折叠功能) -->
     <div class="global-dca-filter-card" id="gDcaCard">
         <div class="global-dca-filter-header" id="gDcaToggleBtn">
             <span class="global-dca-filter-title">📊 动态定投参数配置</span>
@@ -1956,7 +1947,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         </div>
     </div>
 
-    <!-- 智能定投测算弹窗 -->
     <div class="modal-overlay" id="dcaModal">
         <div class="modal-card">
             <div class="modal-header">
@@ -2028,7 +2018,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         var fundNavData = {json.dumps(nav_data_json, ensure_ascii=False)};
         var fundNames = {json.dumps(fund_names_json, ensure_ascii=False)};
 
-        // 主题切换
         (function() {{
             const toggle = document.getElementById('themeToggle');
             const currentTheme = localStorage.getItem('theme') || 'light';
@@ -2043,7 +2032,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             }});
         }})();
 
-        // 核心定投算法抽取 (公用)
         function computeDCA(code, freq, targetDay, perAmount, range) {{
             const raw = fundNavData[code];
             if (!raw || !raw.dates || raw.dates.length < 2) return null;
@@ -2084,7 +2072,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
 
             filtered.forEach(item => {{
                 let shouldBuy = false;
-                const dayOfWeek = item.dt.getDay(); // 0 is Sun, 1-5 Mon-Fri
+                const dayOfWeek = item.dt.getDay(); 
                 const dayOfMonth = item.dt.getDate();
 
                 if (freq === 'daily') {{
@@ -2139,7 +2127,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             }};
         }}
 
-        // 动态填充日期选项工具函数
         function buildDayOptions(freqSelectId, daySelectId, labelId) {{
             const freq = document.getElementById(freqSelectId).value;
             const daySelect = document.getElementById(daySelectId);
@@ -2179,13 +2166,11 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             }}
         }}
 
-        // 初始化全表 DCA 测算逻辑
         function updateTableDca() {{
             const freq = document.getElementById('gDcaFreq').value;
             const targetDay = parseInt(document.getElementById('gDcaDaySelect').value) || 1;
             const range = document.getElementById('gDcaRange').value;
 
-            // 更新表头文本
             const headerTitle = document.getElementById('dcaHeaderTitle');
             if (headerTitle) {{
                 const map = {{'daily':'日','weekly':'周','biweekly':'双周','monthly':'月'}};
@@ -2213,14 +2198,12 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                 }}
             }});
 
-            // 触发排序 (如果是定投列)
             if (currentSortCol === 20) {{
-                isAscending = !isAscending; // 取反回溯状态，保持原定顺序
+                isAscending = !isAscending; 
                 sortTable(20);
             }}
         }}
 
-        // 定投弹窗逻辑与全局筛选卡片折叠逻辑
         let currentDcaCode = null;
         let dcaChartInstance = null;
 
@@ -2234,12 +2217,10 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             buildDayOptions('dcaFreq', 'dcaDaySelect', 'dcaDayLabel');
             freqSelect.addEventListener('change', () => buildDayOptions('dcaFreq', 'dcaDaySelect', 'dcaDayLabel'));
 
-            // 全局表单事件绑定
             buildDayOptions('gDcaFreq', 'gDcaDaySelect', null);
             document.getElementById('gDcaFreq').addEventListener('change', () => buildDayOptions('gDcaFreq', 'gDcaDaySelect', null));
             document.getElementById('gDcaApplyBtn').addEventListener('click', updateTableDca);
 
-            // 全局卡片折叠/展开事件
             document.getElementById('gDcaToggleBtn').addEventListener('click', function() {{
                 document.getElementById('gDcaCard').classList.toggle('collapsed');
             }});
@@ -2311,7 +2292,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             let currentGroup = 'all';
             let searchKeyword = '';
             
-            // 初次加载计算定投数据
             updateTableDca();
 
             function applyFilters() {{
@@ -2662,7 +2642,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             }});
         }}
 
-        // Resizer logic
         document.addEventListener("DOMContentLoaded", function () {{
             const table = document.getElementById("fundTable");
             const headers = table.querySelectorAll("th");
@@ -2955,7 +2934,6 @@ def main():
             continue
         raw_data_sorted = sorted(raw_data, key=lambda x: x['date'])
         
-        # 凡是海外或者投资美股市场的被动基和主动基，均使用 QDII 的延后一天的最新净值判定逻辑
         is_qdii = code in US_ACTIVE_CODES or code in NDX_PASSIVE_CODES or code in SPX_PASSIVE_CODES
         
         res = analyze_fund_metrics(raw_data_sorted, args.end, cutoff_date, is_qdii=is_qdii)
