@@ -17,13 +17,19 @@ for env_var in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_p
     os.environ.pop(env_var, None)
 
 DEFAULT_FUNDS = [
-    # QDII组
+    # 美股主动组 (原QDII)
     "002891", "014002", "006555", "012922", "012920", "021662", "457001", "539002",
     "018147", "021842", "006373", "018036", "501226", "008254", "008253", "017731",
     "017730", "016665", "016664", "018230", "018229", "021277", "270023", "005698",
     "024239", "501312", "017204", "017654", "017653", "022184", "100055", "017437",
     "017436", "017145", "017144", "016702", "016701", "016823", "164212", "019156",
     "019155", "016668", "501225", "015202", "001668", "000043", "007280", "019449",
+    # 纳指被动组
+    "017091", "016057", "160213", "019172", "019441", "018043", "019547", "016532",
+    "040046", "161130", "016452", "270042", "019736", "000834", "019524", "015299",
+    "539001", "018966",
+    # 标普被动组
+    "161125", "007721", "017028", "050025", "018064", "096001", "017641", "018738",
     # CPO 组
     "022365", "540010", "002112", "011892", "021528",
     "009645", "011370", "011452", "016371", "001956",
@@ -49,13 +55,23 @@ DEFAULT_FUNDS = [
     "004233", "008182", "017968", "024648"
 ]
 
-QDII_CODES = {
+US_ACTIVE_CODES = {
     "002891", "014002", "006555", "012922", "012920", "021662", "457001", "539002",
     "018147", "021842", "006373", "018036", "501226", "008254", "008253", "017731",
     "017730", "016665", "016664", "018230", "018229", "021277", "270023", "005698",
     "024239", "501312", "017204", "017654", "017653", "022184", "100055", "017437",
     "017436", "017145", "017144", "016702", "016701", "016823", "164212", "019156",
     "019155", "016668", "501225", "015202", "001668", "000043", "007280", "019449"
+}
+
+NDX_PASSIVE_CODES = {
+    "017091", "016057", "160213", "019172", "019441", "018043", "019547", "016532",
+    "040046", "161130", "016452", "270042", "019736", "000834", "019524", "015299",
+    "539001", "018966"
+}
+
+SPX_PASSIVE_CODES = {
+    "161125", "007721", "017028", "050025", "018064", "096001", "017641", "018738"
 }
 
 # 指数组
@@ -758,8 +774,12 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             group = "crypto"
         elif r['code'] in INDEX_SET_LOCAL:
             group = "index"
+        elif r['code'] in NDX_PASSIVE_CODES:
+            group = "ndx_passive"
+        elif r['code'] in SPX_PASSIVE_CODES:
+            group = "spx_passive"
         else:
-            group = "qdii"
+            group = "us_active"
 
         nav_display_html = f'<span class="highlight-special-nav">{r["latest_nav"]:.4f}</span>' if group in ["metals", "crypto", "index"] else f'{r["latest_nav"]:.4f}'
 
@@ -776,7 +796,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             today_gain_class = ''
             today_data_val = -9999
 
-        # 定投收益数据默认留空（-9999），页面加载后由 JS 全局自动填充并保持状态一致
         rows_html += f"""
         <tr data-group="{group}" class="fund-row" data-code="{r['code']}">
             <td class="code" data-val="{r['code']}">{r['code']}</td>
@@ -936,7 +955,9 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
 
     groups = [
         ("汇总", "all"),
-        ("QDII", "qdii"),
+        ("美股主动", "us_active"),
+        ("纳指被动", "ndx_passive"),
+        ("标普被动", "spx_passive"),
         ("半导体材料设备", "semiconductor"),
         ("CPO", "cpo"),
         ("人工智能", "ai"),
@@ -1222,12 +1243,36 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             flex-wrap: wrap;
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
             font-size: 12px;
-            /* 新增下方这行属性，使卡片在整个纵向页面结构中靠右侧贴边 */
             align-self: flex-end;
+            transition: all 0.3s ease;
+        }}
+        .global-dca-filter-header {{
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            user-select: none;
         }}
         .global-dca-filter-title {{
             font-weight: 600;
             color: var(--link-color);
+        }}
+        #gDcaToggleIcon {{
+            font-size: 10px;
+            color: var(--footer-text);
+            transition: transform 0.2s;
+        }}
+        .global-dca-filter-body {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }}
+        .global-dca-filter-card.collapsed .global-dca-filter-body {{
+            display: none;
+        }}
+        .global-dca-filter-card.collapsed #gDcaToggleIcon {{
+            transform: rotate(-90deg);
         }}
         .global-dca-filter-card select {{
             padding: 4px 8px;
@@ -1844,23 +1889,28 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         </section>
     </div>
     
-    <!-- 新增：全局定投筛选卡片 -->
-    <div class="global-dca-filter-card">
-        <span class="global-dca-filter-title">📊 动态定投参数配置:</span>
-        <select id="gDcaFreq">
-            <option value="daily">每日定投</option>
-            <option value="weekly">每周定投</option>
-            <option value="biweekly">双周定投</option>
-            <option value="monthly" selected>每月定投</option>
-        </select>
-        <select id="gDcaDaySelect"></select>
-        <select id="gDcaRange">
-            <option value="half">近半年内</option>
-            <option value="year" selected>近一年内</option>
-            <option value="ytd">今年以来</option>
-            <option value="all">统计区间全序列</option>
-        </select>
-        <button id="gDcaApplyBtn">计算并刷新排序</button>
+    <!-- 全局定投筛选卡片 (带折叠功能) -->
+    <div class="global-dca-filter-card" id="gDcaCard">
+        <div class="global-dca-filter-header" id="gDcaToggleBtn">
+            <span class="global-dca-filter-title">📊 动态定投参数配置</span>
+            <span id="gDcaToggleIcon">▼</span>
+        </div>
+        <div class="global-dca-filter-body" id="gDcaBody">
+            <select id="gDcaFreq">
+                <option value="daily">每日定投</option>
+                <option value="weekly">每周定投</option>
+                <option value="biweekly">双周定投</option>
+                <option value="monthly" selected>每月定投</option>
+            </select>
+            <select id="gDcaDaySelect"></select>
+            <select id="gDcaRange">
+                <option value="half">近半年内</option>
+                <option value="year" selected>近一年内</option>
+                <option value="ytd">今年以来</option>
+                <option value="all">统计区间全序列</option>
+            </select>
+            <button id="gDcaApplyBtn">计算并刷新排序</button>
+        </div>
     </div>
 
     <div class="table-container">
@@ -2170,7 +2220,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             }}
         }}
 
-        // 定投弹窗逻辑
+        // 定投弹窗逻辑与全局筛选卡片折叠逻辑
         let currentDcaCode = null;
         let dcaChartInstance = null;
 
@@ -2188,6 +2238,11 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             buildDayOptions('gDcaFreq', 'gDcaDaySelect', null);
             document.getElementById('gDcaFreq').addEventListener('change', () => buildDayOptions('gDcaFreq', 'gDcaDaySelect', null));
             document.getElementById('gDcaApplyBtn').addEventListener('click', updateTableDca);
+
+            // 全局卡片折叠/展开事件
+            document.getElementById('gDcaToggleBtn').addEventListener('click', function() {{
+                document.getElementById('gDcaCard').classList.toggle('collapsed');
+            }});
 
             window.openDcaModal = function(code) {{
                 currentDcaCode = code;
@@ -2655,7 +2710,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
     return os.path.abspath(filename)
 
 def fetch_crypto_data(symbol, start_date, end_date):
-    """获取主要虚拟货币对USDT历史收盘行情"""
     cache_file = os.path.join(NAV_CACHE_DIR, f"{symbol}.json")
     if os.path.exists(cache_file):
         try:
@@ -2669,7 +2723,6 @@ def fetch_crypto_data(symbol, start_date, end_date):
     pair = f"{symbol}USDT"
     data = []
 
-    # 1. 币安公用K线接口
     try:
         start_ts = int(datetime.strptime(start_date, '%Y-%m-%d').timestamp() * 1000)
         end_ts = int(datetime.strptime(end_date, '%Y-%m-%d').timestamp() * 1000)
@@ -2685,7 +2738,6 @@ def fetch_crypto_data(symbol, start_date, end_date):
     except Exception:
         data = []
 
-    # 2. akshare/新浪外盘期货兜底
     if not data and symbol == "BTC":
         try:
             df = ak.futures_foreign_hist(symbol="BTC")
@@ -2712,7 +2764,6 @@ def fetch_crypto_data(symbol, start_date, end_date):
     return None
 
 def fetch_precious_metals_data(symbol, start_date, end_date):
-    """获取贵金属（伦敦金/银现货、国内黄金/白银连续主力期货）历史行情"""
     cache_file = os.path.join(NAV_CACHE_DIR, f"{symbol}.json")
     if os.path.exists(cache_file):
         try:
@@ -2726,11 +2777,9 @@ def fetch_precious_metals_data(symbol, start_date, end_date):
     df = None
     data = []
     try:
-        # 兼容处理：对外显示AUM，底层接口依然拉取 AU0 行情
         if symbol == "AUM":
             df = ak.futures_main_sina(symbol="AU0")
         elif symbol == "XAU":
-            # 伦敦金现货/COMEX黄金主力
             for sym in ["GC", "XAU"]:
                 try:
                     df = ak.futures_foreign_hist(symbol=sym)
@@ -2739,7 +2788,6 @@ def fetch_precious_metals_data(symbol, start_date, end_date):
                 except Exception:
                     continue
         elif symbol == "XAG":
-            # 伦敦银现货/COMEX白银主力
             for sym in ["SI", "XAG"]:
                 try:
                     df = ak.futures_foreign_hist(symbol=sym)
@@ -2906,7 +2954,10 @@ def main():
             print(f"[{idx}/{len(args.funds)}] {code} - {meta['name']} ... ❌ 历史净值抓取失败")
             continue
         raw_data_sorted = sorted(raw_data, key=lambda x: x['date'])
-        is_qdii = code in QDII_CODES
+        
+        # 凡是海外或者投资美股市场的被动基和主动基，均使用 QDII 的延后一天的最新净值判定逻辑
+        is_qdii = code in US_ACTIVE_CODES or code in NDX_PASSIVE_CODES or code in SPX_PASSIVE_CODES
+        
         res = analyze_fund_metrics(raw_data_sorted, args.end, cutoff_date, is_qdii=is_qdii)
         if res:
             res.update({
