@@ -590,25 +590,45 @@ def analyze_fund_metrics(valid_data, end_date, cutoff_date, is_qdii=False):
 
     rebound_gain = ((latest_nav - trough_nav) / trough_nav) * 100.0 if trough_nav > 0 else 0.0
 
-    def calc_gain(days):
-        target_date = (datetime.strptime(end_date, '%Y-%m-%d') - timedelta(days=days)).strftime('%Y-%m-%d')
-        nav_before = get_nav_at_date(data_all, target_date)
-        if nav_before is not None and nav_before > 0:
-            return ((latest_nav / nav_before) - 1) * 100.0
+    # -------- 修复区域：改用自然月推导并对齐前端图表首个交易日逻辑 --------
+    def add_months(d, months):
+        month = d.month - 1 + months
+        year = d.year + month // 12
+        month = month % 12 + 1
+        day = min(d.day, monthrange(year, month)[1])
+        return d.replace(year=year, month=month, day=day)
+
+    def calc_gain(days=None, months=None, ytd=False):
+        latest_dt = datetime.strptime(latest_date, '%Y-%m-%d')
+        if ytd:
+            target_dt = latest_dt.replace(month=1, day=1)
+        elif days:
+            target_dt = latest_dt - timedelta(days=days)
+        elif months:
+            target_dt = add_months(latest_dt, -months)
+        else:
+            return None
+            
+        target_date_str = target_dt.strftime('%Y-%m-%d')
+        
+        # 为了与前端图表对齐，向后寻找首个 >= target_date_str 的交易日作为基准点
+        base_nav = None
+        for item in data_all:
+            if item['date'] >= target_date_str:
+                base_nav = item['nav']
+                break
+                
+        if base_nav is not None and base_nav > 0:
+            return ((latest_nav / base_nav) - 1) * 100.0
         return None
 
-    week_gain = calc_gain(7)
-    month_gain = calc_gain(30)
-    quarter_gain = calc_gain(90)
-    half_year_gain = calc_gain(180)
-    year_gain = calc_gain(365)
-
-    year_start = datetime.strptime(end_date, '%Y-%m-%d').replace(month=1, day=1).strftime('%Y-%m-%d')
-    nav_ytd = get_nav_at_date(data_all, year_start)
-    if nav_ytd is not None and nav_ytd > 0:
-        ytd_gain = ((latest_nav / nav_ytd) - 1) * 100.0
-    else:
-        ytd_gain = None
+    week_gain = calc_gain(days=7)
+    month_gain = calc_gain(months=1)
+    quarter_gain = calc_gain(months=3)
+    half_year_gain = calc_gain(months=6)
+    year_gain = calc_gain(months=12)
+    ytd_gain = calc_gain(ytd=True)
+    # ------------------------------------------------------------------
 
     return {
         "max_nav": peak_nav,
