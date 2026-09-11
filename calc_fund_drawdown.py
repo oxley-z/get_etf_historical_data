@@ -122,10 +122,52 @@ def get_direct_opener():
     proxy_handler = urllib.request.ProxyHandler({})
     return urllib.request.build_opener(proxy_handler)
 
+def fetch_fear_and_greed_index(opener):
+    """抓取全网权威的市场恐慌与贪婪指数（包含美股/加密备选）"""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Referer": "https://www.cnn.com/markets/fear-and-greed",
+        "Accept": "application/json, text/plain, */*"
+    }
+    # 优先请求 CNN 恐慌指数数据接口
+    url_cnn = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
+    try:
+        req = urllib.request.Request(url_cnn, headers=headers)
+        with opener.open(req, timeout=4) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            score = float(data.get("fear_and_greed", {}).get("score", 50))
+            rating = data.get("fear_and_greed", {}).get("rating", "neutral")
+            return {
+                "score": round(score, 1),
+                "rating": rating,
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "source": "CNN 美股恐慌贪婪指数"
+            }
+    except Exception:
+        pass
+
+    # 备选：Crypto 恐慌贪婪指数
+    url_crypto = "https://api.alternative.me/fng/?limit=1"
+    try:
+        req = urllib.request.Request(url_crypto, headers={"User-Agent": "Mozilla/5.0"})
+        with opener.open(req, timeout=4) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            item = data.get("data", [{}])[0]
+            score = float(item.get("value", 50))
+            rating = item.get("value_classification", "Neutral").lower()
+            return {
+                "score": round(score, 1),
+                "rating": rating,
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "source": "Alternative 市场情绪指数"
+            }
+    except Exception:
+        pass
+
+    return {"score": 50.0, "rating": "neutral", "date": datetime.now().strftime("%Y-%m-%d"), "source": "市场均值"}
+
 def fetch_fund_holder_structure(opener, code):
-    """
-    抓取天天基金 F10 持有人结构数据（采用 chiyouren.py 验证的真实后端接口）
-    """
+    """抓取天天基金 F10 持有人结构数据"""
     cache_file = os.path.join(HOLDER_CACHE_DIR, f"{code}_holder.json")
     if os.path.exists(cache_file):
         try:
@@ -138,7 +180,7 @@ def fetch_fund_holder_structure(opener, code):
 
     url = f"https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=cyrjg&code={code}"
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Referer": f"https://fundf10.eastmoney.com/cyrjg_{code}.html",
         "Accept": "*/*"
     }
@@ -689,7 +731,7 @@ def analyze_fund_metrics(valid_data, end_date, cutoff_date, is_qdii=False):
         "ytd_gain": ytd_gain
     }
 
-def generate_html_report(results, start_date, end_date, today_str, filename="fund_drawdown_dashboard.html"):
+def generate_html_report(results, start_date, end_date, today_str, fear_greed_info, filename="fund_drawdown_dashboard.html"):
     CPO_CODES = {
         "022365", "540010", "002112", "011892", "021528",
         "009645", "011370", "011452", "016371", "001956",
@@ -824,30 +866,43 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             else:
                 return ''
 
+        # 分类映射
         if r['code'] in CPO_CODES:
             group = "cpo"
+            macro_category = "a_share"
         elif r['code'] in STORAGE_CODES:
             group = "storage"
+            macro_category = "a_share"
         elif r['code'] in SEMICONDUCTOR_CODES:
             group = "semiconductor"
+            macro_category = "a_share"
         elif r['code'] in AI_CODES:
             group = "ai"
+            macro_category = "a_share"
         elif r['code'] in GRID_CODES:
             group = "grid"
+            macro_category = "a_share"
         elif r['code'] in ROBOT_CODES:
             group = "robot"
+            macro_category = "a_share"
         elif r['code'] in PRECIOUS_METALS_LOCAL:
             group = "metals"
+            macro_category = "other"
         elif r['code'] in CRYPTO_LOCAL:
             group = "crypto"
+            macro_category = "other"
         elif r['code'] in INDEX_SET_LOCAL:
             group = "index"
+            macro_category = "other"
         elif r['code'] in NDX_PASSIVE_CODES:
             group = "ndx_passive"
+            macro_category = "us_share"
         elif r['code'] in SPX_PASSIVE_CODES:
             group = "spx_passive"
+            macro_category = "us_share"
         else:
             group = "us_active"
+            macro_category = "us_share"
 
         nav_display_html = f'<span class="highlight-special-nav">{r["latest_nav"]:.4f}</span>' if group in ["metals", "crypto", "index"] else f'{r["latest_nav"]:.4f}'
 
@@ -880,7 +935,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             fee_pur_val = float(clean_pur) if clean_pur.replace('.', '', 1).isdigit() else 999.0
 
         rows_html += f"""
-        <tr data-group="{group}" class="fund-row" data-code="{r['code']}">
+        <tr data-group="{group}" data-macro="{macro_category}" class="fund-row" data-code="{r['code']}">
             <td class="code" data-val="{r['code']}">{r['code']}</td>
             <td class="name" data-val="{r['name']}">
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
@@ -927,7 +982,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         </tr>
         """
 
-        # 构建持仓展示（始终保持稳定的左3栏结构）
         if holdings_history:
             sorted_holdings = sorted(holdings_history, key=lambda x: x['date'], reverse=True)
             display_holdings = sorted_holdings[:3]
@@ -998,7 +1052,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                 </div>
                 """
         else:
-            # 无论有无持仓数据，左侧 3 份始终稳定占位，绝不挤压右侧饼图
             holdings_html = """
             <div class="quarter-card empty-holdings-placeholder">
                 <div class="quarter-label"><span class="quarter-title">前十大持仓</span></div>
@@ -1008,7 +1061,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             </div>
             """
 
-        # 第 4 栏：持有人结构饼图
         holder_data = r.get("holder_struct")
         if holder_data and ("inst" in holder_data) and ("indiv" in holder_data):
             inst_r = holder_data["inst"]
@@ -1074,25 +1126,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         </tr>
     """
 
-    groups = [
-        ("汇总", "all"),
-        ("美股主动", "us_active"),
-        ("纳指被动", "ndx_passive"),
-        ("标普被动", "spx_passive"),
-        ("半导体材料设备", "semiconductor"),
-        ("CPO", "cpo"),
-        ("人工智能", "ai"),
-        ("存储芯片", "storage"),
-        ("电网设备", "grid"),
-        ("机器人", "robot"),
-        ("贵金属", "metals"),
-        ("加密货币", "crypto"),
-        ("指数", "index")
-    ]
-    buttons_html = ""
-    for label, group_id in groups:
-        buttons_html += f'<button class="group-btn" data-group="{group_id}">{label}</button>'
-
     friend_links = [
         {"name": "WISE HOLD", "url": "https://www.wise-hold.com/", "desc": "追踪机构持仓与政商名人投资动向"},
         {"name": "WiseETF", "url": "https://www.wise-etf.com/", "desc": "美股ETF/QDII基金估值与溢价监控"},
@@ -1125,8 +1158,8 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>场外基金量化与费率规模看板（含多周期涨幅及走势图）</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>场外基金量化与资产配置看板</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {{
@@ -1176,210 +1209,301 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             background-color: var(--bg);
             color: var(--text);
             margin: 0; 
-            padding: 24px 32px; 
-            height: 100dvh;
+            padding: 0; 
+            height: 100vh;
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            justify-content: flex-start;
             box-sizing: border-box;
             transition: background-color 0.3s, color 0.3s;
         }}
-        .top-wrapper {{
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-            gap: 14px;
-            flex: 0 0 auto;
-            margin-bottom: 12px;
-            min-height: 0;
-        }}
-        .top-left, .top-right {{
-            min-width: 0;
-            min-height: 0;
-            border: 1px solid var(--border);
-            border-radius: 12px;
+        
+        /* 顶部通栏主导航 */
+        .main-navbar {{
             background: var(--table-bg);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.07);
-            box-sizing: border-box;
-        }}
-        .top-left {{
-            padding: 14px 18px;
+            border-bottom: 1px solid var(--border);
+            padding: 0 20px;
             display: flex;
-            flex-direction: column;
-            overflow: hidden;
+            align-items: center;
+            justify-content: space-between;
+            height: 52px;
+            flex-shrink: 0;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+            z-index: 100;
         }}
-        .top-right {{
-            padding: 14px 18px;
+        .nav-brand {{
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--link-color);
             display: flex;
-            flex-direction: column;
+            align-items: center;
             gap: 8px;
-            overflow: hidden;
+        }}
+        .nav-tabs-group {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+        .nav-tab-btn {{
+            background: transparent;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            color: var(--header-text);
+            transition: all 0.2s;
+        }}
+        .nav-tab-btn:hover {{
+            background: var(--hover-bg);
+            color: var(--link-color);
+        }}
+        .nav-tab-btn.active {{
+            background: var(--btn-active-bg);
+            color: #fff;
+        }}
+        .nav-right-tools {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }}
         .theme-toggle {{
-            align-self: flex-end;
             background: var(--header-bg);
             color: var(--text);
             border: 1px solid var(--border);
-            border-radius: 18px;
-            padding: 4px 12px;
+            border-radius: 16px;
+            padding: 4px 10px;
             font-size: 11px;
             cursor: pointer;
-            flex: 0 0 auto;
         }}
-        .theme-toggle:hover {{ opacity: 0.82; }}
-        .header {{ text-align: left; margin: 0 0 6px 0; }}
-        .header-top {{
+
+        /* 内容视图包裹器 */
+        .views-container {{
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding: 12px 20px;
+        }}
+        .view-pane {{
+            display: none;
+            flex-direction: column;
+            height: 100%;
+            min-height: 0;
+        }}
+        .view-pane.active {{
+            display: flex;
+        }}
+
+        /* 首页视图样式 */
+        .home-container {{
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }}
+        .home-banner {{
+            background: var(--table-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 18px 22px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+        }}
+        .home-banner-left h2 {{
+            margin: 0 0 6px 0;
+            color: var(--link-color);
+            font-size: 20px;
+        }}
+        .home-banner-left p {{
+            margin: 0;
+            color: var(--footer-text);
+            font-size: 12px;
+            line-height: 1.5;
+        }}
+
+        /* 恐慌指数紧凑型卡片 */
+        .fng-compact-card {{
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 14px;
             display: flex;
             align-items: center;
+            gap: 14px;
+            flex-shrink: 0;
+        }}
+        .fng-gauge-box {{
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }}
+        .fng-score-badge {{
+            font-size: 24px;
+            font-weight: 800;
+            font-family: "SFMono-Regular", Consolas, monospace;
+            line-height: 1;
             margin-bottom: 2px;
         }}
-        .header-top h2 {{
-            color: #1a73e8;
-            margin: 0;
-            font-size: 18px;
-            line-height: 1.2;
-        }}
-        .header p {{ color: var(--footer-text); font-size: 11px; margin: 2px 0; line-height: 1.3; }}
-        .header-info {{
-            border: 1px solid #e3e7eb;
-            border-radius: 6px;
-            background: var(--hover-bg);
-            padding: 6px 10px;
-            margin-bottom: 8px;
-            overflow: hidden;
+        .fng-rating-text {{
             font-size: 11px;
+            font-weight: 600;
+            text-transform: capitalize;
         }}
-        .header-info p {{ margin: 1px 0; }}
-        .group-tabs {{
-            display: grid;
-            grid-template-columns: minmax(0,1fr) 230px;
-            gap: 8px;
-            align-items: center;
-            margin-top: auto;
-            min-height: 36px;
-        }}
-        .group-buttons {{
+        .fng-desc-box {{
             display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            align-content: center;
-            min-width: 0;
+            flex-direction: column;
+            gap: 4px;
+            max-width: 380px;
+            border-left: 1px dashed var(--border);
+            padding-left: 14px;
         }}
-        .group-btn {{
+        .fng-header-line {{
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            font-weight: bold;
+            color: var(--header-text);
+        }}
+        .fng-bar-track {{
+            height: 6px;
+            background: #e0e0e0;
+            border-radius: 3px;
+            overflow: hidden;
+            position: relative;
+            background: linear-gradient(to right, #d93025, #ea8600, #fbbc04, #34a853, #188038);
+        }}
+        .fng-bar-pointer {{
+            width: 3px;
+            height: 10px;
+            background: #000;
+            position: absolute;
+            top: -2px;
+            transform: translateX(-50%);
+            border-radius: 1px;
+        }}
+        [data-theme="dark"] .fng-bar-pointer {{ background: #fff; }}
+        .fng-range-legend {{
+            display: flex;
+            justify-content: space-between;
+            font-size: 9px;
+            color: var(--footer-text);
+            margin-top: 1px;
+        }}
+
+        /* 首页后续扩展占位区 */
+        .home-grid-section {{
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 14px;
+        }}
+        .home-card-box {{
+            background: var(--table-bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px;
+            box-shadow: var(--card-shadow);
+        }}
+        .home-card-title {{
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--header-text);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }}
+        .home-card-body {{
+            font-size: 12px;
+            color: var(--footer-text);
+            line-height: 1.6;
+        }}
+
+        /* 基金列表子导航与筛选栏 */
+        .sub-filter-bar {{
+            background: var(--table-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+            flex-shrink: 0;
+        }}
+        .category-nav {{
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }}
+        .category-title {{
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--footer-text);
+            margin-right: 4px;
+        }}
+        .cat-btn {{
             background: var(--btn-bg);
             color: var(--btn-text);
             border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 4px 12px;
+            border-radius: 14px;
+            padding: 3px 10px;
             font-size: 11px;
             cursor: pointer;
             transition: all .2s;
             font-weight: 500;
-            white-space: nowrap;
         }}
-        .group-btn:hover {{
+        .cat-btn:hover {{
             background: var(--btn-active-bg);
             color: var(--btn-active-text);
         }}
-        .group-btn.active {{
+        .cat-btn.active {{
             background: var(--btn-active-bg);
             color: var(--btn-active-text);
             border-color: var(--btn-active-bg);
         }}
-        .search-container {{ width: 100%; }}
-        .search-container input {{
+        .search-box-wrap {{
+            width: 260px;
+            flex-shrink: 0;
+        }}
+        .search-box-wrap input {{
             width: 100%;
-            max-width: none;
-            height: 30px;
-            padding: 4px 12px;
-            border-radius: 16px;
+            height: 28px;
+            padding: 4px 10px;
+            border-radius: 14px;
             border: 1px solid #35a853;
             background: var(--input-bg);
             color: var(--text);
             font-size: 12px;
             outline: none;
             box-sizing: border-box;
-            box-shadow: 0 0 0 2px rgba(52,168,83,.08);
         }}
-        .search-container input:focus {{ border-color: #188038; box-shadow: 0 0 0 3px rgba(52,168,83,.14); }}
-        .search-container input::placeholder {{ color: var(--footer-text); }}
-        .friend-cards-wrapper {{
-            display: grid;
-            grid-template-columns: repeat(3,minmax(0,1fr));
-            gap: 10px;
-            width: 100%;
-            min-height: 0;
-            flex: 1;
-        }}
-        .friend-card {{
-            min-width: 0;
-            min-height: 64px;
-            background: var(--card-bg);
-            border-radius: 6px;
-            padding: 8px 10px;
-            box-shadow: var(--card-shadow);
-            border: 1px solid var(--border);
-            box-sizing: border-box;
-            overflow: hidden;
-            transition: transform .12s, box-shadow .12s;
-        }}
-        .friend-card:hover {{
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0,0,0,.12);
-        }}
-        .friend-card a {{
-            color: var(--link-color);
-            text-decoration: none;
-            font-weight: 650;
-            font-size: 13px;
-            display: block;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }}
-        .friend-card a:hover {{ text-decoration: underline; }}
-        .friend-card .friend-desc {{
-            font-size: 10px;
-            color: var(--footer-text);
-            display: block;
-            margin-top: 3px;
-            line-height: 1.3;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }}
-        
+
+        /* 表格排版 */
         .table-container {{ 
             width: 100%; 
             flex: 1 1 0; 
             min-height: 0; 
             overflow-y: auto; 
             overflow-x: auto; 
-            -webkit-overflow-scrolling: touch;
             box-sizing: border-box; 
             background: var(--table-bg);
-            border-radius: 12px; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08); 
-            padding: 10px; 
+            border-radius: 10px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.06); 
+            padding: 8px; 
             border: 1px solid var(--border);
-            margin-bottom: 12px;
-            transition: background 0.3s, border-color 0.3s;
-        }}
-        .table-container::-webkit-scrollbar {{
-            height: 12px;
-            width: 8px;
-        }}
-        .table-container::-webkit-scrollbar-track {{
-            background: var(--progress-track);
-            border-radius: 6px;
-        }}
-        .table-container::-webkit-scrollbar-thumb {{
-            background: #888;
-            border-radius: 6px;
-        }}
-        .table-container::-webkit-scrollbar-thumb:hover {{
-            background: #666;
+            margin-bottom: 6px;
         }}
         table {{ 
             width: 100%; 
@@ -1396,7 +1520,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             overflow: hidden; 
             text-overflow: ellipsis; 
             box-sizing: border-box; 
-            transition: border-color 0.3s;
         }}
         #fundTable thead th {{
             position: sticky;
@@ -1404,10 +1527,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             z-index: 10;
             background-color: var(--header-bg);
             border-bottom: 2px solid var(--border);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-        }}
-        [data-theme="dark"] #fundTable thead th {{
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }}
         th:nth-child(1), td:nth-child(1) {{ width: 60px; text-align: left; white-space: nowrap; }}
         th:nth-child(2), td:nth-child(2) {{ width: 250px; min-width: 200px; text-align: left; white-space: normal; word-break: break-word; vertical-align: middle; }}
@@ -1436,13 +1555,10 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             text-align: right; 
             user-select: none; 
             cursor: pointer; 
-            transition: background-color 0.2s, color 0.2s; 
             white-space: normal;
             word-break: keep-all;
-            overflow-wrap: anywhere;
             line-height: 1.25;
-            height: 42px;
-            min-height: 42px;
+            height: 38px;
             vertical-align: middle;
             position: relative; 
         }}
@@ -1450,36 +1566,14 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         [data-theme="dark"] th:hover {{ background-color: #3d3d3d; }}
         th:nth-child(1), th:nth-child(2), th:nth-child(3), th:nth-child(4), th:nth-child(5), th:nth-child(6) {{ text-align: left; }}
         tr:hover {{ background-color: var(--hover-bg); }}
-        .resizer {{
-            position: absolute; 
-            right: 0; 
-            top: 0; 
-            bottom: 0; 
-            width: 6px;
-            cursor: col-resize; 
-            user-select: none; 
-            touch-action: none; 
-            z-index: 10;
-        }}
-        .resizer:hover, th.resizing .resizer {{ background-color: #1a73e8; }}
-        .sort-icon {{ font-size: 10px; margin-left: 2px; color: var(--footer-text); }}
-        .code {{ font-family: "SFMono-Regular", Consolas, monospace; font-weight: bold; color: #1a73e8; }}
-        .name a {{ 
-            font-weight: 500; 
-            color: #1a73e8; 
-            text-decoration: none; 
-            display: inline-block; 
-            max-width: 100%; 
-            overflow: hidden; 
-            text-overflow: ellipsis; 
-            vertical-align: middle; 
-        }}
-        .name a:hover {{ text-decoration: underline; color: #1557b0; }}
         
-        .redemption-sub {{ font-size: 10px; color: var(--footer-text); font-weight: normal; margin-top: 2px; }}
+        .code {{ font-family: "SFMono-Regular", Consolas, monospace; font-weight: bold; color: #1a73e8; }}
+        .name a {{ font-weight: 500; color: #1a73e8; text-decoration: none; }}
+        .redemption-sub {{ font-size: 10px; color: var(--footer-text); margin-top: 2px; }}
         .highlight-rate {{ color: #d93025; font-weight: bold; }}
         .highlight-val {{ font-weight: 600; color: #e67e22; }}
         .fee-sub {{ font-size: 10px; color: var(--footer-text); }}
+
         .progress-container {{
             background-color: var(--progress-track);
             border-radius: 6px;
@@ -1487,7 +1581,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             height: 20px;
             width: 100%;
             position: relative;
-            transition: background-color 0.3s;
         }}
         .progress-bar {{
             height: 100%;
@@ -1498,13 +1591,11 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             justify-content: flex-end;
             padding-right: 6px;
             box-sizing: border-box;
-            transition: width .2s ease;
         }}
         .progress-bar span {{
             color: #fff;
             font-size: 11px;
             font-weight: 600;
-            text-shadow: 0 1px 1px rgba(0,0,0,.25);
         }}
         .bar-red {{ background-color: #d93025; }}
         .bar-blue {{ background-color: #1a73e8; }}
@@ -1513,29 +1604,16 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         .metric-green {{ color: #188038; font-weight: 600; }}
         .gain-positive {{ color: #d93025; font-weight: bold; }}
         .gain-negative {{ color: #188038; font-weight: bold; }}
-        .gain-date {{ font-size: 10px; color: var(--footer-text); font-weight: normal; }}
+        .gain-date {{ font-size: 10px; color: var(--footer-text); }}
 
-        .highlight-special-nav {{
-            font-weight: bold;
-            color: #d93025;
-            background-color: rgba(217, 48, 37, 0.1);
-            padding: 2px 6px;
-            border-radius: 4px;
-        }}
-        [data-theme="dark"] .highlight-special-nav {{
-            color: #ff8a65;
-            background-color: rgba(255, 138, 101, 0.15);
-        }}
-
+        /* 折叠持仓卡片排版 */
         .fund-row {{ cursor: pointer; }}
-        .fund-row .name a {{ pointer-events: auto; cursor: pointer; }}
         .holding-row td {{
             background-color: var(--hover-bg) !important;
             border-top: 1px dashed var(--border);
         }}
         .holding-row {{ display: none; }}
         .holding-row.show {{ display: table-row; }}
-        
         .holdings-wrapper {{
             display: flex;
             flex-wrap: nowrap;
@@ -1543,7 +1621,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             align-items: stretch;
             width: 100%;
         }}
-        /* 左半边占50%，内部均匀划分为4等份 */
         .holdings-container {{
             flex: 0 0 calc(50% - 8px);
             width: calc(50% - 8px);
@@ -1560,14 +1637,10 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             padding: 10px 8px;
             box-shadow: var(--card-shadow);
             box-sizing: border-box;
-            overflow: hidden;
             display: flex;
             flex-direction: column;
         }}
-        /* 空持仓时的占位卡片：刚好独占左边3个格子（3/4空间） */
-        .empty-holdings-placeholder {{
-            grid-column: span 3;
-        }}
+        .empty-holdings-placeholder {{ grid-column: span 3; }}
         .quarter-label {{
             font-weight: bold;
             font-size: 12px;
@@ -1578,28 +1651,10 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 4px;
         }}
-        .quarter-title {{
-            flex: 1;
-            min-width: 0;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }}
-        .quarter-end {{
-            flex-shrink: 0;
-            font-size: 10px;
-            font-weight: 500;
-            color: var(--footer-text);
-            white-space: nowrap;
-        }}
-        .quarter-stocks {{
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            flex: 1;
-        }}
+        .quarter-title {{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+        .quarter-end {{ font-size: 10px; color: var(--footer-text); }}
+        .quarter-stocks {{ display: flex; flex-direction: column; gap: 4px; flex: 1; }}
         .stock-item {{
             display: grid;
             grid-template-columns: minmax(0, 1fr) 50px 56px;
@@ -1607,12 +1662,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             font-size: 11px;
             align-items: center;
         }}
-        .stock-name {{
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            text-align: left;
-        }}
+        .stock-name {{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
         .stock-ratio {{ text-align: right; font-weight: 500; }}
         .stock-change {{ text-align: right; font-size: 10px; white-space: nowrap; }}
         .change-add {{ color: #d93025; }}
@@ -1626,10 +1676,8 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             border-top: 1px dashed var(--border);
             font-weight: 600;
         }}
-        .stock-total .stock-name {{ color: var(--header-text); }}
-        .stock-total .stock-ratio {{ color: #e67e22; font-weight: 700; }}
-
-        /* 持有人结构卡片：精准固定占 1 份 */
+        .stock-total .stock-ratio {{ color: #e67e22; }}
+        
         .holder-card {{
             display: flex;
             flex-direction: column;
@@ -1643,7 +1691,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             position: relative;
             min-height: 140px;
             max-height: 180px;
-            padding: 4px 0;
         }}
         .holder-date-sub {{
             font-size: 10px;
@@ -1652,9 +1699,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             border-top: 1px dashed var(--border);
             padding-top: 6px;
             margin-top: 4px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
         }}
 
         .chart-container {{
@@ -1667,12 +1711,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             flex-direction: column;
             min-height: 200px;
         }}
-        .chart-controls {{
-            display: flex;
-            flex-wrap: wrap;
-            gap: 4px;
-            margin-bottom: 6px;
-        }}
+        .chart-controls {{ display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }}
         .chart-controls button {{
             background: var(--btn-bg);
             border: 1px solid var(--border);
@@ -1685,7 +1724,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
         .chart-controls button.active {{
             background: var(--btn-active-bg);
             color: var(--btn-active-text);
-            border-color: var(--btn-active-bg);
         }}
         .chart-container canvas {{
             width: 100% !important;
@@ -1693,147 +1731,223 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             max-height: 200px;
             flex: 1;
         }}
-
-        /* --- 移动端及中小屏幕核心适配 --- */
-        @media (max-width: 1024px) {{
-            body {{ padding: 16px 12px; height: auto; min-height: 100dvh; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; }}
-            .top-wrapper {{ display: flex; flex-direction: column; height: auto; flex: none; gap: 10px; margin-bottom: 12px; }}
-            .top-left, .top-right {{ min-height: auto; padding: 12px; width: 100%; }}
-            .header-top h2 {{ font-size: 16px; white-space: normal; line-height: 1.3; }}
-            .header p, .header-info {{ font-size: 11px; }}
-            .group-tabs {{ display: flex; flex-direction: column; gap: 8px; align-items: stretch; }}
-            .group-buttons {{ justify-content: flex-start; }}
-            .search-container input {{ height: 36px; font-size: 13px; max-width: 100%; }}
-            .friend-cards-wrapper {{ grid-template-columns: repeat(2, 1fr); gap: 8px; }}
-            
-            .table-container {{ height: auto; flex: none; overflow-y: visible; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 16px; padding: 0; }}
-            #fundTable {{ min-width: 2400px; }}
-            
-            .footer-note {{ flex-direction: column; align-items: stretch; text-align: left; gap: 8px; padding: 12px; margin-bottom: 16px; }}
-            .footer-right {{ justify-content: flex-start; flex-wrap: wrap; }}
-            
-            .holdings-wrapper {{ flex-direction: column; gap: 12px; }}
-            .holdings-container {{ width: 100%; flex: none; display: flex; flex-direction: column; gap: 8px; padding: 0 10px; box-sizing: border-box; }}
-            .quarter-card {{ width: 100%; flex: none; padding: 8px 6px; }}
-            .empty-holdings-placeholder {{ grid-column: auto; }}
-            .chart-container {{ width: 100%; flex: none; margin: 0; padding: 10px; box-sizing: border-box; }}
-            .chart-container canvas {{ width: 100% !important; }}
-            
-            .stock-item {{ grid-template-columns: minmax(0, 1fr) 48px 56px; font-size: 10px; }}
-            .stock-change {{ font-size: 9px; }}
-        }}
         
         .footer-note {{ 
-            margin-top: 0; 
             font-size: 11px; 
             color: var(--footer-text);
-            line-height: 1.35; 
             background: var(--footer-bg);
-            padding: 8px 14px; 
+            padding: 6px 12px; 
             border-radius: 6px; 
             border: 1px solid var(--border);
-            flex-shrink: 0;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 12px;
-            box-sizing: border-box;
-            transition: background-color 0.3s, color 0.3s, border-color 0.3s;
-        }}
-        .footer-left {{ flex: 1; min-width: 0; }}
-        .footer-left p {{ margin: 1px 0; }}
-        .footer-right {{
-            flex-shrink: 0;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            font-size: 11px;
-            font-weight: 500;
-            color: var(--link-color);
-            background: var(--hover-bg);
-            padding: 3px 8px;
-            border-radius: 4px;
-            border: 1px solid var(--border);
-            white-space: nowrap;
         }}
     </style>
 </head>
 <body>
-    <div class="top-wrapper">
-        <section class="top-left">
-            <div class="header">
-                <div class="header-top">
-                    <h2>场外基金核心量化与全费率规模看板（含多周期涨幅及走势图）</h2>
-                </div>
-                <p>统计时间区间：<strong>{start_date}</strong> 至 <strong>{end_date}</strong>（包含基金数：{len(results)} 只）</p>
-            </div>
-            <div class="header-info">
-                <p>申购费率已取优惠后费率，销售服务费默认0.00%，赎回费率百分比已高亮。</p>
-                <p>最高/最低净值为回撤计算区间内峰值与谷值（谷值位于峰值之后）；涨幅基于完整历史净值计算。</p>
-            </div>
-            <div class="group-tabs">
-                <div class="group-buttons">
-                    {buttons_html}
-                </div>
-                <div class="search-container">
-                    <input type="text" id="searchInput" placeholder="🔍 搜索基金名称或代码 ...">
-                </div>
-            </div>
-        </section>
-        <section class="top-right">
+    <!-- 顶部主菜单导航栏 -->
+    <header class="main-navbar">
+        <div class="nav-brand">
+            <span>📈 资产量化与策略看板</span>
+        </div>
+        <div class="nav-tabs-group">
+            <button class="nav-tab-btn active" data-view="homeView">🏠 首页概览</button>
+            <button class="nav-tab-btn" data-view="fundView">📊 基金量化看板</button>
+        </div>
+        <div class="nav-right-tools">
             <button class="theme-toggle" id="themeToggle">🌓 切换主题</button>
-            <div class="friend-cards-wrapper">
-                {friend_cards_html}
+        </div>
+    </header>
+
+    <!-- 主体视图区 -->
+    <main class="views-container">
+        
+        <!-- 视图 1：首页 -->
+        <section id="homeView" class="view-pane active">
+            <div class="home-container">
+                <!-- 头部 Banner 与紧凑恐慌指数卡片 -->
+                <div class="home-banner">
+                    <div class="home-banner-left">
+                        <h2>宏观全景与市场情绪</h2>
+                        <p>监控全球主要市场流动性、跨资产表现与市场恐慌贪婪程度，为仓位攻防提供科学的量化依据。</p>
+                    </div>
+                    
+                    <!-- 恐慌指数紧凑组件 -->
+                    <div class="fng-compact-card">
+                        <div class="fng-gauge-box">
+                            <div class="fng-score-badge" id="fngScore">--</div>
+                            <div class="fng-rating-text" id="fngRating">--</div>
+                        </div>
+                        <div class="fng-desc-box">
+                            <div class="fng-header-line">
+                                <span>市场情绪 (Fear & Greed)</span>
+                                <span style="font-weight:normal; font-size:10px; color:var(--footer-text);" id="fngDate">--</span>
+                            </div>
+                            <div class="fng-bar-track">
+                                <div class="fng-bar-pointer" id="fngPointer" style="left: 50%;"></div>
+                            </div>
+                            <div class="fng-range-legend">
+                                <span style="color:#d93025;">0 极度恐慌</span>
+                                <span style="color:#ea8600;">恐慌</span>
+                                <span style="color:#fbbc04;">中性</span>
+                                <span style="color:#34a853;">贪婪</span>
+                                <span style="color:#188038;">100 极度贪婪</span>
+                            </div>
+                            <div style="font-size:10px; color:var(--footer-text); margin-top:2px;">
+                                💡 <strong>指标含义：</strong> 0~25 极恐(往往孕育买点) | 26~45 谨慎 | 46~54 中性 | 55~75 贪婪 | 76~100 亢奋极贪(注意风控)
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 首页后续内容预留区 -->
+                <div class="home-grid-section">
+                    <div class="home-card-box">
+                        <div class="home-card-title">
+                            <span>📌 策略速览与投资备忘</span>
+                            <span style="font-size:11px; font-weight:normal; color:var(--link-color);">后续持续扩展</span>
+                        </div>
+                        <div class="home-card-body">
+                            <p>• <strong>资产分层配置：</strong> 建议维持海外核心指数资产底仓，同时通过网格及定投工具平滑A股科技与周期板块的波动。</p>
+                            <p>• <strong>恐慌指数运用：</strong> 当市场处于极端恐慌区间时，逐步加大定投资金比例；处于极度贪婪时，分批兑现浮盈。</p>
+                            <div style="padding: 20px; text-align: center; background: var(--hover-bg); border-radius: 8px; margin-top: 10px; border: 1px dashed var(--border);">
+                                💡 首页后续内容扩充区域（可扩展：大盘估值雷达、资金动向、重要财经日历）
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="home-card-box">
+                        <div class="home-card-title">
+                            <span>🔗 研投工具导航</span>
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:8px;">
+                            {friend_cards_html}
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
-    </div>
 
-    <div class="table-container">
-        <table id="fundTable">
-            <thead>
-                <tr>
-                    <th data-col="0" onclick="sortTable(0)">代码 <span class="sort-icon">⇅</span></th>
-                    <th data-col="1" onclick="sortTable(1)">基金名称 / 赎回费率阶梯 <span class="sort-icon">⇅</span></th>
-                    <th data-col="2" onclick="sortTable(2)">最新规模 <span class="sort-icon">⇅</span></th>
-                    <th data-col="3" onclick="sortTable(3)">运作费(管/托/销) <span class="sort-icon">⇅</span></th>
-                    <th data-col="4" onclick="sortTable(4)">申购费率 <span class="sort-icon">⇅</span></th>
-                    <th data-col="5" onclick="sortTable(5)">申购状态/限额 <span class="sort-icon">⇅</span></th>
-                    <th data-col="6" onclick="sortTable(6)">最高净值 <span class="sort-icon">⇅</span></th>
-                    <th data-col="7" onclick="sortTable(7)">最低净值 <span class="sort-icon">⇅</span></th>
-                    <th data-col="8" onclick="sortTable(8)">最新净值 <span class="sort-icon">⇅</span></th>
-                    <th data-col="9" onclick="sortTable(9)">最大回撤 <span class="sort-icon">⇅</span></th>
-                    <th data-col="10" onclick="sortTable(10)">自低点反弹 <span class="sort-icon">⇅</span></th>
-                    <th data-col="11" onclick="sortTable(11)">修复程度 <span class="sort-icon">⇅</span></th>
-                    <th data-col="12" onclick="sortTable(12)">修复时间 <span class="sort-icon">⇅</span></th>
-                    <th data-col="13" onclick="sortTable(13)">{col_today_title} <span class="sort-icon">⇅</span></th>
-                    <th data-col="14" onclick="sortTable(14)">近一周 <span class="sort-icon">⇅</span></th>
-                    <th data-col="15" onclick="sortTable(15)">近一月 <span class="sort-icon">⇅</span></th>
-                    <th data-col="16" onclick="sortTable(16)">近三月 <span class="sort-icon">⇅</span></th>
-                    <th data-col="17" onclick="sortTable(17)">近半年 <span class="sort-icon">⇅</span></th>
-                    <th data-col="18" onclick="sortTable(18)">近一年 <span class="sort-icon">⇅</span></th>
-                    <th data-col="19" onclick="sortTable(19)">今年内 <span class="sort-icon">⇅</span></th>
-                </tr>
-            </thead>
-            <tbody>
-                {rows_html}
-                {empty_row}
-            </tbody>
-        </table>
-    </div>
-    <div class="footer-note">
-        <div class="footer-left">
-            <p><strong>使用提示：</strong> 列宽可拖拽调整，点击表头排序。涨幅数据基于可获取的历史净值，若区间内无对应日期数据则显示“-”。</p>
-            <p><span style="color: #1a73e8;">👉 点击基金行可展开/收起持仓明细与净值走势图。</span></p>
-        </div>
-        <div class="footer-right" title="静态页面生成与更新时间">
-            <span>⏱️ 数据更新于: <strong>{update_time_str}</strong></span>
-        </div>
-    </div>
+        <!-- 视图 2：基金量化看板 -->
+        <section id="fundView" class="view-pane">
+            <!-- 顶部多级分类菜单栏 (美股、A股、其他) -->
+            <div class="sub-filter-bar">
+                <div class="category-nav">
+                    <span class="category-title">市场大类:</span>
+                    <button class="cat-btn active" data-macro="all" data-sub="all">全部展示</button>
+                    
+                    <span class="category-title" style="margin-left: 8px;">美股:</span>
+                    <button class="cat-btn" data-macro="us_share" data-sub="all">美股全量</button>
+                    <button class="cat-btn" data-macro="us_share" data-sub="us_active">美股主动</button>
+                    <button class="cat-btn" data-macro="us_share" data-sub="ndx_passive">纳指被动</button>
+                    <button class="cat-btn" data-macro="us_share" data-sub="spx_passive">标普被动</button>
+                    
+                    <span class="category-title" style="margin-left: 8px;">A股板块:</span>
+                    <button class="cat-btn" data-macro="a_share" data-sub="all">A股全量</button>
+                    <button class="cat-btn" data-macro="a_share" data-sub="cpo">CPO</button>
+                    <button class="cat-btn" data-macro="a_share" data-sub="storage">存储芯片</button>
+                    <button class="cat-btn" data-macro="a_share" data-sub="semiconductor">半导体材料</button>
+                    <button class="cat-btn" data-macro="a_share" data-sub="ai">人工智能</button>
+                    <button class="cat-btn" data-macro="a_share" data-sub="grid">电网设备</button>
+                    <button class="cat-btn" data-macro="a_share" data-sub="robot">机器人</button>
+                    
+                    <span class="category-title" style="margin-left: 8px;">其他:</span>
+                    <button class="cat-btn" data-macro="other" data-sub="metals">贵金属</button>
+                    <button class="cat-btn" data-macro="other" data-sub="crypto">加密货币</button>
+                    <button class="cat-btn" data-macro="other" data-sub="index">主流指数</button>
+                </div>
+
+                <div class="search-box-wrap">
+                    <input type="text" id="searchInput" placeholder="🔍 搜索代码或名称...">
+                </div>
+            </div>
+
+            <!-- 数据表格 -->
+            <div class="table-container">
+                <table id="fundTable">
+                    <thead>
+                        <tr>
+                            <th data-col="0" onclick="sortTable(0)">代码 <span class="sort-icon">⇅</span></th>
+                            <th data-col="1" onclick="sortTable(1)">基金名称 / 赎回费率阶梯 <span class="sort-icon">⇅</span></th>
+                            <th data-col="2" onclick="sortTable(2)">最新规模 <span class="sort-icon">⇅</span></th>
+                            <th data-col="3" onclick="sortTable(3)">运作费(管/托/销) <span class="sort-icon">⇅</span></th>
+                            <th data-col="4" onclick="sortTable(4)">申购费率 <span class="sort-icon">⇅</span></th>
+                            <th data-col="5" onclick="sortTable(5)">申购状态/限额 <span class="sort-icon">⇅</span></th>
+                            <th data-col="6" onclick="sortTable(6)">最高净值 <span class="sort-icon">⇅</span></th>
+                            <th data-col="7" onclick="sortTable(7)">最低净值 <span class="sort-icon">⇅</span></th>
+                            <th data-col="8" onclick="sortTable(8)">最新净值 <span class="sort-icon">⇅</span></th>
+                            <th data-col="9" onclick="sortTable(9)">最大回撤 <span class="sort-icon">⇅</span></th>
+                            <th data-col="10" onclick="sortTable(10)">自低点反弹 <span class="sort-icon">⇅</span></th>
+                            <th data-col="11" onclick="sortTable(11)">修复程度 <span class="sort-icon">⇅</span></th>
+                            <th data-col="12" onclick="sortTable(12)">修复时间 <span class="sort-icon">⇅</span></th>
+                            <th data-col="13" onclick="sortTable(13)">{col_today_title} <span class="sort-icon">⇅</span></th>
+                            <th data-col="14" onclick="sortTable(14)">近一周 <span class="sort-icon">⇅</span></th>
+                            <th data-col="15" onclick="sortTable(15)">近一月 <span class="sort-icon">⇅</span></th>
+                            <th data-col="16" onclick="sortTable(16)">近三月 <span class="sort-icon">⇅</span></th>
+                            <th data-col="17" onclick="sortTable(17)">近半年 <span class="sort-icon">⇅</span></th>
+                            <th data-col="18" onclick="sortTable(18)">近一年 <span class="sort-icon">⇅</span></th>
+                            <th data-col="19" onclick="sortTable(19)">今年内 <span class="sort-icon">⇅</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows_html}
+                        {empty_row}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="footer-note">
+                <div class="footer-left">
+                    <span>💡 <strong>使用提示：</strong> 表格支持列宽自由拖拽与表头排序；点击基金数据行可展开查看前十大持仓、持有人结构及走势图。</span>
+                </div>
+                <div class="footer-right">
+                    <span>⏱️ 统计更新于: <strong>{update_time_str}</strong></span>
+                </div>
+            </div>
+        </section>
+    </main>
 
     <script>
         var fundNavData = {json.dumps(nav_data_json, ensure_ascii=False)};
-        var fundNames = {json.dumps(fund_names_json, ensure_ascii=False)};
+        var fngData = {json.dumps(fear_greed_info, ensure_ascii=False)};
 
+        // 1. 初始化恐慌指数
+        (function() {{
+            const scoreElem = document.getElementById('fngScore');
+            const ratingElem = document.getElementById('fngRating');
+            const dateElem = document.getElementById('fngDate');
+            const pointerElem = document.getElementById('fngPointer');
+            if (fngData && scoreElem) {{
+                const val = fngData.score;
+                scoreElem.innerText = val;
+                ratingElem.innerText = fngData.rating;
+                dateElem.innerText = fngData.date + ' (' + fngData.source + ')';
+                pointerElem.style.left = val + '%';
+                
+                // 情绪色彩
+                let color = '#fbbc04';
+                if (val <= 25) color = '#d93025';
+                else if (val <= 45) color = '#ea8600';
+                else if (val >= 75) color = '#188038';
+                else if (val >= 55) color = '#34a853';
+                scoreElem.style.color = color;
+                ratingElem.style.color = color;
+            }}
+        }})();
+
+        // 2. 主导航切换 (首页 vs 看板)
+        document.querySelectorAll('.nav-tab-btn').forEach(btn => {{
+            btn.addEventListener('click', function() {{
+                document.querySelectorAll('.nav-tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.view-pane').forEach(p => p.classList.remove('active'));
+                this.classList.add('active');
+                const targetView = document.getElementById(this.dataset.view);
+                if (targetView) targetView.classList.add('active');
+            }});
+        }});
+
+        // 3. 亮暗主题切换
         (function() {{
             const toggle = document.getElementById('themeToggle');
             const currentTheme = localStorage.getItem('theme') || 'light';
@@ -1848,106 +1962,85 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             }});
         }})();
 
+        // 4. 多级标签与搜索筛选逻辑
         document.addEventListener('DOMContentLoaded', function() {{
-            const buttons = document.querySelectorAll('.group-btn');
+            const catBtns = document.querySelectorAll('.cat-btn');
             const searchInput = document.getElementById('searchInput');
             const emptyRow = document.getElementById('empty-row');
             const allRows = document.querySelectorAll('#fundTable tbody tr:not(#empty-row)');
-            let currentGroup = 'all';
+            let currentMacro = 'all';
+            let currentSub = 'all';
             let searchKeyword = '';
 
             function applyFilters() {{
                 let hasVisible = false;
                 const keyword = searchKeyword.trim().toLowerCase();
+
                 allRows.forEach(row => {{
                     if (row.classList.contains('holding-row')) return;
-                    const rowGroup = row.getAttribute('data-group');
+                    const macro = row.getAttribute('data-macro');
+                    const sub = row.getAttribute('data-group');
                     const nameCell = row.querySelector('.name a');
                     const name = nameCell ? nameCell.textContent.toLowerCase() : '';
                     const codeCell = row.querySelector('.code');
                     const code = codeCell ? codeCell.textContent.toLowerCase() : '';
-                    const matchGroup = (currentGroup === 'all') || (rowGroup === currentGroup);
+
+                    let matchCategory = false;
+                    if (currentMacro === 'all') {{
+                        matchCategory = true;
+                    }} else if (currentSub === 'all') {{
+                        matchCategory = (macro === currentMacro);
+                    }} else {{
+                        matchCategory = (sub === currentSub);
+                    }}
+
                     const matchSearch = keyword === '' || name.includes(keyword) || code.includes(keyword);
-                    const visible = matchGroup && matchSearch;
+                    const visible = matchCategory && matchSearch;
+
                     if (visible) {{
                         row.style.display = '';
                         hasVisible = true;
                         const code = row.getAttribute('data-code');
-                        const holdingRow = document.querySelector(`.holding-row[data-code="${{code}}"]`);
-                        if (holdingRow) {{
-                            if (holdingRow.classList.contains('show')) {{
-                                holdingRow.style.display = '';
-                            }} else {{
-                                holdingRow.style.display = 'none';
-                            }}
-                        }}
+                        const hRow = document.querySelector(`.holding-row[data-code="${{code}}"]`);
+                        if (hRow && hRow.classList.contains('show')) hRow.style.display = '';
                     }} else {{
                         row.style.display = 'none';
                         const code = row.getAttribute('data-code');
-                        const holdingRow = document.querySelector(`.holding-row[data-code="${{code}}"]`);
-                        if (holdingRow) {{
-                            holdingRow.style.display = 'none';
-                        }}
+                        const hRow = document.querySelector(`.holding-row[data-code="${{code}}"]`);
+                        if (hRow) hRow.style.display = 'none';
                     }}
                 }});
-                if (hasVisible) {{
-                    emptyRow.style.display = 'none';
-                }} else {{
-                    emptyRow.style.display = '';
-                    const msg = searchKeyword.trim() ? '未找到匹配基金' : '该分类暂无基金，敬请期待';
-                    emptyRow.querySelector('td').textContent = msg;
+
+                if (emptyRow) {{
+                    emptyRow.style.display = hasVisible ? 'none' : '';
+                    if (!hasVisible) {{
+                        emptyRow.querySelector('td').textContent = keyword ? '未找到匹配基金' : '当前分类暂无数据';
+                    }}
                 }}
             }}
-            buttons.forEach(btn => {{
+
+            catBtns.forEach(btn => {{
                 btn.addEventListener('click', function() {{
-                    buttons.forEach(b => b.classList.remove('active'));
+                    catBtns.forEach(b => b.classList.remove('active'));
                     this.classList.add('active');
-                    currentGroup = this.dataset.group;
+                    currentMacro = this.dataset.macro;
+                    currentSub = this.dataset.sub;
                     applyFilters();
                 }});
             }});
-            searchInput.addEventListener('input', function() {{
-                searchKeyword = this.value;
-                applyFilters();
-            }});
-            const defaultBtn = document.querySelector('.group-btn[data-group="all"]');
-            if (defaultBtn) defaultBtn.classList.add('active');
-            applyFilters();
+
+            if (searchInput) {{
+                searchInput.addEventListener('input', function() {{
+                    searchKeyword = this.value;
+                    applyFilters();
+                }});
+            }}
         }});
 
+        // 5. 原生饼图绘制插件与走势图渲染
         var chartInstances = {{}};
         var holderChartInstances = {{}};
-        var chartColors = {{
-            line: '#1a73e8',
-            point: '#1a73e8',
-            bg: 'rgba(26,115,232,0.1)'
-        }};
-        const crosshairPlugin = {{
-            id: 'fundCrosshair',
-            afterDraw(chart) {{
-                const crosshair = chart._fundCrosshair;
-                if (!crosshair) return;
-                const ctx = chart.ctx;
-                const area = chart.chartArea;
-                if (!area) return;
-                const x = Math.max(area.left, Math.min(area.right, crosshair.x));
-                const y = Math.max(area.top, Math.min(area.bottom, crosshair.y));
-                ctx.save();
-                ctx.beginPath();
-                ctx.moveTo(x, area.top);
-                ctx.lineTo(x, area.bottom);
-                ctx.moveTo(area.left, y);
-                ctx.lineTo(area.right, y);
-                ctx.lineWidth = 1;
-                ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--footer-text').trim() || '#70757a';
-                ctx.setLineDash([4, 4]);
-                ctx.stroke();
-                ctx.restore();
-            }}
-        }};
-        Chart.register(crosshairPlugin);
-
-        // 自定义原生饼图数值绘制插件（无需外挂插件直接在扇区内居中绘制百分比数值）
+        
         const pieLabelsPlugin = {{
             id: 'pieLabels',
             afterDraw(chart) {{
@@ -1957,7 +2050,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                     const meta = chart.getDatasetMeta(i);
                     meta.data.forEach((element, index) => {{
                         const val = dataset.data[index];
-                        if (val <= 6) return; // 比例过小（<=6%）不强行塞入文字，由图例清晰呈现
+                        if (val <= 6) return;
                         const {{ x, y }} = element.tooltipPosition();
                         ctx.save();
                         ctx.fillStyle = '#ffffff';
@@ -1980,32 +2073,19 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             const navs = data.navs;
             const latest = new Date(dates[dates.length - 1]);
             let startDate = new Date(latest);
-            if (period === 'week') {{
-                startDate.setDate(latest.getDate() - 7);
-            }} else if (period === 'month') {{
-                startDate.setMonth(latest.getMonth() - 1);
-            }} else if (period === 'quarter') {{
-                startDate.setMonth(latest.getMonth() - 3);
-            }} else if (period === 'half') {{
-                startDate.setMonth(latest.getMonth() - 6);
-            }} else if (period === 'year') {{
-                startDate.setFullYear(latest.getFullYear() - 1);
-            }} else if (period === 'ytd') {{
-                startDate = new Date(latest.getFullYear(), 0, 1);
-            }}
+            if (period === 'week') startDate.setDate(latest.getDate() - 7);
+            else if (period === 'month') startDate.setMonth(latest.getMonth() - 1);
+            else if (period === 'quarter') startDate.setMonth(latest.getMonth() - 3);
+            else if (period === 'half') startDate.setMonth(latest.getMonth() - 6);
+            else if (period === 'year') startDate.setFullYear(latest.getFullYear() - 1);
+            else if (period === 'ytd') startDate = new Date(latest.getFullYear(), 0, 1);
+
             const indices = [];
             for (let i = 0; i < dates.length; i++) {{
-                const d = new Date(dates[i]);
-                if (d >= startDate) {{
-                    indices.push(i);
-                }}
+                if (new Date(dates[i]) >= startDate) indices.push(i);
             }}
-            if (indices.length === 0) {{
-                return {{ dates: dates, navs: navs }};
-            }}
-            const filteredDates = indices.map(i => dates[i]);
-            const filteredNavs = indices.map(i => navs[i]);
-            return {{ dates: filteredDates, navs: filteredNavs }};
+            if (indices.length === 0) return {{ dates: dates, navs: navs }};
+            return {{ dates: indices.map(i => dates[i]), navs: indices.map(i => navs[i]) }};
         }}
 
         function initHolderChart(code) {{
@@ -2015,9 +2095,7 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                 if (typeof holderChartInstances[code].destroy === 'function') {{
                     holderChartInstances[code].destroy();
                     delete holderChartInstances[code];
-                }} else {{
-                    return;
-                }}
+                }} else return;
             }}
             const inst = parseFloat(canvas.getAttribute('data-inst'));
             const indiv = parseFloat(canvas.getAttribute('data-indiv'));
@@ -2047,7 +2125,6 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                                 boxWidth: 10,
                                 padding: 6,
                                 color: getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#333',
-                                // 图例直接展示精准数值与百分比，无需悬浮一目了然
                                 generateLabels: function(chart) {{
                                     const data = chart.data;
                                     if (data.labels.length && data.datasets.length) {{
@@ -2058,19 +2135,11 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                                                 fillStyle: data.datasets[0].backgroundColor[i],
                                                 strokeStyle: 'transparent',
                                                 lineWidth: 0,
-                                                hidden: false,
                                                 index: i
                                             }};
                                         }});
                                     }}
                                     return [];
-                                }}
-                            }}
-                        }},
-                        tooltip: {{
-                            callbacks: {{
-                                label: function(context) {{
-                                    return ` ${{context.label}}: ${{context.parsed.toFixed(2)}}%`;
                                 }}
                             }}
                         }}
@@ -2086,15 +2155,10 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                 if (typeof chartInstances[code].destroy === 'function') {{
                     chartInstances[code].destroy();
                     delete chartInstances[code];
-                }} else {{
-                    return;
-                }}
+                }} else return;
             }}
             const data = fundNavData[code];
-            if (!data || !data.dates || data.dates.length === 0) {{
-                canvas.parentElement.innerHTML = '<div style="padding:20px;text-align:center;color:var(--footer-text);">无净值数据</div>';
-                return;
-            }}
+            if (!data || !data.dates || data.dates.length === 0) return;
             const filtered = filterNavData(data, 'month');
             const ctx = canvas.getContext('2d');
             const chart = new Chart(ctx, {{
@@ -2104,11 +2168,9 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                     datasets: [{{
                         label: '净值',
                         data: filtered.navs,
-                        borderColor: chartColors.line,
-                        backgroundColor: chartColors.bg,
-                        pointBackgroundColor: chartColors.point,
+                        borderColor: '#1a73e8',
+                        backgroundColor: 'rgba(26,115,232,0.1)',
                         pointRadius: 1.5,
-                        pointHoverRadius: 4,
                         fill: true,
                         tension: 0.1
                     }}]
@@ -2116,123 +2178,38 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
                 options: {{
                     responsive: true,
                     maintainAspectRatio: false,
-                    interaction: {{
-                        mode: 'index',
-                        intersect: false
-                    }},
-                    onHover: function(event, activeElements, chart) {{
-                        const rect = chart.canvas.getBoundingClientRect();
-                        const x = event.native ? event.native.offsetX : (event.x - rect.left);
-                        const y = event.native ? event.native.offsetY : (event.y - rect.top);
-                        if (x >= chart.chartArea.left && x <= chart.chartArea.right &&
-                            y >= chart.chartArea.top && y <= chart.chartArea.bottom) {{
-                            chart._fundCrosshair = {{x: x, y: y}};
-                        }} else {{
-                            chart._fundCrosshair = null;
-                        }}
-                        chart.draw();
-                    }},
-                    plugins: {{
-                        legend: {{ display: false }},
-                        tooltip: {{
-                            enabled: true,
-                            mode: 'index',
-                            intersect: false,
-                            displayColors: false,
-                            callbacks: {{
-                                title: function(items) {{
-                                    if (!items || !items.length) return '';
-                                    return '时间: ' + items[0].label;
-                                }},
-                                label: function(context) {{
-                                    const values = context.dataset.data;
-                                    const index = context.dataIndex;
-                                    const value = Number(context.parsed.y);
-                                    const firstValue = Number(values[0]);
-                                    if (Number.isFinite(firstValue) && firstValue !== 0) {{
-                                        const change = ((value - firstValue) / firstValue) * 100;
-                                        return '净值: ' + value.toFixed(4) + '    涨幅: ' + (change >= 0 ? '+' : '') + change.toFixed(2) + '%';
-                                    }}
-                                    return '净值: ' + value.toFixed(4);
-                                }}
-                            }}
-                        }}
-                    }},
-                    scales: {{
-                        x: {{
-                            ticks: {{
-                                maxTicksLimit: 12,
-                                font: {{ size: 9 }},
-                                color: getComputedStyle(document.documentElement).getPropertyValue('--footer-text').trim() || '#70757a'
-                            }},
-                            grid: {{ display: false }}
-                        }},
-                        y: {{
-                            ticks: {{
-                                font: {{ size: 9 }},
-                                color: getComputedStyle(document.documentElement).getPropertyValue('--footer-text').trim() || '#70757a'
-                            }},
-                            grid: {{
-                                color: getComputedStyle(document.documentElement).getPropertyValue('--border').trim() || '#e0e0e0'
-                            }}
-                        }}
-                    }}
+                    plugins: {{ legend: {{ display: false }} }}
                 }}
             }});
             chartInstances[code] = chart;
-            canvas.addEventListener('mouseleave', function() {{
-                if (chart) {{
-                    chart._fundCrosshair = null;
-                    chart.draw();
-                }}
-            }});
-            const container = document.getElementById(`chart-container-${{code}}`);
-            if (container) {{
-                const btns = container.querySelectorAll('.period-btn');
-                btns.forEach(btn => {{
-                    btn.addEventListener('click', function() {{
-                        btns.forEach(b => b.classList.remove('active'));
-                        this.classList.add('active');
-                        const period = this.dataset.period;
-                        const filteredData = filterNavData(data, period);
-                        if (chart) {{
-                            chart.data.labels = filteredData.dates;
-                            chart.data.datasets[0].data = filteredData.navs;
-                            chart._fundCrosshair = null;
-                            chart.update();
-                        }}
-                    }});
-                }});
-            }}
         }}
 
+        // 点击展开折叠
         document.addEventListener('DOMContentLoaded', function() {{
             const table = document.getElementById('fundTable');
             table.addEventListener('click', function(e) {{
                 const target = e.target.closest('tr.fund-row');
-                if (!target) return;
-                if (e.target.tagName === 'A') return;
-                if (target.style.display === 'none') return;
+                if (!target || e.target.tagName === 'A') return;
                 const code = target.dataset.code;
-                const holdingRow = document.querySelector(`.holding-row[data-code="${{code}}"]`);
-                if (holdingRow) {{
-                    holdingRow.classList.toggle('show');
-                    if (holdingRow.classList.contains('show')) {{
-                        holdingRow.style.display = '';
-                        setTimeout(function() {{
+                const hRow = document.querySelector(`.holding-row[data-code="${{code}}"]`);
+                if (hRow) {{
+                    hRow.classList.toggle('show');
+                    if (hRow.classList.contains('show')) {{
+                        hRow.style.display = '';
+                        setTimeout(() => {{
                             initChart(code);
                             initHolderChart(code);
-                        }}, 100);
+                        }}, 50);
                     }} else {{
-                        holdingRow.style.display = 'none';
+                        hRow.style.display = 'none';
                     }}
                 }}
             }});
         }});
 
+        // 表格基础排序
         let currentSortCol = -1;
         let isAscending = true;
-
         function sortTable(colIndex) {{
             document.querySelectorAll('.holding-row').forEach(row => {{
                 row.classList.remove('show');
@@ -2242,98 +2219,33 @@ def generate_html_report(results, start_date, end_date, today_str, filename="fun
             const tbody = table.querySelector("tbody");
             const allRows = Array.from(tbody.querySelectorAll("tr"));
             const dataRows = allRows.filter(row => row.id !== 'empty-row' && !row.classList.contains('holding-row'));
-            const holdingRows = allRows.filter(row => row.classList.contains('holding-row'));
             const holdingMap = {{}};
-            holdingRows.forEach(row => {{
-                const code = row.getAttribute('data-code');
-                if (code) holdingMap[code] = row;
+            allRows.filter(row => row.classList.contains('holding-row')).forEach(row => {{
+                holdingMap[row.getAttribute('data-code')] = row;
             }});
-            if (currentSortCol === colIndex) {{
-                isAscending = !isAscending;
-            }} else {{
-                currentSortCol = colIndex;
-                isAscending = true;
-            }}
+
+            isAscending = (currentSortCol === colIndex) ? !isAscending : true;
+            currentSortCol = colIndex;
+
             dataRows.sort((a, b) => {{
-                const cellA = a.children[colIndex];
-                const cellB = b.children[colIndex];
-                let valA = cellA.getAttribute('data-val');
-                let valB = cellB.getAttribute('data-val');
-                const numA = parseFloat(valA);
-                const numB = parseFloat(valB);
-                if (!isNaN(numA) && !isNaN(numB)) {{
-                    return isAscending ? numA - numB : numB - numA;
-                }}
-                return isAscending 
-                    ? valA.localeCompare(valB, 'zh-Hans-CN', {{ sensitivity: 'accent' }})
-                    : valB.localeCompare(valA, 'zh-Hans-CN', {{ sensitivity: 'accent' }});
+                let valA = a.children[colIndex].getAttribute('data-val');
+                let valB = b.children[colIndex].getAttribute('data-val');
+                const numA = parseFloat(valA), numB = parseFloat(valB);
+                if (!isNaN(numA) && !isNaN(numB)) return isAscending ? numA - numB : numB - numA;
+                return isAscending ? valA.localeCompare(valB, 'zh-Hans-CN') : valB.localeCompare(valA, 'zh-Hans-CN');
             }});
+
             const fragment = document.createDocumentFragment();
             dataRows.forEach(row => {{
                 fragment.appendChild(row);
                 const code = row.getAttribute('data-code');
-                const hRow = holdingMap[code];
-                if (hRow) {{
-                    fragment.appendChild(hRow);
-                }}
+                if (holdingMap[code]) fragment.appendChild(holdingMap[code]);
             }});
             const empty = document.getElementById('empty-row');
             if (empty) fragment.appendChild(empty);
             tbody.innerHTML = '';
             tbody.appendChild(fragment);
-            const headers = table.querySelectorAll("th");
-            headers.forEach((th, idx) => {{
-                const icon = th.querySelector(".sort-icon");
-                if (icon) {{
-                    if (idx === colIndex) {{
-                        icon.textContent = isAscending ? "▲" : "▼";
-                        th.style.color = "#1a73e8";
-                    }} else {{
-                        icon.textContent = "⇅";
-                        th.style.color = "";
-                    }}
-                }}
-            }});
         }}
-
-        document.addEventListener("DOMContentLoaded", function () {{
-            const table = document.getElementById("fundTable");
-            const headers = table.querySelectorAll("th");
-            headers.forEach((th, idx) => {{
-                const resizer = document.createElement("div");
-                resizer.classList.add("resizer");
-                th.appendChild(resizer);
-                let x = 0, w = 0;
-                resizer.addEventListener("mousedown", function (e) {{
-                    e.preventDefault();
-                    e.stopPropagation();
-                    window._isDragging = true;
-                    x = e.clientX;
-                    w = th.getBoundingClientRect().width;
-                    th.style.width = w + "px";
-                    th.classList.add("resizing");
-                    th.classList.add("is-resizing");
-                    function mouseMoveHandler(e) {{
-                        const dx = e.clientX - x;
-                        const newWidth = Math.max(40, w + dx);
-                        th.style.width = newWidth + "px";
-                    }}
-                    function mouseUpHandler(e) {{
-                        th.classList.remove("resizing");
-                        document.removeEventListener("mousemove", mouseMoveHandler);
-                        document.removeEventListener("mouseup", mouseUpHandler);
-                        const finalWidth = th.getBoundingClientRect().width;
-                        th.style.width = finalWidth + "px";
-                        setTimeout(() => {{
-                            window._isDragging = false;
-                            th.classList.remove("is-resizing");
-                        }}, 50);
-                    }}
-                    document.addEventListener("mousemove", mouseMoveHandler);
-                    document.addEventListener("mouseup", mouseUpHandler);
-                }});
-            }});
-        }});
     </script>
 </body>
 </html>
@@ -2355,7 +2267,6 @@ def fetch_crypto_data(symbol, start_date, end_date):
 
     pair = f"{symbol}USDT"
     data = []
-
     try:
         start_ts = int(datetime.strptime(start_date, '%Y-%m-%d').timestamp() * 1000)
         end_ts = int(datetime.strptime(end_date, '%Y-%m-%d').timestamp() * 1000)
@@ -2370,21 +2281,6 @@ def fetch_crypto_data(symbol, start_date, end_date):
                     data.append({"date": d_str, "nav": nav})
     except Exception:
         data = []
-
-    if not data and symbol == "BTC":
-        try:
-            df = ak.futures_foreign_hist(symbol="BTC")
-            if df is not None and not df.empty:
-                d_col = 'date' if 'date' in df.columns else df.columns[0]
-                c_col = 'close' if 'close' in df.columns else df.columns[4]
-                df[d_col] = pd.to_datetime(df[d_col]).dt.strftime('%Y-%m-%d')
-                df = df[(df[d_col] >= start_date) & (df[d_col] <= end_date)]
-                for _, row in df.iterrows():
-                    val = float(row[c_col])
-                    if val > 0:
-                        data.append({"date": row[d_col], "nav": val})
-        except Exception:
-            pass
 
     if data:
         data = sorted(data, key=lambda x: x['date'])
@@ -2473,22 +2369,11 @@ def fetch_index_data(symbol, start_date, end_date):
         elif symbol == "SOXL":
             for try_symbol in ["105.SOXL", "SOXL", "106.SOXL"]:
                 try:
-                    df = ak.stock_us_hist(
-                        symbol=try_symbol,
-                        period="daily",
-                        start_date=start_date.replace("-", ""),
-                        end_date=end_date.replace("-", ""),
-                        adjust=""
-                    )
+                    df = ak.stock_us_hist(symbol=try_symbol, period="daily", start_date=start_date.replace("-", ""), end_date=end_date.replace("-", ""), adjust="")
                     if df is not None and not df.empty:
                         break
                 except Exception:
                     continue
-            if df is None or df.empty:
-                try:
-                    df = ak.stock_us_daily(symbol="SOXL", adjust="")
-                except Exception:
-                    pass
 
             if df is not None and not df.empty:
                 date_col = '日期' if '日期' in df.columns else ('date' if 'date' in df.columns else df.columns[0])
@@ -2502,22 +2387,11 @@ def fetch_index_data(symbol, start_date, end_date):
         elif symbol == "SOXX":
             for try_symbol in ["105.SOXX", "SOXX", "106.SOXX"]:
                 try:
-                    df = ak.stock_us_hist(
-                        symbol=try_symbol,
-                        period="daily",
-                        start_date=start_date.replace("-", ""),
-                        end_date=end_date.replace("-", ""),
-                        adjust=""
-                    )
+                    df = ak.stock_us_hist(symbol=try_symbol, period="daily", start_date=start_date.replace("-", ""), end_date=end_date.replace("-", ""), adjust="")
                     if df is not None and not df.empty:
                         break
                 except Exception:
                     continue
-            if df is None or df.empty:
-                try:
-                    df = ak.stock_us_daily(symbol="SOXX", adjust="")
-                except Exception:
-                    pass
 
             if df is not None and not df.empty:
                 date_col = '日期' if '日期' in df.columns else ('date' if 'date' in df.columns else df.columns[0])
@@ -2535,7 +2409,6 @@ def fetch_index_data(symbol, start_date, end_date):
         df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
         df = df.dropna(subset=[date_col])
         df['date_str'] = df[date_col].dt.strftime('%Y-%m-%d')
-
         mask = (df['date_str'] >= start_date) & (df['date_str'] <= end_date)
         df = df.loc[mask].sort_values('date_str')
 
@@ -2550,12 +2423,7 @@ def fetch_index_data(symbol, start_date, end_date):
                     data.append({"date": row['date_str'], "nav": nav})
             except (ValueError, TypeError):
                 continue
-
-        if not data:
-            return None
-
-        return data
-
+        return data if data else None
     except Exception:
         return None
 
@@ -2565,8 +2433,7 @@ def main():
     cutoff_date = "2026-04-01"
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--start", type=str, default=default_start,
-                        help="涨幅数据起始日期（默认2025-01-01）")
+    parser.add_argument("--start", type=str, default=default_start)
     parser.add_argument("--end", type=str, default=today_str)
     parser.add_argument("--funds", nargs="+", default=DEFAULT_FUNDS)
     parser.add_argument("--out", type=str, default="fund_drawdown_dashboard.html")
@@ -2574,10 +2441,12 @@ def main():
     args = parser.parse_args()
     opener = get_direct_opener()
 
-    print(f"\n======== 开始抓取数据 (持仓多个季度，每个季度独立获取) ========")
-    print(f"涨幅统计区间: {args.start} 至 {args.end}")
-    print(f"回撤计算区间: {cutoff_date} 至 {args.end}")
-    print(f"基金总数: {len(args.funds)}")
+    print(f"\n======== 开始抓取数据 ========")
+    print(f"统计区间: {args.start} 至 {args.end}")
+    
+    # 抓取市场情绪/恐慌指数
+    fear_greed_info = fetch_fear_and_greed_index(opener)
+    print(f"📊 恐慌贪婪指数获取成功: {fear_greed_info['score']} ({fear_greed_info['rating']})")
 
     results = []
     for idx, code in enumerate(args.funds, start=1):
@@ -2589,7 +2458,6 @@ def main():
         raw_data_sorted = sorted(raw_data, key=lambda x: x['date'])
         
         is_qdii = code in US_ACTIVE_CODES or code in NDX_PASSIVE_CODES or code in SPX_PASSIVE_CODES
-        
         res = analyze_fund_metrics(raw_data_sorted, args.end, cutoff_date, is_qdii=is_qdii)
         if res:
             res.update({
@@ -2614,138 +2482,66 @@ def main():
                 "nav_data": raw_data_sorted
             })
             results.append(res)
-            print(f"[{idx}/{len(args.funds)}] {code} - {meta['name']} ... ✅ 完成 (持仓报告期数: {len(res['holdings'])})")
+            print(f"[{idx}/{len(args.funds)}] {code} - {meta['name']} ... ✅ 完成")
         time.sleep(random.uniform(0.05, 0.1))
 
-    print("\n======== 开始获取贵金属数据 ========")
+    # 获取其他标的数据
     for symbol in PRECIOUS_METALS_SYMBOLS:
         try:
             data = fetch_precious_metals_data(symbol, args.start, args.end)
-            if not data:
-                print(f"[贵金属] {symbol} 无数据，跳过")
-                continue
-            meta_name = PRECIOUS_METALS_NAMES.get(symbol, symbol)
-            res = analyze_fund_metrics(data, args.end, cutoff_date, is_qdii=False)
-            if res:
-                res.update({
-                    "code": symbol,
-                    "name": meta_name,
-                    "scale": "--",
-                    "scale_val": -1.0,
-                    "fee_manage": "--",
-                    "fee_custody": "--",
-                    "fee_sales": "--",
-                    "fee_source": "--",
-                    "fee_purchase": "--",
-                    "fee_redemption": "--",
-                    "buy_status": "--",
-                    "buy_limit": "--",
-                    "buy_limit_val": -1,
-                    "fee_total": "--",
-                    "fee_val": -1.0,
-                    "holdings": [],
-                    "holder_struct": None,
-                    "source": "贵金属行情",
-                    "nav_data": data
-                })
-                results.append(res)
-                print(f"[贵金属] {symbol} - {meta_name} ... ✅ (数据点 {len(data)})")
-        except Exception as e:
-            print(f"[贵金属] {symbol} 获取失败: {e}")
+            if data:
+                meta_name = PRECIOUS_METALS_NAMES.get(symbol, symbol)
+                res = analyze_fund_metrics(data, args.end, cutoff_date, is_qdii=False)
+                if res:
+                    res.update({
+                        "code": symbol, "name": meta_name, "scale": "--", "scale_val": -1.0,
+                        "fee_manage": "--", "fee_custody": "--", "fee_sales": "--", "fee_source": "--",
+                        "fee_purchase": "--", "fee_redemption": "--", "buy_status": "--", "buy_limit": "--",
+                        "buy_limit_val": -1, "fee_total": "--", "fee_val": -1.0, "holdings": [],
+                        "holder_struct": None, "source": "贵金属行情", "nav_data": data
+                    })
+                    results.append(res)
+        except Exception:
+            pass
 
-    print("\n======== 开始获取加密货币数据 ========")
     for symbol in CRYPTO_SYMBOLS:
         try:
             data = fetch_crypto_data(symbol, args.start, args.end)
-            if not data:
-                print(f"[加密货币] {symbol} 无数据，跳过")
-                continue
-            meta_name = CRYPTO_NAMES.get(symbol, symbol)
-            res = analyze_fund_metrics(data, args.end, cutoff_date, is_qdii=False)
-            if res:
-                res.update({
-                    "code": symbol,
-                    "name": meta_name,
-                    "scale": "--",
-                    "scale_val": -1.0,
-                    "fee_manage": "--",
-                    "fee_custody": "--",
-                    "fee_sales": "--",
-                    "fee_source": "--",
-                    "fee_purchase": "--",
-                    "fee_redemption": "--",
-                    "buy_status": "--",
-                    "buy_limit": "--",
-                    "buy_limit_val": -1,
-                    "fee_total": "--",
-                    "fee_val": -1.0,
-                    "holdings": [],
-                    "holder_struct": None,
-                    "source": "现货行情",
-                    "nav_data": data
-                })
-                results.append(res)
-                print(f"[加密货币] {symbol} - {meta_name} ... ✅ (数据点 {len(data)})")
-        except Exception as e:
-            print(f"[加密货币] {symbol} 获取失败: {e}")
+            if data:
+                meta_name = CRYPTO_NAMES.get(symbol, symbol)
+                res = analyze_fund_metrics(data, args.end, cutoff_date, is_qdii=False)
+                if res:
+                    res.update({
+                        "code": symbol, "name": meta_name, "scale": "--", "scale_val": -1.0,
+                        "fee_manage": "--", "fee_custody": "--", "fee_sales": "--", "fee_source": "--",
+                        "fee_purchase": "--", "fee_redemption": "--", "buy_status": "--", "buy_limit": "--",
+                        "buy_limit_val": -1, "fee_total": "--", "fee_val": -1.0, "holdings": [],
+                        "holder_struct": None, "source": "现货行情", "nav_data": data
+                    })
+                    results.append(res)
+        except Exception:
+            pass
 
-    print("\n======== 开始获取指数数据 ========")
     for symbol in INDEX_SYMBOLS:
         try:
             data = fetch_index_data(symbol, args.start, args.end)
-            if not data:
-                print(f"[指数] {symbol} 无数据，跳过")
-                continue
-
-            meta = {
-                "name": INDEX_NAMES.get(symbol, symbol),
-                "scale": "--",
-                "scale_val": -1.0,
-                "fee_manage": "--",
-                "fee_custody": "--",
-                "fee_sales": "--",
-                "fee_source": "--",
-                "fee_purchase": "--",
-                "fee_redemption": "--",
-                "buy_status": "--",
-                "buy_limit": "--",
-                "buy_limit_val": -1,
-                "fee_total": "--",
-                "fee_val": -1.0,
-                "holdings": [],
-                "holder_struct": None
-            }
-            res = analyze_fund_metrics(data, args.end, cutoff_date, is_qdii=False)
-            if res:
-                res.update({
-                    "code": symbol,
-                    "name": meta["name"],
-                    "scale": meta["scale"],
-                    "scale_val": meta["scale_val"],
-                    "fee_manage": meta["fee_manage"],
-                    "fee_custody": meta["fee_custody"],
-                    "fee_sales": meta["fee_sales"],
-                    "fee_source": meta["fee_source"],
-                    "fee_total": meta["fee_total"],
-                    "fee_val": meta["fee_val"],
-                    "fee_purchase": meta["fee_purchase"],
-                    "fee_redemption": meta["fee_redemption"],
-                    "buy_status": meta["buy_status"],
-                    "buy_limit": meta["buy_limit"],
-                    "buy_limit_val": meta["buy_limit_val"],
-                    "holdings": meta["holdings"],
-                    "holder_struct": None,
-                    "source": "akshare指数",
-                    "nav_data": data
-                })
-                results.append(res)
-                print(f"[指数] {symbol} - {meta['name']} ... ✅ (数据点 {len(data)})")
-        except Exception as e:
-            print(f"[指数] {symbol} 获取失败: {e}")
+            if data:
+                res = analyze_fund_metrics(data, args.end, cutoff_date, is_qdii=False)
+                if res:
+                    res.update({
+                        "code": symbol, "name": INDEX_NAMES.get(symbol, symbol), "scale": "--", "scale_val": -1.0,
+                        "fee_manage": "--", "fee_custody": "--", "fee_sales": "--", "fee_source": "--",
+                        "fee_purchase": "--", "fee_redemption": "--", "buy_status": "--", "buy_limit": "--",
+                        "buy_limit_val": -1, "fee_total": "--", "fee_val": -1.0, "holdings": [],
+                        "holder_struct": None, "source": "指数行情", "nav_data": data
+                    })
+                    results.append(res)
+        except Exception:
+            pass
 
     if results:
-        abs_path = generate_html_report(results, args.start, args.end, today_str, filename=args.out)
-        print(f"\n🎉 网页生成成功！文件路径: {abs_path}")
+        abs_path = generate_html_report(results, args.start, args.end, today_str, fear_greed_info, filename=args.out)
+        print(f"\n🎉 升级版网页生成成功！文件路径: {abs_path}")
         try:
             webbrowser.open(f"file://{abs_path}")
         except Exception:
