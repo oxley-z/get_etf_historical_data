@@ -16,7 +16,26 @@ from calendar import monthrange
 for env_var in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]:
     os.environ.pop(env_var, None)
 
-DEFAULT_FUNDS = [
+# 通用请求头，防止部分数据源反爬阻断
+DEFAULT_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "*/*",
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8"
+}
+
+# ==============================================================================
+# 配置中心：测试环境 / 发布环境 快速切换开关
+# ==============================================================================
+IS_DEBUG = True  # True: 调试测试模式(几秒完成); False: 正式发布模式(全量抓取)
+
+TEST_FUNDS = [
+    "002891",  # 美股主动代表
+    "161125",  # 标普被动代表
+    "022365",  # A股 CPO 代表
+    "025500",  # A股 存储芯片代表
+]
+
+PROD_FUNDS = [
     # 美股主动组
     "002891", "014002", "006555", "012922", "012920", "021662", "457001", "539002",
     "018147", "021842", "006373", "018036", "501226", "008254", "008253", "017731",
@@ -76,7 +95,6 @@ SPX_PASSIVE_CODES = {
     "161125", "007721", "017028", "050025", "018064", "096001", "017641", "018738"
 }
 
-INDEX_SYMBOLS = ["NDX", "SPX", "SOXX", "SOXL"]
 INDEX_NAMES = {
     "NDX": "纳斯达克100指数",
     "SPX": "标普500指数",
@@ -84,24 +102,18 @@ INDEX_NAMES = {
     "SOXL": "三倍做多半导体ETF-Direxion"
 }
 
-PRECIOUS_METALS_SYMBOLS = ["XAU", "AUM", "XAG"]
 PRECIOUS_METALS_NAMES = {
     "XAU": "伦敦金 (XAU)",
     "AUM": "黄金连续 (AUM)",
     "XAG": "伦敦银 (XAG)"
 }
 
-CRYPTO_SYMBOLS = ["BTC", "ETH", "SOL", "BNB"]
 CRYPTO_NAMES = {
     "BTC": "比特币 (BTC/USDT)",
     "ETH": "以太坊 (ETH/USDT)",
     "SOL": "索拉纳 (SOL/USDT)",
     "BNB": "币安币 (BNB/USDT)"
 }
-
-INDEX_SET = set(INDEX_SYMBOLS)
-PRECIOUS_METALS_SET = set(PRECIOUS_METALS_SYMBOLS)
-CRYPTO_SET = set(CRYPTO_SYMBOLS)
 
 SINA_INDEX_MAP = {
     "NDX": ".NDX",
@@ -122,52 +134,265 @@ def get_direct_opener():
     proxy_handler = urllib.request.ProxyHandler({})
     return urllib.request.build_opener(proxy_handler)
 
-def fetch_fear_and_greed_index(opener):
-    """抓取全网权威的市场恐慌与贪婪指数（包含美股/加密备选）"""
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Referer": "https://www.cnn.com/markets/fear-and-greed",
-        "Accept": "application/json, text/plain, */*"
+
+# ==============================================================================
+# 来自 demo.py 的多源宏观指标获取模块
+# ==============================================================================
+def fetch_from_yahoo_finance(opener, symbol: str, timeout: int = 5) -> float:
+    """通用源: Yahoo Finance Chart API v8"""
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(symbol)}?interval=1d&range=5d"
+    req = urllib.request.Request(url, headers=DEFAULT_HEADERS)
+    with opener.open(req, timeout=timeout) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+        result = data.get("chart", {}).get("result", [{}])[0]
+        price = result.get("meta", {}).get("regularMarketPrice")
+        if price is None:
+            closes = result.get("indicators", {}).get("quote", [{}])[0].get("close", [])
+            valid_closes = [c for c in closes if c is not None]
+            if valid_closes:
+                price = valid_closes[-1]
+        if price is not None:
+            return round(float(price), 2)
+    return 0.0
+
+def fetch_from_cboe_quote(opener, symbol: str, timeout: int = 5) -> float:
+    """通用源: CBOE 官方延时行情接口"""
+    url = f"https://cdn.cboe.com/api/global/delayed_quotes/quotes/{symbol}.json"
+    req = urllib.request.Request(url, headers=DEFAULT_HEADERS)
+    with opener.open(req, timeout=timeout) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+        quote_data = data.get("data", {})
+        price = quote_data.get("last_trade_price") or quote_data.get("current_price") or quote_data.get("close")
+        if price is not None:
+            return round(float(price), 2)
+    return 0.0
+
+def get_vix(opener) -> tuple[float, str]:
+    """指标 1: VIX 波动率指数 (多源获取，失败为 0.0)"""
+    # 源 1: Yahoo Finance (^VIX)
+    try:
+        val = fetch_from_yahoo_finance(opener, "^VIX")
+        if val > 0:
+            return val, "Yahoo Finance (^VIX)"
+    except Exception:
+        pass
+
+    # 源 2: CBOE 官方接口 (_VIX)
+    try:
+        val = fetch_from_cboe_quote(opener, "_VIX")
+        if val > 0:
+            return val, "CBOE 官方 (_VIX)"
+    except Exception:
+        pass
+
+    # 源 3: 新浪外盘接口 (gb_$vix)
+    try:
+        url = "https://hq.sinajs.cn/list=gb_$vix"
+        req = urllib.request.Request(url, headers={**DEFAULT_HEADERS, "Referer": "https://finance.sina.com.cn/"})
+        with opener.open(req, timeout=4) as resp:
+            content = resp.read().decode("gbk", errors="ignore")
+            match = re.search(r'"([^"]+)"', content)
+            if match:
+                parts = match.group(1).split(",")
+                if len(parts) > 1 and float(parts[1]) > 0:
+                    return round(float(parts[1]), 2), "新浪财经 (gb_$vix)"
+    except Exception:
+        pass
+
+    return 0.0, "获取失败"
+
+def get_cnn_fear_greed(opener) -> tuple[float, str, str]:
+    """指标 2: CNN 恐慌与贪婪指数 (多源获取，失败为 0.0)"""
+    # 源 1: CNN Dataviz 官方端点
+    try:
+        url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
+        req = urllib.request.Request(url, headers={
+            **DEFAULT_HEADERS,
+            "Referer": "https://www.cnn.com/markets/fear-and-greed"
+        })
+        with opener.open(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            score = data.get("fear_and_greed", {}).get("score")
+            raw_cls = str(data.get("fear_and_greed", {}).get("rating", "neutral")).lower()
+            cls_map = {
+                "extreme fear": "极度恐惧", "fear": "恐惧",
+                "neutral": "中性观望", "greed": "贪婪", "extreme greed": "极度贪婪"
+            }
+            if score is not None:
+                return round(float(score), 1), cls_map.get(raw_cls, raw_cls.capitalize()), "CNN 官方接口"
+    except Exception:
+        pass
+
+    # 源 2: Alternative.me 情绪接口
+    try:
+        url = "https://api.alternative.me/fng/?limit=1"
+        req = urllib.request.Request(url, headers=DEFAULT_HEADERS)
+        with opener.open(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            items = data.get("data", [])
+            if items and items[0].get("value") is not None:
+                score = round(float(items[0]["value"]), 1)
+                rating = items[0].get("value_classification", "Neutral")
+                return score, rating, "Alternative 情绪源"
+    except Exception:
+        pass
+
+    return 0.0, "暂无数据", "获取失败"
+
+def get_usd_cny(opener) -> tuple[float, str]:
+    """指标 3: USD/CNY 汇率 (多源获取，失败为 0.0)"""
+    # 源 1: 新浪外汇实时接口 (fx_susdcny)
+    try:
+        url = "https://hq.sinajs.cn/list=fx_susdcny"
+        req = urllib.request.Request(url, headers={**DEFAULT_HEADERS, "Referer": "https://finance.sina.com.cn/"})
+        with opener.open(req, timeout=4) as resp:
+            content = resp.read().decode("gbk", errors="ignore")
+            match = re.search(r'"([^"]+)"', content)
+            if match:
+                parts = match.group(1).split(",")
+                for idx in [1, 8]:
+                    if len(parts) > idx and float(parts[idx]) > 0:
+                        return round(float(parts[idx]), 4), "新浪外汇 (fx_susdcny)"
+    except Exception:
+        pass
+
+    # 源 2: 开放汇率 API (open.er-api.com)
+    try:
+        url = "https://open.er-api.com/v6/latest/USD"
+        req = urllib.request.Request(url, headers=DEFAULT_HEADERS)
+        with opener.open(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            rate = data.get("rates", {}).get("CNY")
+            if rate is not None and float(rate) > 0:
+                return round(float(rate), 4), "Open Exchange API"
+    except Exception:
+        pass
+
+    # 源 3: Yahoo Finance (USDCNY=X)
+    try:
+        val = fetch_from_yahoo_finance(opener, "USDCNY=X")
+        if val > 0:
+            return round(val, 4), "Yahoo Finance (USDCNY=X)"
+    except Exception:
+        pass
+
+    return 0.0, "获取失败"
+
+def get_vxn(opener) -> tuple[float, str]:
+    """指标 4: VXN 纳指波动率 (多源获取，失败为 0.0)"""
+    # 源 1: Yahoo Finance (^VXN)
+    try:
+        val = fetch_from_yahoo_finance(opener, "^VXN")
+        if val > 0:
+            return val, "Yahoo Finance (^VXN)"
+    except Exception:
+        pass
+
+    # 源 2: CBOE 官方接口 (_VXN)
+    try:
+        val = fetch_from_cboe_quote(opener, "_VXN")
+        if val > 0:
+            return val, "CBOE 官方 (_VXN)"
+    except Exception:
+        pass
+
+    return 0.0, "获取失败"
+
+def get_skew(opener) -> tuple[float, str]:
+    """指标 5: SKEW 黑天鹅指数 (多源获取，失败为 0.0)"""
+    # 源 1: Yahoo Finance (^SKEW)
+    try:
+        val = fetch_from_yahoo_finance(opener, "^SKEW")
+        if val > 0:
+            return val, "Yahoo Finance (^SKEW)"
+    except Exception:
+        pass
+
+    # 源 2: CBOE 官方接口 (_SKEW)
+    try:
+        val = fetch_from_cboe_quote(opener, "_SKEW")
+        if val > 0:
+            return val, "CBOE 官方 (_SKEW)"
+    except Exception:
+        pass
+
+    return 0.0, "获取失败"
+
+
+def fetch_home_market_metrics(opener):
+    """
+    重构后的首页指标抓取函数：
+    多源降级获取 CNN、VIX、USD/CNY、VXN、SKEW，若获取失败统一返回 0.0
+    """
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # 1. CNN 恐慌指数
+    fng_score, fng_rating, fng_src = get_cnn_fear_greed(opener)
+    
+    # 2. VIX
+    vix_val, vix_src = get_vix(opener)
+    if vix_val <= 0:
+        vix_status = "数据暂缺"
+    else:
+        vix_status = "极度恐慌" if vix_val >= 30 else ("警惕波动" if vix_val >= 20 else ("温和震荡" if vix_val >= 15 else "平稳低波"))
+
+    # 3. USD/CNY
+    usdcny_val, usdcny_src = get_usd_cny(opener)
+    if usdcny_val <= 0:
+        usdcny_status = "数据暂缺"
+    else:
+        usdcny_status = "美元走强" if usdcny_val >= 7.30 else ("区间震荡" if usdcny_val >= 7.15 else "人民币升值")
+
+    # 4. VXN
+    vxn_val, vxn_src = get_vxn(opener)
+    if vxn_val <= 0:
+        vxn_status = "数据暂缺"
+    else:
+        vxn_status = "科技股极恐" if vxn_val >= 30 else ("杀估值抛压" if vxn_val >= 22 else "波动平缓")
+
+    # 5. SKEW
+    skew_val, skew_src = get_skew(opener)
+    if skew_val <= 0:
+        skew_status = "数据暂缺"
+    else:
+        skew_status = "尾部黑天鹅预警" if skew_val >= 140 else ("风险积聚" if skew_val >= 132 else "常态平稳")
+
+    metrics = {
+        "fng": {
+            "score": fng_score,
+            "rating": fng_rating,
+            "time": now_str,
+            "source": fng_src
+        },
+        "vix": {
+            "val": vix_val,
+            "status": vix_status,
+            "time": now_str,
+            "desc": "<15 平稳低波 | 15~20 正常震荡 | 20~30 警惕波动 | >30 极度恐慌"
+        },
+        "usdcny": {
+            "val": usdcny_val,
+            "status": usdcny_status,
+            "time": now_str,
+            "desc": "美元兑人民币汇率，QDII换汇成本及折溢价关键锚"
+        },
+        "vxn": {
+            "val": vxn_val,
+            "status": vxn_status,
+            "time": now_str,
+            "desc": "纳斯达克100期权隐波，监测科技成长股杀估值抛压"
+        },
+        "skew": {
+            "val": skew_val,
+            "status": skew_status,
+            "time": now_str,
+            "desc": "基准100。>135提示期权市场尾部极度对冲成本升高"
+        }
     }
-    # 优先请求 CNN 恐慌指数数据接口
-    url_cnn = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
-    try:
-        req = urllib.request.Request(url_cnn, headers=headers)
-        with opener.open(req, timeout=4) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
-            score = float(data.get("fear_and_greed", {}).get("score", 50))
-            rating = data.get("fear_and_greed", {}).get("rating", "neutral")
-            return {
-                "score": round(score, 1),
-                "rating": rating,
-                "date": datetime.now().strftime("%Y-%m-%d"),
-                "source": "CNN 美股恐慌贪婪指数"
-            }
-    except Exception:
-        pass
+    return metrics
 
-    # 备选：Crypto 恐慌贪婪指数
-    url_crypto = "https://api.alternative.me/fng/?limit=1"
-    try:
-        req = urllib.request.Request(url_crypto, headers={"User-Agent": "Mozilla/5.0"})
-        with opener.open(req, timeout=4) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
-            item = data.get("data", [{}])[0]
-            score = float(item.get("value", 50))
-            rating = item.get("value_classification", "Neutral").lower()
-            return {
-                "score": round(score, 1),
-                "rating": rating,
-                "date": datetime.now().strftime("%Y-%m-%d"),
-                "source": "Alternative 市场情绪指数"
-            }
-    except Exception:
-        pass
-
-    return {"score": 50.0, "rating": "neutral", "date": datetime.now().strftime("%Y-%m-%d"), "source": "市场均值"}
 
 def fetch_fund_holder_structure(opener, code):
-    """抓取天天基金 F10 持有人结构数据"""
     cache_file = os.path.join(HOLDER_CACHE_DIR, f"{code}_holder.json")
     if os.path.exists(cache_file):
         try:
@@ -180,7 +405,7 @@ def fetch_fund_holder_structure(opener, code):
 
     url = f"https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=cyrjg&code={code}"
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Referer": f"https://fundf10.eastmoney.com/cyrjg_{code}.html",
         "Accept": "*/*"
     }
@@ -195,11 +420,9 @@ def fetch_fund_holder_structure(opener, code):
             cols = re.findall(r'<td[^>]*>(.*?)</td>', row, re.S)
             if len(cols) >= 3:
                 date_m = re.search(r'\d{4}-\d{2}-\d{2}', cols[0])
-                if not date_m:
-                    continue
+                if not date_m: continue
 
-                def clean_text(val):
-                    return re.sub(r'<[^>]+>', '', val).strip()
+                def clean_text(val): return re.sub(r'<[^>]+>', '', val).strip()
 
                 date_str = date_m.group(0)
                 inst_text = clean_text(cols[1]).replace('%', '')
@@ -234,10 +457,8 @@ def fetch_holdings(opener, code):
                 else:
                     os.remove(cache_file)
         except Exception:
-            try:
-                os.remove(cache_file)
-            except Exception:
-                pass
+            try: os.remove(cache_file)
+            except Exception: pass
 
     try:
         current_year = datetime.now().year
@@ -246,10 +467,8 @@ def fetch_holdings(opener, code):
         for year in years:
             try:
                 df = ak.fund_portfolio_hold_em(symbol=code, date=year)
-                if df is not None and not df.empty:
-                    all_dfs.append(df)
-            except Exception:
-                pass
+                if df is not None and not df.empty: all_dfs.append(df)
+            except Exception: pass
 
         if all_dfs:
             combined = pd.concat(all_dfs, ignore_index=True)
@@ -265,8 +484,7 @@ def fetch_holdings(opener, code):
                         combined['季度'] = combined[date_col].apply(
                             lambda x: f"{x[:4]}Q{(int(x[5:7])-1)//3 + 1}" if isinstance(x, str) and len(x)>=7 else None
                         )
-                    else:
-                        raise ValueError("缺少季度信息")
+                    else: raise ValueError("缺少季度信息")
 
             quarters = sorted(combined['季度'].unique(), reverse=True)[:3]
             result = []
@@ -276,21 +494,16 @@ def fetch_holdings(opener, code):
                 ratio_col = '占净值比例' if '占净值比例' in df_q.columns else None
                 if name_col is None or ratio_col is None:
                     for col in df_q.columns:
-                        if '名称' in col:
-                            name_col = col
-                        if '比例' in col:
-                            ratio_col = col
-                    if name_col is None or ratio_col is None:
-                        continue
+                        if '名称' in col: name_col = col
+                        if '比例' in col: ratio_col = col
+                    if name_col is None or ratio_col is None: continue
                 top10 = df_q.head(10)[[name_col, ratio_col]]
                 holdings = []
                 for _, row in top10.iterrows():
                     name = str(row[name_col])
-                    if pd.isna(name) or name == 'nan':
-                        continue
+                    if pd.isna(name) or name == 'nan': continue
                     ratio = float(row[ratio_col])
-                    if ratio > 0:
-                        holdings.append({'name': name, 'ratio': round(ratio, 2)})
+                    if ratio > 0: holdings.append({'name': name, 'ratio': round(ratio, 2)})
                 result.append({'date': q, 'holdings': holdings})
             if result:
                 with open(cache_file, 'w', encoding='utf-8') as f:
@@ -333,25 +546,20 @@ def fetch_fund_detail_meta(opener, code):
         req = urllib.request.Request(main_url, headers=headers)
         with opener.open(req, timeout=5) as resp:
             main_html = resp.read().decode('utf-8', errors='ignore')
-    except Exception:
-        pass
+    except Exception: pass
 
     if main_html:
         name_match = re.search(r'<title>(.*?)基金', main_html)
-        if name_match:
-            meta["name"] = name_match.group(1).strip() + "基金"
+        if name_match: meta["name"] = name_match.group(1).strip() + "基金"
 
         manage_match = re.search(r'管理费率?[：:]\s*([\d.]+)%', main_html)
-        if manage_match:
-            meta["fee_manage"] = manage_match.group(1)
+        if manage_match: meta["fee_manage"] = manage_match.group(1)
 
         custody_match = re.search(r'托管费率?[：:]\s*([\d.]+)%', main_html)
-        if custody_match:
-            meta["fee_custody"] = custody_match.group(1)
+        if custody_match: meta["fee_custody"] = custody_match.group(1)
 
         sales_match = re.search(r'销售服务费率?[：:]\s*([\d.]+)%', main_html)
-        if sales_match:
-            meta["fee_sales"] = sales_match.group(1)
+        if sales_match: meta["fee_sales"] = sales_match.group(1)
 
         rate_section = re.search(r'申购费率[：:](.*?)(?=<div|$)', main_html, re.S)
         if rate_section:
@@ -363,21 +571,15 @@ def fetch_fund_detail_meta(opener, code):
 
         trade = re.search(r"交易状态：</span>(.*?)</div>", main_html, re.S)
         if trade:
-            text = re.sub(r"<.*?>", "", trade.group(1))
-            text = text.replace("&nbsp;", "").strip()
+            text = re.sub(r"<.*?>", "", trade.group(1)).replace("&nbsp;", "").strip()
             status = re.search(r"^(.*?)\s*\(", text)
-            if status:
-                meta["buy_status"] = status.group(1).strip()
+            if status: meta["buy_status"] = status.group(1).strip()
             limit_match = re.search(r"单日累计购买上限([\d.]+)(万?)元", text)
             if limit_match:
                 num = float(limit_match.group(1))
-                if limit_match.group(2) == "万":
-                    num *= 10000
+                if limit_match.group(2) == "万": num *= 10000
                 meta["buy_limit"] = f"{limit_match.group(1)}{limit_match.group(2)}元"
                 meta["buy_limit_val"] = num
-            else:
-                meta["buy_limit"] = "无限额"
-                meta["buy_limit_val"] = -1
 
     js_url = f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
     js_content = None
@@ -385,37 +587,30 @@ def fetch_fund_detail_meta(opener, code):
         req = urllib.request.Request(js_url, headers=headers)
         with opener.open(req, timeout=5) as resp:
             js_content = resp.read().decode('utf-8', errors='ignore')
-    except Exception:
-        pass
+    except Exception: pass
 
     if js_content:
         if meta["name"] == f"基金_{code}":
             match_name = re.search(r'var\s+fS_name\s*=\s*["\']([^"\']+)["\']', js_content)
-            if match_name:
-                meta["name"] = match_name.group(1)
+            if match_name: meta["name"] = match_name.group(1)
 
         rate_match = re.search(r'var\s+Data_rateInverstment\s*=\s*["\']([^"\']+)["\']', js_content)
         if rate_match:
             rate_text = rate_match.group(1)
             if meta["fee_manage"] is None:
                 m = re.search(r'管理费[：:]\s*([\d.]+)%', rate_text)
-                if m:
-                    meta["fee_manage"] = m.group(1)
+                if m: meta["fee_manage"] = m.group(1)
             if meta["fee_custody"] is None:
                 c = re.search(r'托管费[：:]\s*([\d.]+)%', rate_text)
-                if c:
-                    meta["fee_custody"] = c.group(1)
+                if c: meta["fee_custody"] = c.group(1)
             if meta["fee_sales"] is None:
                 s = re.search(r'销售服务费[：:]\s*([\d.]+)%', rate_text)
-                if s:
-                    meta["fee_sales"] = s.group(1)
+                if s: meta["fee_sales"] = s.group(1)
 
         buy_source_m = re.search(r'var\s+fund_sourceRate\s*=\s*"([^"]+)";', js_content)
         buy_rate_m = re.search(r'var\s+fund_Rate\s*=\s*"([^"]+)";', js_content)
-        if buy_source_m and buy_source_m.group(1):
-            meta["fee_source"] = buy_source_m.group(1)
-        if buy_rate_m and buy_rate_m.group(1):
-            meta["fee_purchase"] = buy_rate_m.group(1)
+        if buy_source_m and buy_source_m.group(1): meta["fee_source"] = buy_source_m.group(1)
+        if buy_rate_m and buy_rate_m.group(1): meta["fee_purchase"] = buy_rate_m.group(1)
 
         try:
             df_xq = ak.fund_individual_basic_info_xq(symbol=code)
@@ -429,51 +624,32 @@ def fetch_fund_detail_meta(opener, code):
                             unit_match = re.search(r'([\d.]+)\s*(亿|万)', scale_str)
                             if unit_match:
                                 num = float(unit_match.group(1))
-                                if unit_match.group(2) == '万':
-                                    num /= 10000.0
+                                if unit_match.group(2) == '万': num /= 10000.0
                                 meta["scale_val"] = num
                                 meta["scale"] = f"{num:.2f} 亿"
-                            else:
-                                num_match = re.search(r'([\d.]+)', scale_str)
-                                if num_match:
-                                    num = float(num_match.group(1))
-                                    meta["scale_val"] = num
-                                    meta["scale"] = f"{num:.2f} 亿"
                             break
-        except Exception:
-            pass
+        except Exception: pass
 
     f10_url = f"https://fundf10.eastmoney.com/jjfl_{code}.html"
     try:
         req = urllib.request.Request(f10_url, headers=headers)
         with opener.open(req, timeout=5) as resp:
             f10_html = resp.read().decode('utf-8', errors='ignore')
-
             if meta["fee_manage"] is None:
                 mm = re.search(r'管理费率.*?([\d.]+)%', f10_html, re.S)
-                if mm:
-                    meta["fee_manage"] = mm.group(1)
+                if mm: meta["fee_manage"] = mm.group(1)
             if meta["fee_custody"] is None:
                 cc = re.search(r'托管费率.*?([\d.]+)%', f10_html, re.S)
-                if cc:
-                    meta["fee_custody"] = cc.group(1)
+                if cc: meta["fee_custody"] = cc.group(1)
             if meta["fee_sales"] is None:
                 ss = re.search(r'销售服务费率.*?([\d.]+)%', f10_html, re.S)
-                if ss:
-                    meta["fee_sales"] = ss.group(1)
+                if ss: meta["fee_sales"] = ss.group(1)
 
             if meta["scale"] == "未知":
                 scale_m = re.search(r'基金规模.*?([\d.]+)\s*亿元', f10_html, re.S)
                 if scale_m:
-                    num = float(scale_m.group(1))
-                    meta["scale_val"] = num
-                    meta["scale"] = f"{num:.2f} 亿"
-                else:
-                    scale_m = re.search(r'基金规模.*?([\d.]+)\s*万元', f10_html, re.S)
-                    if scale_m:
-                        num = float(scale_m.group(1)) / 10000.0
-                        meta["scale_val"] = num
-                        meta["scale"] = f"{num:.2f} 亿"
+                    meta["scale_val"] = float(scale_m.group(1))
+                    meta["scale"] = f"{meta['scale_val']:.2f} 亿"
 
             red_section = re.search(r'赎回费率.*?(?:</table>|</div>\s*</div>)', f10_html, re.S)
             if red_section:
@@ -487,39 +663,19 @@ def fetch_fund_detail_meta(opener, code):
                         rate_desc = re.sub(r'<[^>]+>', '', cols[1]).strip()
                         if period_desc and rate_desc and '%' in rate_desc:
                             red_tiers.append(f"{period_desc}: {rate_desc}")
-                if red_tiers:
-                    meta["fee_redemption"] = " | ".join(red_tiers)
-                else:
-                    red_m = re.findall(r'([\d.]+)%', red_html)
-                    if red_m:
-                        meta["fee_redemption"] = f"常规档: {red_m[0]}%"
-    except Exception:
-        pass
+                if red_tiers: meta["fee_redemption"] = " | ".join(red_tiers)
+    except Exception: pass
 
-    if meta["fee_manage"] is None:
-        meta["fee_manage"] = "--"
-    else:
-        meta["fee_manage"] = f"{float(meta['fee_manage']):.2f}%"
-
-    if meta["fee_custody"] is None:
-        meta["fee_custody"] = "--"
-    else:
-        meta["fee_custody"] = f"{float(meta['fee_custody']):.2f}%"
-
-    if meta["fee_sales"] is None:
-        meta["fee_sales"] = "0.00%"
-    else:
-        meta["fee_sales"] = f"{float(meta['fee_sales']):.2f}%"
+    meta["fee_manage"] = f"{float(meta['fee_manage']):.2f}%" if meta["fee_manage"] else "--"
+    meta["fee_custody"] = f"{float(meta['fee_custody']):.2f}%" if meta["fee_custody"] else "--"
+    meta["fee_sales"] = f"{float(meta['fee_sales']):.2f}%" if meta["fee_sales"] else "0.00%"
 
     m_val = float(re.search(r'([\d.]+)', meta["fee_manage"]).group(1)) if meta["fee_manage"] != "--" else 0.0
     c_val = float(re.search(r'([\d.]+)', meta["fee_custody"]).group(1)) if meta["fee_custody"] != "--" else 0.0
     s_val = float(re.search(r'([\d.]+)', meta["fee_sales"]).group(1)) if meta["fee_sales"] != "--" else 0.0
     tot = m_val + c_val + s_val
-    if tot > 0:
-        meta["fee_val"] = tot
-        meta["fee_total"] = f"{tot:.2f}%"
-    else:
-        meta["fee_total"] = "0.00%"
+    meta["fee_val"] = tot
+    meta["fee_total"] = f"{tot:.2f}%" if tot > 0 else "0.00%"
 
     meta["holdings"] = fetch_holdings(opener, code)
     meta["holder_struct"] = fetch_fund_holder_structure(opener, code)
@@ -531,12 +687,9 @@ def fetch_from_eastmoney(opener, code, start_date, end_date):
         try:
             with open(cache_file, 'r', encoding='utf-8') as f:
                 cache = json.load(f)
-            cache_start = cache.get('start_date', '')
-            cache_end = cache.get('end_date', '')
-            if cache_start <= start_date and cache_end >= end_date:
+            if cache.get('start_date', '') <= start_date and cache.get('end_date', '') >= end_date:
                 return cache.get('data', [])
-        except Exception:
-            pass
+        except Exception: pass
 
     all_data = []
     page_index = 1
@@ -566,41 +719,30 @@ def fetch_from_eastmoney(opener, code, start_date, end_date):
                 if match:
                     res_json = json.loads(match.group(1))
                     lsjz = res_json.get("Data", {}).get("LSJZList", [])
-                    if not lsjz:
-                        break
+                    if not lsjz: break
                     for item in lsjz:
                         if item.get("DWJZ"):
                             all_data.append({"date": item["FSRQ"], "nav": float(item["DWJZ"])})
-                    if len(lsjz) < page_size:
-                        break
+                    if len(lsjz) < page_size: break
                     page_index += 1
-                else:
-                    break
-        except Exception:
-            break
+                else: break
+        except Exception: break
 
     if all_data:
-        cache = {
-            'start_date': start_date,
-            'end_date': end_date,
-            'data': all_data
-        }
+        cache = {'start_date': start_date, 'end_date': end_date, 'data': all_data}
         try:
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(cache, f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
+        except Exception: pass
 
     return all_data if all_data else None
 
 def analyze_fund_metrics(valid_data, end_date, cutoff_date, is_qdii=False):
     data_all = sorted(valid_data, key=lambda x: x["date"])
-    if not data_all:
-        return None
+    if not data_all: return None
 
     data_cutoff = [item for item in data_all if item["date"] >= cutoff_date]
-    if not data_cutoff:
-        data_cutoff = data_all
+    if not data_cutoff: data_cutoff = data_all
 
     latest_nav = data_all[-1]["nav"]
     latest_date = data_all[-1]["date"]
@@ -609,36 +751,23 @@ def analyze_fund_metrics(valid_data, end_date, cutoff_date, is_qdii=False):
     today_str = now.strftime("%Y-%m-%d")
     weekday = now.weekday()
 
-    if weekday == 5:
-        target_friday = (now - timedelta(days=1)).strftime("%Y-%m-%d")
-    elif weekday == 6:
-        target_friday = (now - timedelta(days=2)).strftime("%Y-%m-%d")
-    else:
-        target_friday = today_str
+    if weekday == 5: target_friday = (now - timedelta(days=1)).strftime("%Y-%m-%d")
+    elif weekday == 6: target_friday = (now - timedelta(days=2)).strftime("%Y-%m-%d")
+    else: target_friday = today_str
 
     is_weekend = (weekday >= 5)
     today_gain = None
 
     if is_qdii:
-        if len(data_all) >= 2:
-            prev_nav = data_all[-2]["nav"]
-            if prev_nav and prev_nav > 0:
-                today_gain = ((latest_nav / prev_nav) - 1) * 100.0
+        if len(data_all) >= 2 and data_all[-2]["nav"] > 0:
+            today_gain = ((latest_nav / data_all[-2]["nav"]) - 1) * 100.0
     else:
         if is_weekend:
-            if len(data_all) >= 2 and latest_date <= target_friday:
-                prev_nav = data_all[-2]["nav"]
-                if prev_nav and prev_nav > 0:
-                    today_gain = ((latest_nav / prev_nav) - 1) * 100.0
+            if len(data_all) >= 2 and latest_date <= target_friday and data_all[-2]["nav"] > 0:
+                today_gain = ((latest_nav / data_all[-2]["nav"]) - 1) * 100.0
         else:
-            if latest_date == today_str and len(data_all) >= 2:
-                prev_nav = data_all[-2]["nav"]
-                if prev_nav and prev_nav > 0:
-                    today_gain = ((latest_nav / prev_nav) - 1) * 100.0
-            elif len(data_all) >= 2:
-                prev_nav = data_all[-2]["nav"]
-                if prev_nav and prev_nav > 0:
-                    today_gain = ((latest_nav / prev_nav) - 1) * 100.0
+            if len(data_all) >= 2 and data_all[-2]["nav"] > 0:
+                today_gain = ((latest_nav / data_all[-2]["nav"]) - 1) * 100.0
 
     max_drawdown = 0.0
     peak_nav = data_cutoff[0]["nav"]
@@ -662,17 +791,13 @@ def analyze_fund_metrics(valid_data, end_date, cutoff_date, is_qdii=False):
             trough_nav = nav
             trough_date = date
 
-    if max_drawdown == 0:
-        recovery_rate = 100.0
-    elif peak_nav == trough_nav:
-        recovery_rate = 0.0
-    else:
-        recovery_rate = ((latest_nav - trough_nav) / (peak_nav - trough_nav)) * 100.0
+    if max_drawdown == 0: recovery_rate = 100.0
+    elif peak_nav == trough_nav: recovery_rate = 0.0
+    else: recovery_rate = ((latest_nav - trough_nav) / (peak_nav - trough_nav)) * 100.0
 
     min_dt = datetime.strptime(trough_date, '%Y-%m-%d')
     latest_dt = datetime.strptime(latest_date, '%Y-%m-%d')
     recovery_days = (latest_dt - min_dt).days
-
     rebound_gain = ((latest_nav - trough_nav) / trough_nav) * 100.0 if trough_nav > 0 else 0.0
 
     def add_months(d, months):
@@ -684,14 +809,10 @@ def analyze_fund_metrics(valid_data, end_date, cutoff_date, is_qdii=False):
 
     def calc_gain(days=None, months=None, ytd=False):
         latest_dt = datetime.strptime(latest_date, '%Y-%m-%d')
-        if ytd:
-            target_dt = latest_dt.replace(month=1, day=1)
-        elif days:
-            target_dt = latest_dt - timedelta(days=days)
-        elif months:
-            target_dt = add_months(latest_dt, -months)
-        else:
-            return None
+        if ytd: target_dt = latest_dt.replace(month=1, day=1)
+        elif days: target_dt = latest_dt - timedelta(days=days)
+        elif months: target_dt = add_months(latest_dt, -months)
+        else: return None
             
         target_date_str = target_dt.strftime('%Y-%m-%d')
         base_nav = None
@@ -703,13 +824,6 @@ def analyze_fund_metrics(valid_data, end_date, cutoff_date, is_qdii=False):
         if base_nav is not None and base_nav > 0:
             return ((latest_nav / base_nav) - 1) * 100.0
         return None
-
-    week_gain = calc_gain(days=7)
-    month_gain = calc_gain(months=1)
-    quarter_gain = calc_gain(months=3)
-    half_year_gain = calc_gain(months=6)
-    year_gain = calc_gain(months=12)
-    ytd_gain = calc_gain(ytd=True)
 
     return {
         "max_nav": peak_nav,
@@ -723,49 +837,21 @@ def analyze_fund_metrics(valid_data, end_date, cutoff_date, is_qdii=False):
         "recovery_days": recovery_days,
         "rebound_gain": rebound_gain,
         "today_gain": today_gain,
-        "week_gain": week_gain,
-        "month_gain": month_gain,
-        "quarter_gain": quarter_gain,
-        "half_year_gain": half_year_gain,
-        "year_gain": year_gain,
-        "ytd_gain": ytd_gain
+        "week_gain": calc_gain(days=7),
+        "month_gain": calc_gain(months=1),
+        "quarter_gain": calc_gain(months=3),
+        "half_year_gain": calc_gain(months=6),
+        "year_gain": calc_gain(months=12),
+        "ytd_gain": calc_gain(ytd=True)
     }
 
-def generate_html_report(results, start_date, end_date, today_str, fear_greed_info, filename="fund_drawdown_dashboard.html"):
-    CPO_CODES = {
-        "022365", "540010", "002112", "011892", "021528",
-        "009645", "011370", "011452", "016371", "001956",
-        "016234", "016173", "006616", "018291", "020661",
-        "017462", "001438", "008984", "180031", "004320", "027063"
-    }
-
-    STORAGE_CODES = {
-        "025500", "025209", "018816", "014320"
-    }
-
-    SEMICONDUCTOR_CODES = {
-        "024418", "024975", "020640", "019633", "024424",
-        "017811", "013841", "007491", "020629", "017747",
-        "026633", "162214", "007343", "018777"
-    }
-
-    AI_CODES = {
-        "024663", "024726", "023286", "023408", "025506",
-        "025493", "025653", "005963", "014162", "011840",
-        "024412", "024775", "026613", "023551", "024561"
-    }
-
-    GRID_CODES = {
-        "025857", "023639", "023675", "019411", "167002",
-        "020425", "002164", "017133", "017042", "026681",
-        "016387", "025833", "011172", "001665", "018919"
-    }
-
-    ROBOT_CODES = {
-        "016531", "018345", "020482", "018125", "007519",
-        "014243", "018957", "003835", "014939", "008998",
-        "004233", "008182", "017968", "024648"
-    }
+def generate_html_report(results, start_date, end_date, today_str, metrics, is_debug_mode=False, filename="fund_drawdown_dashboard.html"):
+    CPO_CODES = {"022365", "540010", "002112", "011892", "021528", "009645", "011370", "011452", "016371", "001956", "016234", "016173", "006616", "018291", "020661", "017462", "001438", "008984", "180031", "004320", "027063"}
+    STORAGE_CODES = {"025500", "025209", "018816", "014320"}
+    SEMICONDUCTOR_CODES = {"024418", "024975", "020640", "019633", "024424", "017811", "013841", "007491", "020629", "017747", "026633", "162214", "007343", "018777"}
+    AI_CODES = {"024663", "024726", "023286", "023408", "025506", "025493", "025653", "005963", "014162", "011840", "024412", "024775", "026613", "023551", "024561"}
+    GRID_CODES = {"025857", "023639", "023675", "019411", "167002", "020425", "002164", "017133", "017042", "026681", "016387", "025833", "011172", "001665", "018919"}
+    ROBOT_CODES = {"016531", "018345", "020482", "018125", "007519", "014243", "018957", "003835", "014939", "008998", "004233", "008182", "017968", "024648"}
 
     INDEX_SET_LOCAL = {"NDX", "SPX", "SOXX", "SOXL"}
     PRECIOUS_METALS_LOCAL = {"XAU", "AUM", "XAG"}
@@ -773,35 +859,20 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
     col_count = 20
 
     def date_to_label(date_str):
-        if 'Q' in date_str:
-            return date_str
-        if date_str.isdigit() and len(date_str) == 4:
-            return f"{date_str}年报"
+        if 'Q' in date_str: return date_str
+        if date_str.isdigit() and len(date_str) == 4: return f"{date_str}年报"
         try:
             year, month, _ = date_str.split('-')
-            month = int(month)
-            quarter = (month - 1) // 3 + 1
-            return f"{year}Q{quarter}"
-        except Exception:
-            return date_str
+            return f"{year}Q{(int(month) - 1) // 3 + 1}"
+        except Exception: return date_str
 
     def quarter_to_end_date(date_str):
-        if not date_str:
-            return ""
-        if re.match(r'^\d{4}-\d{2}-\d{2}$', str(date_str)):
-            return date_str
+        if not date_str: return ""
+        if re.match(r'^\d{4}-\d{2}-\d{2}$', str(date_str)): return date_str
         m = re.match(r'^(\d{4})Q([1-4])$', str(date_str), re.I)
         if m:
-            year = m.group(1)
-            q = int(m.group(2))
             end_map = {1: "03-31", 2: "06-30", 3: "09-30", 4: "12-31"}
-            return f"{year}-{end_map[q]}"
-        m2 = re.search(r'(\d{4}).*?([1-4])', str(date_str))
-        if m2:
-            year = m2.group(1)
-            q = int(m2.group(2))
-            end_map = {1: "03-31", 2: "06-30", 3: "09-30", 4: "12-31"}
-            return f"{year}-{end_map[q]}"
+            return f"{m.group(1)}-{end_map[int(m.group(2))]}"
         return ""
 
     nav_data_json = {}
@@ -843,71 +914,30 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
         redemption_text = r.get('fee_redemption', '未知')
         if redemption_text and redemption_text != "未知":
             parts = redemption_text.split(" | ")
-            highlighted_parts = []
-            for part in parts:
-                highlighted = re.sub(r'(\d+\.\d+%)', r'<span class="highlight-rate">\1</span>', part)
-                highlighted_parts.append(highlighted)
+            highlighted_parts = [re.sub(r'(\d+\.\d+%)', r'<span class="highlight-rate">\1</span>', p) for p in parts]
             redemption_lines = "<br>".join(highlighted_parts)
         else:
             redemption_lines = redemption_text or "未知"
 
-        def format_gain(val):
-            if val is None:
-                return '-'
-            return f"{val:.2f}%"
+        def format_gain(val): return f"{val:.2f}%" if val is not None else '-'
+        def gain_class(val): return 'gain-positive' if (val and val > 0) else ('gain-negative' if (val and val < 0) else '')
 
-        def gain_class(val):
-            if val is None:
-                return ''
-            if val > 0:
-                return 'gain-positive'
-            elif val < 0:
-                return 'gain-negative'
-            else:
-                return ''
-
-        # 分类映射
-        if r['code'] in CPO_CODES:
-            group = "cpo"
-            macro_category = "a_share"
-        elif r['code'] in STORAGE_CODES:
-            group = "storage"
-            macro_category = "a_share"
-        elif r['code'] in SEMICONDUCTOR_CODES:
-            group = "semiconductor"
-            macro_category = "a_share"
-        elif r['code'] in AI_CODES:
-            group = "ai"
-            macro_category = "a_share"
-        elif r['code'] in GRID_CODES:
-            group = "grid"
-            macro_category = "a_share"
-        elif r['code'] in ROBOT_CODES:
-            group = "robot"
-            macro_category = "a_share"
-        elif r['code'] in PRECIOUS_METALS_LOCAL:
-            group = "metals"
-            macro_category = "other"
-        elif r['code'] in CRYPTO_LOCAL:
-            group = "crypto"
-            macro_category = "other"
-        elif r['code'] in INDEX_SET_LOCAL:
-            group = "index"
-            macro_category = "other"
-        elif r['code'] in NDX_PASSIVE_CODES:
-            group = "ndx_passive"
-            macro_category = "us_share"
-        elif r['code'] in SPX_PASSIVE_CODES:
-            group = "spx_passive"
-            macro_category = "us_share"
-        else:
-            group = "us_active"
-            macro_category = "us_share"
+        if r['code'] in CPO_CODES: group = "cpo"; macro_category = "a_share"
+        elif r['code'] in STORAGE_CODES: group = "storage"; macro_category = "a_share"
+        elif r['code'] in SEMICONDUCTOR_CODES: group = "semiconductor"; macro_category = "a_share"
+        elif r['code'] in AI_CODES: group = "ai"; macro_category = "a_share"
+        elif r['code'] in GRID_CODES: group = "grid"; macro_category = "a_share"
+        elif r['code'] in ROBOT_CODES: group = "robot"; macro_category = "a_share"
+        elif r['code'] in PRECIOUS_METALS_LOCAL: group = "metals"; macro_category = "other"
+        elif r['code'] in CRYPTO_LOCAL: group = "crypto"; macro_category = "other"
+        elif r['code'] in INDEX_SET_LOCAL: group = "index"; macro_category = "other"
+        elif r['code'] in NDX_PASSIVE_CODES: group = "ndx_passive"; macro_category = "us_share"
+        elif r['code'] in SPX_PASSIVE_CODES: group = "spx_passive"; macro_category = "us_share"
+        else: group = "us_active"; macro_category = "us_share"
 
         nav_display_html = f'<span class="highlight-special-nav">{r["latest_nav"]:.4f}</span>' if group in ["metals", "crypto", "index"] else f'{r["latest_nav"]:.4f}'
 
         holdings_history = r.get('holdings', [])
-
         today_gain_val = r.get('today_gain', None)
         latest_date = r['latest_date']
         if today_gain_val is not None:
@@ -921,7 +951,6 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
 
         fee_src = str(r.get('fee_source', ''))
         fee_pur = str(r.get('fee_purchase', ''))
-        
         if fee_src and "%" not in fee_src and fee_src != "0.00": fee_src += "%"
         if fee_pur and "%" not in fee_pur and fee_pur != "0.00": fee_pur += "%"
 
@@ -993,9 +1022,7 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
                 end_date_str = quarter_to_end_date(date_str)
                 end_date_html = f'<span class="quarter-end">截止至：{end_date_str}</span>' if end_date_str else ""
                 prev_period = sorted_holdings[i+1] if i+1 < len(sorted_holdings) else None
-                prev_holdings_dict = {}
-                if prev_period:
-                    prev_holdings_dict = {h['name']: h['ratio'] for h in prev_period['holdings']}
+                prev_holdings_dict = {h['name']: h['ratio'] for h in prev_period['holdings']} if prev_period else {}
                 stocks_html = ""
                 total_ratio = 0.0
                 if holdings_list:
@@ -1006,26 +1033,14 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
                         change_text = ''
                         change_class = ''
                         if name in prev_holdings_dict:
-                            prev_ratio = prev_holdings_dict[name]
-                            diff = ratio - prev_ratio
-                            if abs(diff) < 0.01:
-                                change_text = '持平'
-                                change_class = ''
-                            elif diff > 0.3:
-                                change_text = f'加仓 {diff:.2f}%'
-                                change_class = 'change-add'
-                            elif diff > 0:
-                                change_text = f'↑{diff:.2f}%'
-                                change_class = 'change-up'
-                            elif diff < -0.3:
-                                change_text = f'减仓 {abs(diff):.2f}%'
-                                change_class = 'change-sub'
-                            else:
-                                change_text = f'↓{abs(diff):.2f}%'
-                                change_class = 'change-down'
+                            diff = ratio - prev_holdings_dict[name]
+                            if abs(diff) < 0.01: change_text = '持平'; change_class = ''
+                            elif diff > 0.3: change_text = f'加仓 {diff:.2f}%'; change_class = 'change-add'
+                            elif diff > 0: change_text = f'↑{diff:.2f}%'; change_class = 'change-up'
+                            elif diff < -0.3: change_text = f'减仓 {abs(diff):.2f}%'; change_class = 'change-sub'
+                            else: change_text = f'↓{abs(diff):.2f}%'; change_class = 'change-down'
                         else:
-                            change_text = '新增'
-                            change_class = 'change-new'
+                            change_text = '新增'; change_class = 'change-new'
                         stocks_html += f'''
                         <div class="stock-item">
                             <span class="stock-name">{name}</span>
@@ -1133,14 +1148,12 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
         {"name": "定投估值计算机", "url": "https://btcdca.me/", "desc": "多资产定投策略与估值评分"},
         {"name": "FiNews 美股日报", "url": "https://finews.elsetech.app/", "desc": "每日美股盘后总结与新闻聚合"}
     ]
-    friend_cards_html = ""
-    for link in friend_links:
-        friend_cards_html += f"""
+    friend_cards_html = "".join([f"""
         <div class="friend-card">
             <a href="{link['url']}" target="_blank">{link['name']}</a>
             <span class="friend-desc">{link['desc']}</span>
         </div>
-        """
+    """ for link in friend_links])
 
     now_dt = datetime.now()
     update_time_str = now_dt.strftime("%Y-%m-%d %H:%M")
@@ -1153,6 +1166,14 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
         col_today_title = f"今日涨幅 (基准周五: {fri_dt})"
     else:
         col_today_title = f"今日涨幅 ({today_str})"
+
+    mode_badge = '<span style="background:#e67e22; color:#fff; font-size:11px; padding:2px 8px; border-radius:10px; margin-left:6px;">🛠️ 调试测试模式</span>' if is_debug_mode else '<span style="background:#188038; color:#fff; font-size:11px; padding:2px 8px; border-radius:10px; margin-left:6px;">🚀 正式发布版本</span>'
+
+    fng = metrics["fng"]
+    vix = metrics["vix"]
+    usdcny = metrics["usdcny"]
+    vxn = metrics["vxn"]
+    skew = metrics["skew"]
 
     html_content = f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -1218,7 +1239,6 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
             transition: background-color 0.3s, color 0.3s;
         }}
         
-        /* 顶部通栏主导航 */
         .main-navbar {{
             background: var(--table-bg);
             border-bottom: 1px solid var(--border);
@@ -1255,19 +1275,9 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
             color: var(--header-text);
             transition: all 0.2s;
         }}
-        .nav-tab-btn:hover {{
-            background: var(--hover-bg);
-            color: var(--link-color);
-        }}
-        .nav-tab-btn.active {{
-            background: var(--btn-active-bg);
-            color: #fff;
-        }}
-        .nav-right-tools {{
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }}
+        .nav-tab-btn:hover {{ background: var(--hover-bg); color: var(--link-color); }}
+        .nav-tab-btn.active {{ background: var(--btn-active-bg); color: #fff; }}
+        .nav-right-tools {{ display: flex; align-items: center; gap: 12px; }}
         .theme-toggle {{
             background: var(--header-bg);
             color: var(--text);
@@ -1278,7 +1288,6 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
             cursor: pointer;
         }}
 
-        /* 内容视图包裹器 */
         .views-container {{
             flex: 1;
             min-height: 0;
@@ -1287,99 +1296,75 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
             overflow: hidden;
             padding: 12px 20px;
         }}
-        .view-pane {{
-            display: none;
-            flex-direction: column;
-            height: 100%;
-            min-height: 0;
-        }}
-        .view-pane.active {{
-            display: flex;
-        }}
+        .view-pane {{ display: none; flex-direction: column; height: 100%; min-height: 0; }}
+        .view-pane.active {{ display: flex; }}
 
-        /* 首页视图样式 */
         .home-container {{
             flex: 1;
             overflow-y: auto;
             padding-right: 6px;
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 14px;
         }}
-        .home-banner {{
+        
+        /* 5列自适应宏观指标矩阵 */
+        .macro-metrics-grid {{
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 10px;
+        }}
+        .metric-card {{
             background: var(--table-bg);
             border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 18px 22px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            border-radius: 10px;
+            padding: 12px 14px;
+            box-shadow: var(--card-shadow);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }}
+        .metric-header {{
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 20px;
-        }}
-        .home-banner-left h2 {{
-            margin: 0 0 6px 0;
-            color: var(--link-color);
-            font-size: 20px;
-        }}
-        .home-banner-left p {{
-            margin: 0;
-            color: var(--footer-text);
             font-size: 12px;
-            line-height: 1.5;
+            font-weight: 700;
+            color: var(--header-text);
         }}
-
-        /* 恐慌指数紧凑型卡片 */
-        .fng-compact-card {{
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 10px 14px;
+        .metric-body {{
             display: flex;
-            align-items: center;
-            gap: 14px;
-            flex-shrink: 0;
+            align-items: baseline;
+            gap: 8px;
+            margin: 8px 0;
         }}
-        .fng-gauge-box {{
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }}
-        .fng-score-badge {{
-            font-size: 24px;
+        .metric-value {{
+            font-size: 26px;
             font-weight: 800;
             font-family: "SFMono-Regular", Consolas, monospace;
             line-height: 1;
-            margin-bottom: 2px;
         }}
-        .fng-rating-text {{
+        .metric-tag {{
             font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 4px;
             font-weight: 600;
-            text-transform: capitalize;
         }}
-        .fng-desc-box {{
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            max-width: 380px;
-            border-left: 1px dashed var(--border);
-            padding-left: 14px;
-        }}
-        .fng-header-line {{
-            display: flex;
-            justify-content: space-between;
+        .metric-desc {{
             font-size: 11px;
-            font-weight: bold;
-            color: var(--header-text);
+            color: var(--footer-text);
+            line-height: 1.4;
+            border-top: 1px dashed var(--border);
+            padding-top: 6px;
+            margin-top: 4px;
         }}
+
         .fng-bar-track {{
             height: 6px;
-            background: #e0e0e0;
-            border-radius: 3px;
-            overflow: hidden;
-            position: relative;
             background: linear-gradient(to right, #d93025, #ea8600, #fbbc04, #34a853, #188038);
+            border-radius: 3px;
+            position: relative;
+            margin: 6px 0 2px 0;
         }}
         .fng-bar-pointer {{
             width: 3px;
@@ -1391,20 +1376,8 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
             border-radius: 1px;
         }}
         [data-theme="dark"] .fng-bar-pointer {{ background: #fff; }}
-        .fng-range-legend {{
-            display: flex;
-            justify-content: space-between;
-            font-size: 9px;
-            color: var(--footer-text);
-            margin-top: 1px;
-        }}
 
-        /* 首页后续扩展占位区 */
-        .home-grid-section {{
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 14px;
-        }}
+        .home-grid-section {{ display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }}
         .home-card-box {{
             background: var(--table-bg);
             border: 1px solid var(--border);
@@ -1421,13 +1394,8 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
             align-items: center;
             justify-content: space-between;
         }}
-        .home-card-body {{
-            font-size: 12px;
-            color: var(--footer-text);
-            line-height: 1.6;
-        }}
+        .home-card-body {{ font-size: 12px; color: var(--footer-text); line-height: 1.6; }}
 
-        /* 基金列表子导航与筛选栏 */
         .sub-filter-bar {{
             background: var(--table-bg);
             border: 1px solid var(--border);
@@ -1441,18 +1409,8 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
             box-shadow: 0 1px 3px rgba(0,0,0,0.03);
             flex-shrink: 0;
         }}
-        .category-nav {{
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            flex-wrap: wrap;
-        }}
-        .category-title {{
-            font-size: 11px;
-            font-weight: 700;
-            color: var(--footer-text);
-            margin-right: 4px;
-        }}
+        .category-nav {{ display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }}
+        .category-title {{ font-size: 11px; font-weight: 700; color: var(--footer-text); margin-right: 4px; }}
         .cat-btn {{
             background: var(--btn-bg);
             color: var(--btn-text);
@@ -1464,19 +1422,9 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
             transition: all .2s;
             font-weight: 500;
         }}
-        .cat-btn:hover {{
-            background: var(--btn-active-bg);
-            color: var(--btn-active-text);
-        }}
-        .cat-btn.active {{
-            background: var(--btn-active-bg);
-            color: var(--btn-active-text);
-            border-color: var(--btn-active-bg);
-        }}
-        .search-box-wrap {{
-            width: 260px;
-            flex-shrink: 0;
-        }}
+        .cat-btn:hover {{ background: var(--btn-active-bg); color: var(--btn-active-text); }}
+        .cat-btn.active {{ background: var(--btn-active-bg); color: var(--btn-active-text); border-color: var(--btn-active-bg); }}
+        .search-box-wrap {{ width: 260px; flex-shrink: 0; }}
         .search-box-wrap input {{
             width: 100%;
             height: 28px;
@@ -1490,7 +1438,6 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
             box-sizing: border-box;
         }}
 
-        /* 表格排版 */
         .table-container {{ 
             width: 100%; 
             flex: 1 1 0; 
@@ -1505,63 +1452,22 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
             border: 1px solid var(--border);
             margin-bottom: 6px;
         }}
-        table {{ 
-            width: 100%; 
-            min-width: 2400px; 
-            border-collapse: collapse; 
-            font-size: 12px; 
-            text-align: right; 
-            table-layout: fixed; 
-        }}
-        th, td {{ 
-            padding: 6px 8px; 
-            border-bottom: 1px solid var(--border);
-            line-height: 1.4; 
-            overflow: hidden; 
-            text-overflow: ellipsis; 
-            box-sizing: border-box; 
-        }}
-        #fundTable thead th {{
-            position: sticky;
-            top: 0;
-            z-index: 10;
-            background-color: var(--header-bg);
-            border-bottom: 2px solid var(--border);
-        }}
+        table {{ width: 100%; min-width: 2400px; border-collapse: collapse; font-size: 12px; text-align: right; table-layout: fixed; }}
+        th, td {{ padding: 6px 8px; border-bottom: 1px solid var(--border); line-height: 1.4; overflow: hidden; text-overflow: ellipsis; box-sizing: border-box; }}
+        #fundTable thead th {{ position: sticky; top: 0; z-index: 10; background-color: var(--header-bg); border-bottom: 2px solid var(--border); }}
         th:nth-child(1), td:nth-child(1) {{ width: 60px; text-align: left; white-space: nowrap; }}
         th:nth-child(2), td:nth-child(2) {{ width: 250px; min-width: 200px; text-align: left; white-space: normal; word-break: break-word; vertical-align: middle; }}
         th:nth-child(3), td:nth-child(3) {{ width: 80px; text-align: left; white-space: nowrap; }}
         th:nth-child(4), td:nth-child(4) {{ width: 130px; text-align: left; white-space: normal; word-break: break-word; }}
         th:nth-child(5), td:nth-child(5) {{ width: 70px; text-align: left; white-space: nowrap; }}
         th:nth-child(6), td:nth-child(6) {{ width: 100px; text-align: left; white-space: nowrap; }}
-        th:nth-child(7), td:nth-child(7),
-        th:nth-child(8), td:nth-child(8) {{ width: 128px; white-space: nowrap; }}
+        th:nth-child(7), td:nth-child(7), th:nth-child(8), td:nth-child(8) {{ width: 128px; white-space: nowrap; }}
         th:nth-child(9), td:nth-child(9) {{ width: 85px; white-space: nowrap; }}
-        th:nth-child(10), td:nth-child(10),
-        th:nth-child(11), td:nth-child(11),
-        th:nth-child(12), td:nth-child(12) {{ width: 300px; white-space: nowrap; }}
+        th:nth-child(10), td:nth-child(10), th:nth-child(11), td:nth-child(11), th:nth-child(12), td:nth-child(12) {{ width: 300px; white-space: nowrap; }}
         th:nth-child(13), td:nth-child(13) {{ width: 80px; white-space: nowrap; }}
         th:nth-child(14), td:nth-child(14) {{ width: 155px; min-width: 90px; white-space: normal; }}
-        th:nth-child(15), td:nth-child(15),
-        th:nth-child(16), td:nth-child(16),
-        th:nth-child(17), td:nth-child(17),
-        th:nth-child(18), td:nth-child(18),
-        th:nth-child(19), td:nth-child(19),
-        th:nth-child(20), td:nth-child(20) {{ width: 80px; white-space: nowrap; }}
-        th {{ 
-            background-color: var(--header-bg);
-            color: var(--header-text);
-            font-weight: 600; 
-            text-align: right; 
-            user-select: none; 
-            cursor: pointer; 
-            white-space: normal;
-            word-break: keep-all;
-            line-height: 1.25;
-            height: 38px;
-            vertical-align: middle;
-            position: relative; 
-        }}
+        th:nth-child(15), td:nth-child(15), th:nth-child(16), td:nth-child(16), th:nth-child(17), td:nth-child(17), th:nth-child(18), td:nth-child(18), th:nth-child(19), td:nth-child(19), th:nth-child(20), td:nth-child(20) {{ width: 80px; white-space: nowrap; }}
+        th {{ background-color: var(--header-bg); color: var(--header-text); font-weight: 600; text-align: right; user-select: none; cursor: pointer; white-space: normal; word-break: keep-all; line-height: 1.25; height: 38px; vertical-align: middle; position: relative; }}
         th:hover {{ background-color: #e4e7eb; }}
         [data-theme="dark"] th:hover {{ background-color: #3d3d3d; }}
         th:nth-child(1), th:nth-child(2), th:nth-child(3), th:nth-child(4), th:nth-child(5), th:nth-child(6) {{ text-align: left; }}
@@ -1574,29 +1480,9 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
         .highlight-val {{ font-weight: 600; color: #e67e22; }}
         .fee-sub {{ font-size: 10px; color: var(--footer-text); }}
 
-        .progress-container {{
-            background-color: var(--progress-track);
-            border-radius: 6px;
-            overflow: hidden;
-            height: 20px;
-            width: 100%;
-            position: relative;
-        }}
-        .progress-bar {{
-            height: 100%;
-            border-radius: 6px;
-            min-width: 42px;
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            padding-right: 6px;
-            box-sizing: border-box;
-        }}
-        .progress-bar span {{
-            color: #fff;
-            font-size: 11px;
-            font-weight: 600;
-        }}
+        .progress-container {{ background-color: var(--progress-track); border-radius: 6px; overflow: hidden; height: 20px; width: 100%; position: relative; }}
+        .progress-bar {{ height: 100%; border-radius: 6px; min-width: 42px; display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; box-sizing: border-box; }}
+        .progress-bar span {{ color: #fff; font-size: 11px; font-weight: 600; }}
         .bar-red {{ background-color: #d93025; }}
         .bar-blue {{ background-color: #1a73e8; }}
         .bar-green {{ background-color: #188038; }}
@@ -1606,62 +1492,19 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
         .gain-negative {{ color: #188038; font-weight: bold; }}
         .gain-date {{ font-size: 10px; color: var(--footer-text); }}
 
-        /* 折叠持仓卡片排版 */
         .fund-row {{ cursor: pointer; }}
-        .holding-row td {{
-            background-color: var(--hover-bg) !important;
-            border-top: 1px dashed var(--border);
-        }}
+        .holding-row td {{ background-color: var(--hover-bg) !important; border-top: 1px dashed var(--border); }}
         .holding-row {{ display: none; }}
         .holding-row.show {{ display: table-row; }}
-        .holdings-wrapper {{
-            display: flex;
-            flex-wrap: nowrap;
-            gap: 16px;
-            align-items: stretch;
-            width: 100%;
-        }}
-        .holdings-container {{
-            flex: 0 0 calc(50% - 8px);
-            width: calc(50% - 8px);
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 8px;
-            align-items: stretch;
-            min-width: 0;
-        }}
-        .quarter-card {{
-            min-width: 0;
-            background: var(--card-bg);
-            border-radius: 8px;
-            padding: 10px 8px;
-            box-shadow: var(--card-shadow);
-            box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
-        }}
+        .holdings-wrapper {{ display: flex; flex-wrap: nowrap; gap: 16px; align-items: stretch; width: 100%; }}
+        .holdings-container {{ flex: 0 0 calc(50% - 8px); width: calc(50% - 8px); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-items: stretch; min-width: 0; }}
+        .quarter-card {{ min-width: 0; background: var(--card-bg); border-radius: 8px; padding: 10px 8px; box-shadow: var(--card-shadow); box-sizing: border-box; display: flex; flex-direction: column; }}
         .empty-holdings-placeholder {{ grid-column: span 3; }}
-        .quarter-label {{
-            font-weight: bold;
-            font-size: 12px;
-            margin-bottom: 8px;
-            color: var(--header-text);
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 4px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }}
+        .quarter-label {{ font-weight: bold; font-size: 12px; margin-bottom: 8px; color: var(--header-text); border-bottom: 1px solid var(--border); padding-bottom: 4px; display: flex; justify-content: space-between; align-items: center; }}
         .quarter-title {{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
         .quarter-end {{ font-size: 10px; color: var(--footer-text); }}
         .quarter-stocks {{ display: flex; flex-direction: column; gap: 4px; flex: 1; }}
-        .stock-item {{
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) 50px 56px;
-            gap: 3px;
-            font-size: 11px;
-            align-items: center;
-        }}
+        .stock-item {{ display: grid; grid-template-columns: minmax(0, 1fr) 50px 56px; gap: 3px; font-size: 11px; align-items: center; }}
         .stock-name {{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
         .stock-ratio {{ text-align: right; font-weight: 500; }}
         .stock-change {{ text-align: right; font-size: 10px; white-space: nowrap; }}
@@ -1670,86 +1513,34 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
         .change-up {{ color: #d93025; }}
         .change-down {{ color: #188038; }}
         .change-new {{ color: #1a73e8; }}
-        .stock-total {{
-            margin-top: 6px;
-            padding-top: 6px;
-            border-top: 1px dashed var(--border);
-            font-weight: 600;
-        }}
+        .stock-total {{ margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); font-weight: 600; }}
         .stock-total .stock-ratio {{ color: #e67e22; }}
         
-        .holder-card {{
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-        }}
-        .holder-pie-wrapper {{
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-            min-height: 140px;
-            max-height: 180px;
-        }}
-        .holder-date-sub {{
-            font-size: 10px;
-            color: var(--footer-text);
-            text-align: center;
-            border-top: 1px dashed var(--border);
-            padding-top: 6px;
-            margin-top: 4px;
-        }}
+        .holder-card {{ display: flex; flex-direction: column; justify-content: space-between; }}
+        .holder-pie-wrapper {{ flex: 1; display: flex; align-items: center; justify-content: center; position: relative; min-height: 140px; max-height: 180px; }}
+        .holder-date-sub {{ font-size: 10px; color: var(--footer-text); text-align: center; border-top: 1px dashed var(--border); padding-top: 6px; margin-top: 4px; }}
 
-        .chart-container {{
-            flex: 0 0 calc(50% - 8px);
-            background: var(--card-bg);
-            border-radius: 8px;
-            padding: 10px;
-            box-shadow: var(--card-shadow);
-            display: flex;
-            flex-direction: column;
-            min-height: 200px;
-        }}
+        .chart-container {{ flex: 0 0 calc(50% - 8px); background: var(--card-bg); border-radius: 8px; padding: 10px; box-shadow: var(--card-shadow); display: flex; flex-direction: column; min-height: 200px; }}
         .chart-controls {{ display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }}
-        .chart-controls button {{
-            background: var(--btn-bg);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 2px 10px;
-            font-size: 11px;
-            cursor: pointer;
-            color: var(--btn-text);
-        }}
-        .chart-controls button.active {{
-            background: var(--btn-active-bg);
-            color: var(--btn-active-text);
-        }}
-        .chart-container canvas {{
-            width: 100% !important;
-            height: auto !important;
-            max-height: 200px;
-            flex: 1;
-        }}
+        .chart-controls button {{ background: var(--btn-bg); border: 1px solid var(--border); border-radius: 12px; padding: 2px 10px; font-size: 11px; cursor: pointer; color: var(--btn-text); }}
+        .chart-controls button.active {{ background: var(--btn-active-bg); color: var(--btn-active-text); }}
+        .chart-container canvas {{ width: 100% !important; height: auto !important; max-height: 200px; flex: 1; }}
         
-        .footer-note {{ 
-            font-size: 11px; 
-            color: var(--footer-text);
-            background: var(--footer-bg);
-            padding: 6px 12px; 
-            border-radius: 6px; 
-            border: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        .footer-note {{ font-size: 11px; color: var(--footer-text); background: var(--footer-bg); padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }}
+        .friend-card {{ background: var(--card-bg); border-radius: 6px; padding: 8px 10px; border: 1px solid var(--border); }}
+        .friend-card a {{ color: var(--link-color); text-decoration: none; font-weight: 600; font-size: 12px; display: block; }}
+        .friend-desc {{ font-size: 10px; color: var(--footer-text); }}
+
+        @media (max-width: 1200px) {{
+            .macro-metrics-grid {{ grid-template-columns: repeat(2, 1fr); }}
         }}
     </style>
 </head>
 <body>
-    <!-- 顶部主菜单导航栏 -->
     <header class="main-navbar">
         <div class="nav-brand">
             <span>📈 资产量化与策略看板</span>
+            {mode_badge}
         </div>
         <div class="nav-tabs-group">
             <button class="nav-tab-btn active" data-view="homeView">🏠 首页概览</button>
@@ -1760,59 +1551,103 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
         </div>
     </header>
 
-    <!-- 主体视图区 -->
     <main class="views-container">
-        
         <!-- 视图 1：首页 -->
         <section id="homeView" class="view-pane active">
             <div class="home-container">
-                <!-- 头部 Banner 与紧凑恐慌指数卡片 -->
-                <div class="home-banner">
-                    <div class="home-banner-left">
-                        <h2>宏观全景与市场情绪</h2>
-                        <p>监控全球主要市场流动性、跨资产表现与市场恐慌贪婪程度，为仓位攻防提供科学的量化依据。</p>
-                    </div>
-                    
-                    <!-- 恐慌指数紧凑组件 -->
-                    <div class="fng-compact-card">
-                        <div class="fng-gauge-box">
-                            <div class="fng-score-badge" id="fngScore">--</div>
-                            <div class="fng-rating-text" id="fngRating">--</div>
+                <!-- 顶部 5 大宏观情绪与风险指标矩阵 -->
+                <div class="macro-metrics-grid">
+                    <!-- 1. CNN 恐慌与贪婪指数 -->
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span>CNN 恐慌贪婪指数</span>
+                            <span style="font-size:10px; color:var(--footer-text);">{fng['time']}</span>
                         </div>
-                        <div class="fng-desc-box">
-                            <div class="fng-header-line">
-                                <span>市场情绪 (Fear & Greed)</span>
-                                <span style="font-weight:normal; font-size:10px; color:var(--footer-text);" id="fngDate">--</span>
-                            </div>
-                            <div class="fng-bar-track">
-                                <div class="fng-bar-pointer" id="fngPointer" style="left: 50%;"></div>
-                            </div>
-                            <div class="fng-range-legend">
-                                <span style="color:#d93025;">0 极度恐慌</span>
-                                <span style="color:#ea8600;">恐慌</span>
-                                <span style="color:#fbbc04;">中性</span>
-                                <span style="color:#34a853;">贪婪</span>
-                                <span style="color:#188038;">100 极度贪婪</span>
-                            </div>
-                            <div style="font-size:10px; color:var(--footer-text); margin-top:2px;">
-                                💡 <strong>指标含义：</strong> 0~25 极恐(往往孕育买点) | 26~45 谨慎 | 46~54 中性 | 55~75 贪婪 | 76~100 亢奋极贪(注意风控)
-                            </div>
+                        <div class="metric-body">
+                            <span class="metric-value" style="color:#1a73e8;">{fng['score']}</span>
+                            <span class="metric-tag" style="background:rgba(26,115,232,0.12); color:#1a73e8;">{fng['rating']}</span>
+                        </div>
+                        <div class="fng-bar-track">
+                            <div class="fng-bar-pointer" style="left: {fng['score']}%;"></div>
+                        </div>
+                        <div class="metric-desc">
+                            0~25 极恐 | 26~45 恐惧 | 46~54 中性 | 55~75 贪婪 | 76~100 极贪
+                        </div>
+                    </div>
+
+                    <!-- 2. VIX 恐慌指数 -->
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span>VIX 恐慌指数</span>
+                            <span style="font-size:10px; color:var(--footer-text);">{vix['time']}</span>
+                        </div>
+                        <div class="metric-body">
+                            <span class="metric-value" style="color:#d93025;">{vix['val']}</span>
+                            <span class="metric-tag" style="background:rgba(217,48,37,0.12); color:#d93025;">{vix['status']}</span>
+                        </div>
+                        <div class="metric-desc">
+                            {vix['desc']}
+                        </div>
+                    </div>
+
+                    <!-- 3. USD/CNY 汇率 -->
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span>USD/CNY 汇率</span>
+                            <span style="font-size:10px; color:var(--footer-text);">{usdcny['time']}</span>
+                        </div>
+                        <div class="metric-body">
+                            <span class="metric-value" style="color:#188038;">{usdcny['val']}</span>
+                            <span class="metric-tag" style="background:rgba(24,128,56,0.12); color:#188038;">{usdcny['status']}</span>
+                        </div>
+                        <div class="metric-desc">
+                            {usdcny['desc']}
+                        </div>
+                    </div>
+
+                    <!-- 4. VXN 纳指波动率 -->
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span>VXN 纳指波动率</span>
+                            <span style="font-size:10px; color:var(--footer-text);">{vxn['time']}</span>
+                        </div>
+                        <div class="metric-body">
+                            <span class="metric-value" style="color:#34a853;">{vxn['val']}</span>
+                            <span class="metric-tag" style="background:rgba(52,168,83,0.12); color:#34a853;">{vxn['status']}</span>
+                        </div>
+                        <div class="metric-desc">
+                            {vxn['desc']}
+                        </div>
+                    </div>
+
+                    <!-- 5. SKEW 黑天鹅指数 -->
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span>SKEW 黑天鹅偏斜</span>
+                            <span style="font-size:10px; color:var(--footer-text);">{skew['time']}</span>
+                        </div>
+                        <div class="metric-body">
+                            <span class="metric-value" style="color:#e67e22;">{skew['val']}</span>
+                            <span class="metric-tag" style="background:rgba(230,126,34,0.12); color:#e67e22;">{skew['status']}</span>
+                        </div>
+                        <div class="metric-desc">
+                            {skew['desc']}
                         </div>
                     </div>
                 </div>
 
-                <!-- 首页后续内容预留区 -->
+                <!-- 首页备忘与工具区 -->
                 <div class="home-grid-section">
                     <div class="home-card-box">
                         <div class="home-card-title">
-                            <span>📌 策略速览与投资备忘</span>
+                            <span>📌 宏观资产配置速览与逻辑备忘</span>
                             <span style="font-size:11px; font-weight:normal; color:var(--link-color);">后续持续扩展</span>
                         </div>
                         <div class="home-card-body">
-                            <p>• <strong>资产分层配置：</strong> 建议维持海外核心指数资产底仓，同时通过网格及定投工具平滑A股科技与周期板块的波动。</p>
-                            <p>• <strong>恐慌指数运用：</strong> 当市场处于极端恐慌区间时，逐步加大定投资金比例；处于极度贪婪时，分批兑现浮盈。</p>
-                            <div style="padding: 20px; text-align: center; background: var(--hover-bg); border-radius: 8px; margin-top: 10px; border: 1px dashed var(--border);">
-                                💡 首页后续内容扩充区域（可扩展：大盘估值雷达、资金动向、重要财经日历）
+                            <p>• <strong>恐慌指标协同判断：</strong> 当 <strong>VIX 恐慌指数</strong> 显著飙升（>20）且 <strong>CNN 情绪指数</strong> 步入极度恐惧（0~25）时，通常对应全市场非理性杀跌的左侧加仓与定投翻倍窗口。</p>
+                            <p>• <strong>汇率对冲与折溢价：</strong> 跟踪 <strong>USD/CNY 汇率</strong> 走势，当汇率波动较大时，QDII 基金的实际净值波动将叠加汇率损益，需警惕场内溢价过高风险。</p>
+                            <div style="padding: 24px; text-align: center; background: var(--hover-bg); border-radius: 8px; margin-top: 10px; border: 1px dashed var(--border);">
+                                💡 首页后续内容扩充区域（可随时接入：大盘估值雷达、资金动向、重要财经日历）
                             </div>
                         </div>
                     </div>
@@ -1831,7 +1666,6 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
 
         <!-- 视图 2：基金量化看板 -->
         <section id="fundView" class="view-pane">
-            <!-- 顶部多级分类菜单栏 (美股、A股、其他) -->
             <div class="sub-filter-bar">
                 <div class="category-nav">
                     <span class="category-title">市场大类:</span>
@@ -1863,7 +1697,6 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
                 </div>
             </div>
 
-            <!-- 数据表格 -->
             <div class="table-container">
                 <table id="fundTable">
                     <thead>
@@ -1899,7 +1732,7 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
 
             <div class="footer-note">
                 <div class="footer-left">
-                    <span>💡 <strong>使用提示：</strong> 表格支持列宽自由拖拽与表头排序；点击基金数据行可展开查看前十大持仓、持有人结构及走势图。</span>
+                    <span>💡 <strong>使用提示：</strong> 表格支持列宽拖拽调整与点击表头排序；点击基金行可展开查看前十大持仓、持有人结构饼图及走势。</span>
                 </div>
                 <div class="footer-right">
                     <span>⏱️ 统计更新于: <strong>{update_time_str}</strong></span>
@@ -1910,33 +1743,7 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
 
     <script>
         var fundNavData = {json.dumps(nav_data_json, ensure_ascii=False)};
-        var fngData = {json.dumps(fear_greed_info, ensure_ascii=False)};
 
-        // 1. 初始化恐慌指数
-        (function() {{
-            const scoreElem = document.getElementById('fngScore');
-            const ratingElem = document.getElementById('fngRating');
-            const dateElem = document.getElementById('fngDate');
-            const pointerElem = document.getElementById('fngPointer');
-            if (fngData && scoreElem) {{
-                const val = fngData.score;
-                scoreElem.innerText = val;
-                ratingElem.innerText = fngData.rating;
-                dateElem.innerText = fngData.date + ' (' + fngData.source + ')';
-                pointerElem.style.left = val + '%';
-                
-                // 情绪色彩
-                let color = '#fbbc04';
-                if (val <= 25) color = '#d93025';
-                else if (val <= 45) color = '#ea8600';
-                else if (val >= 75) color = '#188038';
-                else if (val >= 55) color = '#34a853';
-                scoreElem.style.color = color;
-                ratingElem.style.color = color;
-            }}
-        }})();
-
-        // 2. 主导航切换 (首页 vs 看板)
         document.querySelectorAll('.nav-tab-btn').forEach(btn => {{
             btn.addEventListener('click', function() {{
                 document.querySelectorAll('.nav-tab-btn').forEach(b => b.classList.remove('active'));
@@ -1947,7 +1754,6 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
             }});
         }});
 
-        // 3. 亮暗主题切换
         (function() {{
             const toggle = document.getElementById('themeToggle');
             const currentTheme = localStorage.getItem('theme') || 'light';
@@ -1962,7 +1768,6 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
             }});
         }})();
 
-        // 4. 多级标签与搜索筛选逻辑
         document.addEventListener('DOMContentLoaded', function() {{
             const catBtns = document.querySelectorAll('.cat-btn');
             const searchInput = document.getElementById('searchInput');
@@ -2037,10 +1842,9 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
             }}
         }});
 
-        // 5. 原生饼图绘制插件与走势图渲染
         var chartInstances = {{}};
         var holderChartInstances = {{}};
-        
+
         const pieLabelsPlugin = {{
             id: 'pieLabels',
             afterDraw(chart) {{
@@ -2155,11 +1959,19 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
                 if (typeof chartInstances[code].destroy === 'function') {{
                     chartInstances[code].destroy();
                     delete chartInstances[code];
-                }} else return;
+                }}
             }}
             const data = fundNavData[code];
             if (!data || !data.dates || data.dates.length === 0) return;
-            const filtered = filterNavData(data, 'month');
+            
+            const container = document.getElementById(`chart-container-${{code}}`);
+            let currentPeriod = 'month';
+            if (container) {{
+                const activeBtn = container.querySelector('.period-btn.active');
+                if (activeBtn) currentPeriod = activeBtn.dataset.period;
+            }}
+
+            const filtered = filterNavData(data, currentPeriod);
             const ctx = canvas.getContext('2d');
             const chart = new Chart(ctx, {{
                 type: 'line',
@@ -2182,9 +1994,27 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
                 }}
             }});
             chartInstances[code] = chart;
+
+            if (container && !container._eventsBound) {{
+                const btns = container.querySelectorAll('.period-btn');
+                btns.forEach(btn => {{
+                    btn.addEventListener('click', function(e) {{
+                        e.stopPropagation();
+                        btns.forEach(b => b.classList.remove('active'));
+                        this.classList.add('active');
+                        const period = this.dataset.period;
+                        const fData = filterNavData(data, period);
+                        if (chartInstances[code]) {{
+                            chartInstances[code].data.labels = fData.dates;
+                            chartInstances[code].data.datasets[0].data = fData.navs;
+                            chartInstances[code].update();
+                        }}
+                    }});
+                }});
+                container._eventsBound = true;
+            }}
         }}
 
-        // 点击展开折叠
         document.addEventListener('DOMContentLoaded', function() {{
             const table = document.getElementById('fundTable');
             table.addEventListener('click', function(e) {{
@@ -2207,7 +2037,6 @@ def generate_html_report(results, start_date, end_date, today_str, fear_greed_in
             }});
         }});
 
-        // 表格基础排序
         let currentSortCol = -1;
         let isAscending = true;
         function sortTable(colIndex) {{
@@ -2262,8 +2091,7 @@ def fetch_crypto_data(symbol, start_date, end_date):
                 cache = json.load(f)
             if cache.get('start_date', '') <= start_date and cache.get('end_date', '') >= end_date:
                 return cache.get('data', [])
-        except Exception:
-            pass
+        except Exception: pass
 
     pair = f"{symbol}USDT"
     data = []
@@ -2277,18 +2105,15 @@ def fetch_crypto_data(symbol, start_date, end_date):
             for item in klines:
                 d_str = datetime.fromtimestamp(item[0] / 1000).strftime('%Y-%m-%d')
                 nav = float(item[4])
-                if nav > 0:
-                    data.append({"date": d_str, "nav": nav})
-    except Exception:
-        data = []
+                if nav > 0: data.append({"date": d_str, "nav": nav})
+    except Exception: pass
 
     if data:
         data = sorted(data, key=lambda x: x['date'])
         try:
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump({'start_date': start_date, 'end_date': end_date, 'data': data}, f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
+        except Exception: pass
         return data
     return None
 
@@ -2300,30 +2125,24 @@ def fetch_precious_metals_data(symbol, start_date, end_date):
                 cache = json.load(f)
             if cache.get('start_date', '') <= start_date and cache.get('end_date', '') >= end_date:
                 return cache.get('data', [])
-        except Exception:
-            pass
+        except Exception: pass
 
     df = None
     data = []
     try:
-        if symbol == "AUM":
-            df = ak.futures_main_sina(symbol="AU0")
+        if symbol == "AUM": df = ak.futures_main_sina(symbol="AU0")
         elif symbol == "XAU":
             for sym in ["GC", "XAU"]:
                 try:
                     df = ak.futures_foreign_hist(symbol=sym)
-                    if df is not None and not df.empty:
-                        break
-                except Exception:
-                    continue
+                    if df is not None and not df.empty: break
+                except Exception: continue
         elif symbol == "XAG":
             for sym in ["SI", "XAG"]:
                 try:
                     df = ak.futures_foreign_hist(symbol=sym)
-                    if df is not None and not df.empty:
-                        break
-                except Exception:
-                    continue
+                    if df is not None and not df.empty: break
+                except Exception: continue
 
         if df is not None and not df.empty:
             d_col = '日期' if '日期' in df.columns else ('date' if 'date' in df.columns else df.columns[0])
@@ -2333,10 +2152,8 @@ def fetch_precious_metals_data(symbol, start_date, end_date):
             for _, row in df.iterrows():
                 try:
                     nav = float(row[c_col])
-                    if nav > 0:
-                        data.append({"date": str(row[d_col]), "nav": nav})
-                except Exception:
-                    continue
+                    if nav > 0: data.append({"date": str(row[d_col]), "nav": nav})
+                except Exception: continue
 
         if data:
             with open(cache_file, 'w', encoding='utf-8') as f:
@@ -2347,63 +2164,22 @@ def fetch_precious_metals_data(symbol, start_date, end_date):
     return None
 
 def fetch_index_data(symbol, start_date, end_date):
-    df = None
-    close_col = None
-    date_col = None
-
     try:
+        df = None
         if symbol in SINA_INDEX_MAP:
             sina_symbol = SINA_INDEX_MAP[symbol]
             df = ak.index_us_stock_sina(symbol=sina_symbol)
-            if df is not None and not df.empty:
-                date_col = 'date' if 'date' in df.columns else df.columns[0]
-                close_col = 'close' if 'close' in df.columns else None
-                if close_col is None:
-                    for c in df.columns:
-                        if 'close' in str(c).lower() or '收盘' in str(c):
-                            close_col = c
-                            break
-                if close_col is None:
-                    close_col = df.columns[4] if len(df.columns) > 4 else df.columns[-1]
-
-        elif symbol == "SOXL":
-            for try_symbol in ["105.SOXL", "SOXL", "106.SOXL"]:
+        elif symbol in ["SOXL", "SOXX"]:
+            for try_symbol in [f"105.{symbol}", symbol, f"106.{symbol}"]:
                 try:
                     df = ak.stock_us_hist(symbol=try_symbol, period="daily", start_date=start_date.replace("-", ""), end_date=end_date.replace("-", ""), adjust="")
-                    if df is not None and not df.empty:
-                        break
-                except Exception:
-                    continue
+                    if df is not None and not df.empty: break
+                except Exception: continue
 
-            if df is not None and not df.empty:
-                date_col = '日期' if '日期' in df.columns else ('date' if 'date' in df.columns else df.columns[0])
-                close_col = '收盘' if '收盘' in df.columns else ('close' if 'close' in df.columns else None)
-                if close_col is None:
-                    for c in df.columns:
-                        if 'close' in str(c).lower() or '收盘' in str(c):
-                            close_col = c
-                            break
+        if df is None or df.empty: return None
 
-        elif symbol == "SOXX":
-            for try_symbol in ["105.SOXX", "SOXX", "106.SOXX"]:
-                try:
-                    df = ak.stock_us_hist(symbol=try_symbol, period="daily", start_date=start_date.replace("-", ""), end_date=end_date.replace("-", ""), adjust="")
-                    if df is not None and not df.empty:
-                        break
-                except Exception:
-                    continue
-
-            if df is not None and not df.empty:
-                date_col = '日期' if '日期' in df.columns else ('date' if 'date' in df.columns else df.columns[0])
-                close_col = '收盘' if '收盘' in df.columns else ('close' if 'close' in df.columns else None)
-                if close_col is None:
-                    for c in df.columns:
-                        if 'close' in str(c).lower() or '收盘' in str(c):
-                            close_col = c
-                            break
-
-        if df is None or df.empty:
-            return None
+        date_col = '日期' if '日期' in df.columns else ('date' if 'date' in df.columns else df.columns[0])
+        close_col = '收盘' if '收盘' in df.columns else ('close' if 'close' in df.columns else df.columns[4])
 
         df = df.copy()
         df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
@@ -2412,17 +2188,12 @@ def fetch_index_data(symbol, start_date, end_date):
         mask = (df['date_str'] >= start_date) & (df['date_str'] <= end_date)
         df = df.loc[mask].sort_values('date_str')
 
-        if df.empty:
-            return None
-
         data = []
         for _, row in df.iterrows():
             try:
                 nav = float(row[close_col])
-                if nav > 0:
-                    data.append({"date": row['date_str'], "nav": nav})
-            except (ValueError, TypeError):
-                continue
+                if nav > 0: data.append({"date": row['date_str'], "nav": nav})
+            except Exception: continue
         return data if data else None
     except Exception:
         return None
@@ -2432,31 +2203,53 @@ def main():
     default_start = "2025-01-01"
     cutoff_date = "2026-04-01"
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="场外基金量化与资产配置看板生成引擎")
+    parser.add_argument("--mode", type=str, choices=["debug", "prod"], default=None,
+                        help="运行模式配置：debug(快速测试少量标的) / prod(生产发布全量标的)")
     parser.add_argument("--start", type=str, default=default_start)
     parser.add_argument("--end", type=str, default=today_str)
-    parser.add_argument("--funds", nargs="+", default=DEFAULT_FUNDS)
     parser.add_argument("--out", type=str, default="fund_drawdown_dashboard.html")
 
     args = parser.parse_args()
-    opener = get_direct_opener()
 
-    print(f"\n======== 开始抓取数据 ========")
+    if args.mode: is_debug = (args.mode == "debug")
+    else: is_debug = IS_DEBUG
+
+    if is_debug:
+        target_funds = TEST_FUNDS
+        target_metals = ["XAU"]
+        target_cryptos = ["BTC"]
+        target_indices = ["NDX"]
+        print("\n=======================================================")
+        print("🛠️ 当前处于【测试调试阶段 (DEBUG MODE)】")
+        print(f"👉 仅抓取 {len(target_funds)} 只核心测试基金 + 极简大类资产样本")
+        print("=======================================================\n")
+    else:
+        target_funds = PROD_FUNDS
+        target_metals = ["XAU", "AUM", "XAG"]
+        target_cryptos = ["BTC", "ETH", "SOL", "BNB"]
+        target_indices = ["NDX", "SPX", "SOXX", "SOXL"]
+        print("\n=======================================================")
+        print("🚀 当前处于【正式发布阶段 (PROD MODE)】")
+        print(f"👉 正在抓取全量 {len(target_funds)} 只基金与全品类宏观大类资产...")
+        print("=======================================================\n")
+
+    opener = get_direct_opener()
     print(f"统计区间: {args.start} 至 {args.end}")
     
-    # 抓取市场情绪/恐慌指数
-    fear_greed_info = fetch_fear_and_greed_index(opener)
-    print(f"📊 恐慌贪婪指数获取成功: {fear_greed_info['score']} ({fear_greed_info['rating']})")
+    # 采用多源机制抓取宏观指标 (CNN F&G, VIX, USD/CNY, VXN, SKEW)
+    home_metrics = fetch_home_market_metrics(opener)
+    print(f"📊 核心宏观指标多源获取完成: 恐慌贪婪 {home_metrics['fng']['score']} | VIX {home_metrics['vix']['val']} | USD/CNY {home_metrics['usdcny']['val']} | VXN {home_metrics['vxn']['val']} | SKEW {home_metrics['skew']['val']}")
 
     results = []
-    for idx, code in enumerate(args.funds, start=1):
+    # 1. 抓取基金列表
+    for idx, code in enumerate(target_funds, start=1):
         meta = fetch_fund_detail_meta(opener, code)
         raw_data = fetch_from_eastmoney(opener, code, args.start, args.end)
         if not raw_data:
-            print(f"[{idx}/{len(args.funds)}] {code} - {meta['name']} ... ❌ 历史净值抓取失败")
+            print(f"[{idx}/{len(target_funds)}] {code} - {meta['name']} ... ❌ 历史净值抓取失败")
             continue
         raw_data_sorted = sorted(raw_data, key=lambda x: x['date'])
-        
         is_qdii = code in US_ACTIVE_CODES or code in NDX_PASSIVE_CODES or code in SPX_PASSIVE_CODES
         res = analyze_fund_metrics(raw_data_sorted, args.end, cutoff_date, is_qdii=is_qdii)
         if res:
@@ -2482,11 +2275,11 @@ def main():
                 "nav_data": raw_data_sorted
             })
             results.append(res)
-            print(f"[{idx}/{len(args.funds)}] {code} - {meta['name']} ... ✅ 完成")
+            print(f"[{idx}/{len(target_funds)}] {code} - {meta['name']} ... ✅ 完成")
         time.sleep(random.uniform(0.05, 0.1))
 
-    # 获取其他标的数据
-    for symbol in PRECIOUS_METALS_SYMBOLS:
+    # 2. 贵金属
+    for symbol in target_metals:
         try:
             data = fetch_precious_metals_data(symbol, args.start, args.end)
             if data:
@@ -2501,28 +2294,27 @@ def main():
                         "holder_struct": None, "source": "贵金属行情", "nav_data": data
                     })
                     results.append(res)
-        except Exception:
-            pass
+        except Exception: pass
 
-    for symbol in CRYPTO_SYMBOLS:
+    # 3. 加密货币
+    for symbol in target_cryptos:
         try:
             data = fetch_crypto_data(symbol, args.start, args.end)
             if data:
-                meta_name = CRYPTO_NAMES.get(symbol, symbol)
                 res = analyze_fund_metrics(data, args.end, cutoff_date, is_qdii=False)
                 if res:
                     res.update({
-                        "code": symbol, "name": meta_name, "scale": "--", "scale_val": -1.0,
+                        "code": symbol, "name": CRYPTO_NAMES.get(symbol, symbol), "scale": "--", "scale_val": -1.0,
                         "fee_manage": "--", "fee_custody": "--", "fee_sales": "--", "fee_source": "--",
                         "fee_purchase": "--", "fee_redemption": "--", "buy_status": "--", "buy_limit": "--",
                         "buy_limit_val": -1, "fee_total": "--", "fee_val": -1.0, "holdings": [],
                         "holder_struct": None, "source": "现货行情", "nav_data": data
                     })
                     results.append(res)
-        except Exception:
-            pass
+        except Exception: pass
 
-    for symbol in INDEX_SYMBOLS:
+    # 4. 指数
+    for symbol in target_indices:
         try:
             data = fetch_index_data(symbol, args.start, args.end)
             if data:
@@ -2536,16 +2328,14 @@ def main():
                         "holder_struct": None, "source": "指数行情", "nav_data": data
                     })
                     results.append(res)
-        except Exception:
-            pass
+        except Exception: pass
 
     if results:
-        abs_path = generate_html_report(results, args.start, args.end, today_str, fear_greed_info, filename=args.out)
-        print(f"\n🎉 升级版网页生成成功！文件路径: {abs_path}")
+        abs_path = generate_html_report(results, args.start, args.end, today_str, home_metrics, is_debug_mode=is_debug, filename=args.out)
+        print(f"\n🎉 升级版网页构建成功！文件路径: {abs_path}")
         try:
             webbrowser.open(f"file://{abs_path}")
-        except Exception:
-            pass
+        except Exception: pass
 
 if __name__ == "__main__":
     main()
