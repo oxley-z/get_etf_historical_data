@@ -131,7 +131,6 @@
             gap: 14px;
         }
         
-        /* 5列自适应宏观指标矩阵 */
         .macro-metrics-grid {
             display: grid;
             grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -181,6 +180,19 @@
             padding-top: 6px;
             margin-top: 4px;
         }
+        .metric-source-link {
+            font-size: 11px;
+            color: var(--link-color);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            margin-top: 6px;
+            padding-top: 4px;
+            border-top: 1px solid var(--border);
+            word-break: break-all;
+        }
+        .metric-source-link:hover { text-decoration: underline; }
 
         .fng-bar-track {
             height: 6px;
@@ -247,6 +259,17 @@
         }
         .cat-btn:hover { background: var(--btn-active-bg); color: var(--btn-active-text); }
         .cat-btn.active { background: var(--btn-active-bg); color: var(--btn-active-text); border-color: var(--btn-active-bg); }
+        .cat-btn.fav-filter {
+            background: rgba(230,126,34,0.15);
+            color: #e67e22;
+            border-color: #e67e22;
+            font-weight: 700;
+        }
+        .cat-btn.fav-filter.active {
+            background: #e67e22;
+            color: #fff;
+            border-color: #e67e22;
+        }
         .search-box-wrap { width: 260px; flex-shrink: 0; }
         .search-box-wrap input {
             width: 100%;
@@ -260,6 +283,68 @@
             outline: none;
             box-sizing: border-box;
         }
+
+        /* 定投全局参数配置条 */
+        .global-dca-filter-card {
+            background: var(--table-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 6px 12px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+            font-size: 11px;
+            flex-shrink: 0;
+            transition: all 0.3s ease;
+        }
+        .global-dca-filter-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .global-dca-filter-title {
+            font-weight: 700;
+            color: var(--link-color);
+        }
+        #gDcaToggleIcon {
+            font-size: 9px;
+            color: var(--footer-text);
+            transition: transform 0.2s;
+        }
+        .global-dca-filter-body {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .global-dca-filter-card.collapsed .global-dca-filter-body { display: none; }
+        .global-dca-filter-card.collapsed #gDcaToggleIcon { transform: rotate(-90deg); }
+        .global-dca-filter-card select {
+            padding: 3px 8px;
+            border-radius: 6px;
+            border: 1px solid var(--input-border);
+            background: var(--input-bg);
+            color: var(--text);
+            font-size: 11px;
+            outline: none;
+        }
+        .global-dca-filter-card button {
+            background: var(--btn-active-bg);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 3px 10px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .global-dca-filter-card button:hover { opacity: 0.9; }
 
         .table-container { 
             width: 100%; 
@@ -275,33 +360,74 @@
             border: 1px solid var(--border);
             margin-bottom: 6px;
         }
-        table { width: 100%; min-width: 2400px; border-collapse: collapse; font-size: 12px; text-align: right; table-layout: fixed; }
+        table { width: 100%; min-width: 2550px; border-collapse: collapse; font-size: 12px; text-align: right; table-layout: fixed; }
         th, td { padding: 6px 8px; border-bottom: 1px solid var(--border); line-height: 1.4; overflow: hidden; text-overflow: ellipsis; box-sizing: border-box; }
         #fundTable thead th { position: sticky; top: 0; z-index: 10; background-color: var(--header-bg); border-bottom: 2px solid var(--border); }
-        th:nth-child(1), td:nth-child(1) { width: 60px; text-align: left; white-space: nowrap; }
-        th:nth-child(2), td:nth-child(2) { width: 250px; min-width: 200px; text-align: left; white-space: normal; word-break: break-word; vertical-align: middle; }
-        th:nth-child(3), td:nth-child(3) { width: 80px; text-align: left; white-space: nowrap; }
-        th:nth-child(4), td:nth-child(4) { width: 130px; text-align: left; white-space: normal; word-break: break-word; }
-        th:nth-child(5), td:nth-child(5) { width: 70px; text-align: left; white-space: nowrap; }
-        th:nth-child(6), td:nth-child(6) { width: 100px; text-align: left; white-space: nowrap; }
-        th:nth-child(7), td:nth-child(7), th:nth-child(8), td:nth-child(8) { width: 128px; white-space: nowrap; }
-        th:nth-child(9), td:nth-child(9) { width: 85px; white-space: nowrap; }
-        th:nth-child(10), td:nth-child(10), th:nth-child(11), td:nth-child(11), th:nth-child(12), td:nth-child(12) { width: 300px; white-space: nowrap; }
-        th:nth-child(13), td:nth-child(13) { width: 80px; white-space: nowrap; }
-        th:nth-child(14), td:nth-child(14) { width: 155px; min-width: 90px; white-space: normal; }
-        th:nth-child(15), td:nth-child(15), th:nth-child(16), td:nth-child(16), th:nth-child(17), td:nth-child(17), th:nth-child(18), td:nth-child(18), th:nth-child(19), td:nth-child(19), th:nth-child(20), td:nth-child(20) { width: 80px; white-space: nowrap; }
+        th:nth-child(1), td:nth-child(1) { width: 45px; text-align: center; white-space: nowrap; }
+        th:nth-child(2), td:nth-child(2) { width: 65px; text-align: left; white-space: nowrap; }
+        th:nth-child(3), td:nth-child(3) { width: 250px; min-width: 200px; text-align: left; white-space: normal; word-break: break-word; vertical-align: middle; }
+        th:nth-child(4), td:nth-child(4) { width: 80px; text-align: left; white-space: nowrap; }
+        th:nth-child(5), td:nth-child(5) { width: 130px; text-align: left; white-space: normal; word-break: break-word; }
+        th:nth-child(6), td:nth-child(6) { width: 70px; text-align: left; white-space: nowrap; }
+        th:nth-child(7), td:nth-child(7) { width: 100px; text-align: left; white-space: nowrap; }
+        th:nth-child(8), td:nth-child(8), th:nth-child(9), td:nth-child(9) { width: 128px; white-space: nowrap; }
+        th:nth-child(10), td:nth-child(10) { width: 85px; white-space: nowrap; }
+        th:nth-child(11), td:nth-child(11), th:nth-child(12), td:nth-child(12), th:nth-child(13), td:nth-child(13) { width: 300px; white-space: nowrap; }
+        th:nth-child(14), td:nth-child(14) { width: 80px; white-space: nowrap; }
+        th:nth-child(15), td:nth-child(15) { width: 155px; min-width: 90px; white-space: normal; }
+        th:nth-child(16), td:nth-child(16), th:nth-child(17), td:nth-child(17), th:nth-child(18), td:nth-child(18), th:nth-child(19), td:nth-child(19), th:nth-child(20), td:nth-child(20), th:nth-child(21), td:nth-child(21), th:nth-child(22), td:nth-child(22) { width: 80px; white-space: nowrap; }
         th { background-color: var(--header-bg); color: var(--header-text); font-weight: 600; text-align: right; user-select: none; cursor: pointer; white-space: normal; word-break: keep-all; line-height: 1.25; height: 38px; vertical-align: middle; position: relative; }
         th:hover { background-color: #e4e7eb; }
         [data-theme="dark"] th:hover { background-color: #3d3d3d; }
-        th:nth-child(1), th:nth-child(2), th:nth-child(3), th:nth-child(4), th:nth-child(5), th:nth-child(6) { text-align: left; }
+        th:nth-child(1) { text-align: center; }
+        th:nth-child(2), th:nth-child(3), th:nth-child(4), th:nth-child(5), th:nth-child(6), th:nth-child(7) { text-align: left; }
         tr:hover { background-color: var(--hover-bg); }
         
+        .star-btn {
+            background: transparent;
+            border: none;
+            font-size: 16px;
+            color: #aaa;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+            transition: all 0.2s;
+        }
+        .star-btn:hover { transform: scale(1.2); color: #f39c12; }
+        .star-btn.starred { color: #f39c12; font-weight: bold; text-shadow: 0 0 2px rgba(243,156,18,0.5); }
+
         .code { font-family: "SFMono-Regular", Consolas, monospace; font-weight: bold; color: #1a73e8; }
         .name a { font-weight: 500; color: #1a73e8; text-decoration: none; }
         .redemption-sub { font-size: 10px; color: var(--footer-text); margin-top: 2px; }
         .highlight-rate { color: #d93025; font-weight: bold; }
         .highlight-val { font-weight: 600; color: #e67e22; }
         .fee-sub { font-size: 10px; color: var(--footer-text); }
+
+        .dca-btn {
+            background: #e8f0fe;
+            color: #1a73e8;
+            border: 1px solid #dadce0;
+            border-radius: 10px;
+            padding: 1px 5px;
+            font-size: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+        }
+        .dca-btn:hover {
+            background: #1a73e8;
+            color: #fff;
+            border-color: #1a73e8;
+            transform: scale(1.05);
+        }
+        [data-theme="dark"] .dca-btn {
+            background: #2a3b50;
+            color: #8ab4f8;
+            border-color: #3c4043;
+        }
 
         .progress-container { background-color: var(--progress-track); border-radius: 6px; overflow: hidden; height: 20px; width: 100%; position: relative; }
         .progress-bar { height: 100%; border-radius: 6px; min-width: 42px; display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; box-sizing: border-box; }
@@ -354,6 +480,144 @@
         .friend-card a { color: var(--link-color); text-decoration: none; font-weight: 600; font-size: 12px; display: block; }
         .friend-desc { font-size: 10px; color: var(--footer-text); }
 
+        /* 定投回测模态弹窗 */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.45);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: blur(2px);
+        }
+        .modal-overlay.show { display: flex; }
+        .modal-card {
+            background: var(--table-bg);
+            color: var(--text);
+            width: 92%;
+            max-width: 820px;
+            border-radius: 14px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            animation: modalFadeIn 0.2s ease;
+        }
+        @keyframes modalFadeIn {
+            from { transform: scale(0.96); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        .modal-header {
+            padding: 12px 18px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--header-bg);
+        }
+        .modal-header h3 {
+            margin: 0;
+            font-size: 15px;
+            color: var(--link-color);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .modal-close {
+            background: transparent;
+            border: none;
+            font-size: 20px;
+            color: var(--footer-text);
+            cursor: pointer;
+            line-height: 1;
+        }
+        .modal-close:hover { color: #d93025; }
+        .modal-body {
+            padding: 14px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .dca-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+            background: var(--card-bg);
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+        .dca-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .dca-field select, .dca-field input {
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid var(--input-border);
+            background: var(--input-bg);
+            color: var(--text);
+            font-size: 12px;
+            outline: none;
+        }
+        .dca-run-btn {
+            grid-column: 1 / -1;
+            background: var(--btn-active-bg);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            margin-top: 2px;
+        }
+        .dca-run-btn:hover { opacity: 0.9; }
+        
+        .dca-results-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 8px;
+        }
+        .dca-result-card {
+            background: var(--hover-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 10px;
+            text-align: center;
+        }
+        .dca-result-title {
+            font-size: 10px;
+            color: var(--footer-text);
+            margin-bottom: 2px;
+        }
+        .dca-result-value {
+            font-size: 14px;
+            font-weight: 700;
+            font-family: "SFMono-Regular", Consolas, monospace;
+        }
+        .dca-chart-box {
+            height: 230px;
+            width: 100%;
+            position: relative;
+            background: var(--card-bg);
+            border-radius: 8px;
+            padding: 8px;
+            border: 1px solid var(--border);
+            box-sizing: border-box;
+        }
+
         @media (max-width: 1200px) {
             .macro-metrics-grid { grid-template-columns: repeat(2, 1fr); }
         }
@@ -378,13 +642,12 @@
         <!-- 视图 1：首页 -->
         <section id="homeView" class="view-pane active">
             <div class="home-container">
-                <!-- 顶部 5 大宏观情绪与风险指标矩阵 -->
                 <div class="macro-metrics-grid">
                     <!-- 1. CNN 恐慌与贪婪指数 -->
                     <div class="metric-card">
                         <div class="metric-header">
                             <span>CNN 恐慌贪婪指数</span>
-                            <span style="font-size:10px; color:var(--footer-text);">2026-09-12 13:29:01</span>
+                            <span style="font-size:10px; color:var(--footer-text);">2026-09-12 14:11:43</span>
                         </div>
                         <div class="metric-body">
                             <span class="metric-value" style="color:#1a73e8;">63.0</span>
@@ -396,13 +659,16 @@
                         <div class="metric-desc">
                             0~25 极恐 | 26~45 恐惧 | 46~54 中性 | 55~75 贪婪 | 76~100 极贪
                         </div>
+                        <a href="https://alternative.me/crypto/fear-and-greed-index/" target="_blank" class="metric-source-link" title="点击跳转至源数据官方网页">
+                            🔗 来源: Alternative 情绪源 ↗
+                        </a>
                     </div>
 
                     <!-- 2. VIX 恐慌指数 -->
                     <div class="metric-card">
                         <div class="metric-header">
                             <span>VIX 恐慌指数</span>
-                            <span style="font-size:10px; color:var(--footer-text);">2026-09-12 13:29:01</span>
+                            <span style="font-size:10px; color:var(--footer-text);">2026-09-12 14:11:43</span>
                         </div>
                         <div class="metric-body">
                             <span class="metric-value" style="color:#d93025;">15.84</span>
@@ -411,13 +677,16 @@
                         <div class="metric-desc">
                             <15 平稳低波 | 15~20 正常震荡 | 20~30 警惕波动 | >30 极度恐慌
                         </div>
+                        <a href="https://www.cboe.com/us/indices/dashboard/vix/" target="_blank" class="metric-source-link" title="点击跳转至源数据官方网页">
+                            🔗 来源: CBOE 官方 (_VIX) ↗
+                        </a>
                     </div>
 
                     <!-- 3. USD/CNY 汇率 -->
                     <div class="metric-card">
                         <div class="metric-header">
                             <span>USD/CNY 汇率</span>
-                            <span style="font-size:10px; color:var(--footer-text);">2026-09-12 13:29:01</span>
+                            <span style="font-size:10px; color:var(--footer-text);">2026-09-12 14:11:43</span>
                         </div>
                         <div class="metric-body">
                             <span class="metric-value" style="color:#188038;">6.6974</span>
@@ -426,13 +695,16 @@
                         <div class="metric-desc">
                             美元兑人民币汇率，QDII换汇成本及折溢价关键锚
                         </div>
+                        <a href="https://finance.sina.com.cn/money/forex/hq/USDCNY.shtml" target="_blank" class="metric-source-link" title="点击跳转至源数据官方网页">
+                            🔗 来源: 新浪外汇 (实时) ↗
+                        </a>
                     </div>
 
                     <!-- 4. VXN 纳指波动率 -->
                     <div class="metric-card">
                         <div class="metric-header">
                             <span>VXN 纳指波动率</span>
-                            <span style="font-size:10px; color:var(--footer-text);">2026-09-12 13:29:01</span>
+                            <span style="font-size:10px; color:var(--footer-text);">2026-09-12 14:11:43</span>
                         </div>
                         <div class="metric-body">
                             <span class="metric-value" style="color:#34a853;">21.02</span>
@@ -441,13 +713,16 @@
                         <div class="metric-desc">
                             纳斯达克100期权隐波，监测科技成长股杀估值抛压
                         </div>
+                        <a href="https://www.cboe.com/us/indices/dashboard/vxn/" target="_blank" class="metric-source-link" title="点击跳转至源数据官方网页">
+                            🔗 来源: CBOE 官方 (_VXN) ↗
+                        </a>
                     </div>
 
                     <!-- 5. SKEW 黑天鹅指数 -->
                     <div class="metric-card">
                         <div class="metric-header">
                             <span>SKEW 黑天鹅偏斜</span>
-                            <span style="font-size:10px; color:var(--footer-text);">2026-09-12 13:29:01</span>
+                            <span style="font-size:10px; color:var(--footer-text);">2026-09-12 14:11:43</span>
                         </div>
                         <div class="metric-body">
                             <span class="metric-value" style="color:#e67e22;">154.49</span>
@@ -456,21 +731,23 @@
                         <div class="metric-desc">
                             基准100。>135提示期权市场尾部极度对冲成本升高
                         </div>
+                        <a href="https://www.cboe.com/us/indices/dashboard/SKEW/" target="_blank" class="metric-source-link" title="点击跳转至源数据官方网页">
+                            🔗 来源: CBOE 官方 (_SKEW) ↗
+                        </a>
                     </div>
                 </div>
 
-                <!-- 首页备忘与工具区 -->
                 <div class="home-grid-section">
                     <div class="home-card-box">
                         <div class="home-card-title">
                             <span>📌 宏观资产配置速览与逻辑备忘</span>
-                            <span style="font-size:11px; font-weight:normal; color:var(--link-color);">后续持续扩展</span>
+                            <span style="font-size:11px; font-weight:normal; color:var(--link-color);">数据源直通跳转</span>
                         </div>
                         <div class="home-card-body">
                             <p>• <strong>恐慌指标协同判断：</strong> 当 <strong>VIX 恐慌指数</strong> 显著飙升（>20）且 <strong>CNN 情绪指数</strong> 步入极度恐惧（0~25）时，通常对应全市场非理性杀跌的左侧加仓与定投翻倍窗口。</p>
                             <p>• <strong>汇率对冲与折溢价：</strong> 跟踪 <strong>USD/CNY 汇率</strong> 走势，当汇率波动较大时，QDII 基金的实际净值波动将叠加汇率损益，需警惕场内溢价过高风险。</p>
                             <div style="padding: 24px; text-align: center; background: var(--hover-bg); border-radius: 8px; margin-top: 10px; border: 1px dashed var(--border);">
-                                💡 首页后续内容扩充区域（可随时接入：大盘估值雷达、资金动向、重要财经日历）
+                                💡 每个宏观卡片底部均配有直达源头的官方链接（CNN、CBOE、新浪等），可随时点击校验一手数据。
                             </div>
                         </div>
                     </div>
@@ -516,7 +793,8 @@
         <section id="fundView" class="view-pane">
             <div class="sub-filter-bar">
                 <div class="category-nav">
-                    <span class="category-title">市场大类:</span>
+                    <button class="cat-btn fav-filter" data-macro="favorites" data-sub="favorites">⭐ 我的自选</button>
+                    <span class="category-title" style="margin-left: 6px;">市场大类:</span>
                     <button class="cat-btn active" data-macro="all" data-sub="all">全部展示</button>
                     
                     <span class="category-title" style="margin-left: 8px;">美股:</span>
@@ -545,39 +823,67 @@
                 </div>
             </div>
 
+            <!-- 全局动态定投筛选栏 -->
+            <div class="global-dca-filter-card" id="gDcaCard">
+                <div class="global-dca-filter-header" id="gDcaToggleBtn">
+                    <span class="global-dca-filter-title">📊 动态定投参数配置</span>
+                    <span id="gDcaToggleIcon">▼</span>
+                </div>
+                <div class="global-dca-filter-body" id="gDcaBody">
+                    <select id="gDcaFreq">
+                        <option value="daily">每日定投</option>
+                        <option value="weekly">每周定投</option>
+                        <option value="biweekly">双周定投</option>
+                        <option value="monthly" selected>每月定投</option>
+                    </select>
+                    <select id="gDcaDaySelect"></select>
+                    <select id="gDcaRange">
+                        <option value="half">近半年内</option>
+                        <option value="year" selected>近一年内</option>
+                        <option value="ytd">今年以来</option>
+                        <option value="all">统计区间全序列</option>
+                    </select>
+                    <button id="gDcaApplyBtn">计算并刷新排序</button>
+                </div>
+            </div>
+
             <div class="table-container">
                 <table id="fundTable">
                     <thead>
                         <tr>
-                            <th data-col="0" onclick="sortTable(0)">代码 <span class="sort-icon">⇅</span></th>
-                            <th data-col="1" onclick="sortTable(1)">基金名称 / 赎回费率阶梯 <span class="sort-icon">⇅</span></th>
-                            <th data-col="2" onclick="sortTable(2)">最新规模 <span class="sort-icon">⇅</span></th>
-                            <th data-col="3" onclick="sortTable(3)">运作费(管/托/销) <span class="sort-icon">⇅</span></th>
-                            <th data-col="4" onclick="sortTable(4)">申购费率 <span class="sort-icon">⇅</span></th>
-                            <th data-col="5" onclick="sortTable(5)">申购状态/限额 <span class="sort-icon">⇅</span></th>
-                            <th data-col="6" onclick="sortTable(6)">最高净值 <span class="sort-icon">⇅</span></th>
-                            <th data-col="7" onclick="sortTable(7)">最低净值 <span class="sort-icon">⇅</span></th>
-                            <th data-col="8" onclick="sortTable(8)">最新净值 <span class="sort-icon">⇅</span></th>
-                            <th data-col="9" onclick="sortTable(9)">最大回撤 <span class="sort-icon">⇅</span></th>
-                            <th data-col="10" onclick="sortTable(10)">自低点反弹 <span class="sort-icon">⇅</span></th>
-                            <th data-col="11" onclick="sortTable(11)">修复程度 <span class="sort-icon">⇅</span></th>
-                            <th data-col="12" onclick="sortTable(12)">修复时间 <span class="sort-icon">⇅</span></th>
-                            <th data-col="13" onclick="sortTable(13)">今日涨幅 (基准周五: 2026-09-11) <span class="sort-icon">⇅</span></th>
-                            <th data-col="14" onclick="sortTable(14)">近一周 <span class="sort-icon">⇅</span></th>
-                            <th data-col="15" onclick="sortTable(15)">近一月 <span class="sort-icon">⇅</span></th>
-                            <th data-col="16" onclick="sortTable(16)">近三月 <span class="sort-icon">⇅</span></th>
-                            <th data-col="17" onclick="sortTable(17)">近半年 <span class="sort-icon">⇅</span></th>
-                            <th data-col="18" onclick="sortTable(18)">近一年 <span class="sort-icon">⇅</span></th>
-                            <th data-col="19" onclick="sortTable(19)">今年内 <span class="sort-icon">⇅</span></th>
+                            <th data-col="0" onclick="sortTable(0)">收藏 <span class="sort-icon">⇅</span></th>
+                            <th data-col="1" onclick="sortTable(1)">代码 <span class="sort-icon">⇅</span></th>
+                            <th data-col="2" onclick="sortTable(2)">基金名称 / 赎回费率阶梯 <span class="sort-icon">⇅</span></th>
+                            <th data-col="3" onclick="sortTable(3)">最新规模 <span class="sort-icon">⇅</span></th>
+                            <th data-col="4" onclick="sortTable(4)">运作费(管/托/销) <span class="sort-icon">⇅</span></th>
+                            <th data-col="5" onclick="sortTable(5)">申购费率 <span class="sort-icon">⇅</span></th>
+                            <th data-col="6" onclick="sortTable(6)">申购状态/限额 <span class="sort-icon">⇅</span></th>
+                            <th data-col="7" onclick="sortTable(7)">最高净值 <span class="sort-icon">⇅</span></th>
+                            <th data-col="8" onclick="sortTable(8)">最低净值 <span class="sort-icon">⇅</span></th>
+                            <th data-col="9" onclick="sortTable(9)">最新净值 <span class="sort-icon">⇅</span></th>
+                            <th data-col="10" onclick="sortTable(10)">最大回撤 <span class="sort-icon">⇅</span></th>
+                            <th data-col="11" onclick="sortTable(11)">自低点反弹 <span class="sort-icon">⇅</span></th>
+                            <th data-col="12" onclick="sortTable(12)">修复程度 <span class="sort-icon">⇅</span></th>
+                            <th data-col="13" onclick="sortTable(13)">修复时间 <span class="sort-icon">⇅</span></th>
+                            <th data-col="14" onclick="sortTable(14)">今日涨幅 (基准周五: 2026-09-11) <span class="sort-icon">⇅</span></th>
+                            <th data-col="15" onclick="sortTable(15)">近一周 <span class="sort-icon">⇅</span></th>
+                            <th data-col="16" onclick="sortTable(16)">近一月 <span class="sort-icon">⇅</span></th>
+                            <th data-col="17" onclick="sortTable(17)">近三月 <span class="sort-icon">⇅</span></th>
+                            <th data-col="18" onclick="sortTable(18)">近半年 <span class="sort-icon">⇅</span></th>
+                            <th data-col="19" onclick="sortTable(19)">近一年 <span class="sort-icon">⇅</span></th>
+                            <th data-col="20" onclick="sortTable(20)">今年内 <span class="sort-icon">⇅</span></th>
+                            <th data-col="21" onclick="sortTable(21)"><span id="dcaHeaderTitle">月定投</span>收益 <span class="sort-icon">⇅</span></th>
                         </tr>
                     </thead>
                     <tbody>
                         
         <tr data-group="us_active" data-macro="us_share" class="fund-row" data-code="002891">
+            <td class="fav-col" data-val="0"><button class="star-btn" data-code="002891" title="点击添加/取消自选">☆</button></td>
             <td class="code" data-val="002891">002891</td>
             <td class="name" data-val="华夏移动互联混合人民币(002891)基金">
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
                     <a href="https://fund.eastmoney.com/002891.html" target="_blank" title="点击查看行情/概况" style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">华夏移动互联混合人民币(002891)基金</a>
+                    <button class="dca-btn" data-code="002891" title="启动定投回测测算小工具">📊 定投</button>
                 </div>
                 <div class="redemption-sub" style="white-space: normal; line-height: 1.6;">赎回:<br>小于7天: <span class="highlight-rate">1.50%</span><br>大于等于7天，小于30天: <span class="highlight-rate">0.75%</span><br>大于等于30天，小于365天: <span class="highlight-rate">0.50%</span><br>大于等于365天: <span class="highlight-rate">0.00%</span></div>
             </td>
@@ -617,10 +923,11 @@
             <td data-val="38.688016528925615" class="gain-positive">38.69%</td>
             <td data-val="84.66299862448419" class="gain-positive">84.66%</td>
             <td data-val="59.726353361094574" class="gain-positive">59.73%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="002891">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="22" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -876,10 +1183,12 @@
         </tr>
         
         <tr data-group="spx_passive" data-macro="us_share" class="fund-row" data-code="161125">
+            <td class="fav-col" data-val="0"><button class="star-btn" data-code="161125" title="点击添加/取消自选">☆</button></td>
             <td class="code" data-val="161125">161125</td>
             <td class="name" data-val="易方达标普500指数人民币A(161125)基金">
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
                     <a href="https://fund.eastmoney.com/161125.html" target="_blank" title="点击查看行情/概况" style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">易方达标普500指数人民币A(161125)基金</a>
+                    <button class="dca-btn" data-code="161125" title="启动定投回测测算小工具">📊 定投</button>
                 </div>
                 <div class="redemption-sub" style="white-space: normal; line-height: 1.6;">赎回:<br>小于等于6天: <span class="highlight-rate">1.50%</span><br>大于等于7天，小于等于364天: <span class="highlight-rate">0.50%</span><br>大于等于365天，小于等于729天: <span class="highlight-rate">0.25%</span><br>大于等于730天: <span class="highlight-rate">0.00%</span></div>
             </td>
@@ -919,10 +1228,11 @@
             <td data-val="9.52682052903362" class="gain-positive">9.53%</td>
             <td data-val="10.51680136112292" class="gain-positive">10.52%</td>
             <td data-val="6.101544953379157" class="gain-positive">6.10%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="161125">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="22" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -1178,10 +1488,12 @@
         </tr>
         
         <tr data-group="cpo" data-macro="a_share" class="fund-row" data-code="022365">
+            <td class="fav-col" data-val="0"><button class="star-btn" data-code="022365" title="点击添加/取消自选">☆</button></td>
             <td class="code" data-val="022365">022365</td>
             <td class="name" data-val="永赢科技智选混合发起C(022365)基金">
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
                     <a href="https://fund.eastmoney.com/022365.html" target="_blank" title="点击查看行情/概况" style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">永赢科技智选混合发起C(022365)基金</a>
+                    <button class="dca-btn" data-code="022365" title="启动定投回测测算小工具">📊 定投</button>
                 </div>
                 <div class="redemption-sub" style="white-space: normal; line-height: 1.6;">赎回:<br>小于7天: <span class="highlight-rate">1.50%</span><br>大于等于7天，小于30天: <span class="highlight-rate">0.50%</span><br>大于等于30天: <span class="highlight-rate">0.00%</span></div>
             </td>
@@ -1221,10 +1533,11 @@
             <td data-val="42.85185381075791" class="gain-positive">42.85%</td>
             <td data-val="65.38991457701846" class="gain-positive">65.39%</td>
             <td data-val="41.564023271659934" class="gain-positive">41.56%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="022365">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="22" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -1480,10 +1793,12 @@
         </tr>
         
         <tr data-group="storage" data-macro="a_share" class="fund-row" data-code="025500">
+            <td class="fav-col" data-val="0"><button class="star-btn" data-code="025500" title="点击添加/取消自选">☆</button></td>
             <td class="code" data-val="025500">025500</td>
             <td class="name" data-val="东方阿尔法科技智选混合发起C(025500)基金">
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
                     <a href="https://fund.eastmoney.com/025500.html" target="_blank" title="点击查看行情/概况" style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">东方阿尔法科技智选混合发起C(025500)基金</a>
+                    <button class="dca-btn" data-code="025500" title="启动定投回测测算小工具">📊 定投</button>
                 </div>
                 <div class="redemption-sub" style="white-space: normal; line-height: 1.6;">赎回:<br>小于7天: <span class="highlight-rate">1.50%</span><br>大于等于7天，小于30天: <span class="highlight-rate">0.50%</span><br>大于等于30天: <span class="highlight-rate">0.00%</span></div>
             </td>
@@ -1523,10 +1838,11 @@
             <td data-val="23.164112388250313" class="gain-positive">23.16%</td>
             <td data-val="54.29999999999999" class="gain-positive">54.30%</td>
             <td data-val="33.385200553250336" class="gain-positive">33.39%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="025500">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="22" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -1782,10 +2098,12 @@
         </tr>
         
         <tr data-group="metals" data-macro="other" class="fund-row" data-code="XAU">
+            <td class="fav-col" data-val="0"><button class="star-btn" data-code="XAU" title="点击添加/取消自选">☆</button></td>
             <td class="code" data-val="XAU">XAU</td>
             <td class="name" data-val="伦敦金 (XAU)">
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
                     <a href="https://cn.investing.com/currencies/xau-usd" target="_blank" title="点击查看行情/概况" style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">伦敦金 (XAU)</a>
+                    <button class="dca-btn" data-code="XAU" title="启动定投回测测算小工具">📊 定投</button>
                 </div>
                 <div class="redemption-sub" style="white-space: normal; line-height: 1.6;">赎回:<br>--</div>
             </td>
@@ -1825,10 +2143,11 @@
             <td data-val="-15.313090782823412" class="gain-negative">-15.31%</td>
             <td data-val="19.517573711578784" class="gain-positive">19.52%</td>
             <td data-val="1.107809944954985" class="gain-positive">1.11%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="XAU">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="22" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -1869,10 +2188,12 @@
         </tr>
         
         <tr data-group="crypto" data-macro="other" class="fund-row" data-code="BTC">
+            <td class="fav-col" data-val="0"><button class="star-btn" data-code="BTC" title="点击添加/取消自选">☆</button></td>
             <td class="code" data-val="BTC">BTC</td>
             <td class="name" data-val="比特币 (BTC/USDT)">
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
                     <a href="https://www.tradingview.com/symbols/BTCUSD/" target="_blank" title="点击查看行情/概况" style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">比特币 (BTC/USDT)</a>
+                    <button class="dca-btn" data-code="BTC" title="启动定投回测测算小工具">📊 定投</button>
                 </div>
                 <div class="redemption-sub" style="white-space: normal; line-height: 1.6;">赎回:<br>--</div>
             </td>
@@ -1912,10 +2233,11 @@
             <td data-val="10.020877064662482" class="gain-positive">10.02%</td>
             <td data-val="-33.12789994760254" class="gain-negative">-33.13%</td>
             <td data-val="-13.072338467412525" class="gain-negative">-13.07%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="BTC">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="22" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -1956,10 +2278,12 @@
         </tr>
         
         <tr data-group="index" data-macro="other" class="fund-row" data-code="NDX">
+            <td class="fav-col" data-val="0"><button class="star-btn" data-code="NDX" title="点击添加/取消自选">☆</button></td>
             <td class="code" data-val="NDX">NDX</td>
             <td class="name" data-val="纳斯达克100指数">
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
                     <a href="https://quote.eastmoney.com/gb/zsNDX100.html" target="_blank" title="点击查看行情/概况" style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">纳斯达克100指数</a>
+                    <button class="dca-btn" data-code="NDX" title="启动定投回测测算小工具">📊 定投</button>
                 </div>
                 <div class="redemption-sub" style="white-space: normal; line-height: 1.6;">赎回:<br>--</div>
             </td>
@@ -1999,10 +2323,11 @@
             <td data-val="17.638424030975287" class="gain-positive">17.64%</td>
             <td data-val="22.406431159656258" class="gain-positive">22.41%</td>
             <td data-val="16.51290866584718" class="gain-positive">16.51%</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         
         <tr class="holding-row" data-code="NDX">
-            <td colspan="20" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
+            <td colspan="22" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
                     <div class="holdings-container">
                         
@@ -2044,7 +2369,7 @@
         
                         
         <tr id="empty-row" style="display:none;">
-            <td colspan="20" style="text-align:center; padding:30px; color: var(--footer-text);">
+            <td colspan="22" style="text-align:center; padding:30px; color: var(--footer-text);">
                 该分类暂无基金，敬请期待
             </td>
         </tr>
@@ -2055,18 +2380,88 @@
 
             <div class="footer-note">
                 <div class="footer-left">
-                    <span>💡 <strong>使用提示：</strong> 表格支持列宽拖拽调整与点击表头排序；点击基金行可展开查看前十大持仓、持有人结构饼图及走势。</span>
+                    <span>💡 <strong>使用提示：</strong> 点击首列 ☆ 添加自选；点击行内「📊 定投」呼出单只回测小工具；点击基金行展开双轴走势图（左轴净值，右轴涨幅，含十字光标）。</span>
                 </div>
                 <div class="footer-right">
-                    <span>⏱️ 统计更新于: <strong>2026-09-12 13:29</strong></span>
+                    <span>⏱️ 统计更新于: <strong>2026-09-12 14:12</strong></span>
                 </div>
             </div>
         </section>
     </main>
 
+    <!-- 定投独立测算弹窗 -->
+    <div class="modal-overlay" id="dcaModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="dcaModalTitle">📊 智能定投/回测测算小工具</h3>
+                <button class="modal-close" id="closeDcaModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="dca-controls">
+                    <div class="dca-field">
+                        <label>定投频次</label>
+                        <select id="dcaFreq">
+                            <option value="daily">每日定投</option>
+                            <option value="weekly">每周定投</option>
+                            <option value="biweekly">每两周定投</option>
+                            <option value="monthly" selected>每月定投</option>
+                        </select>
+                    </div>
+                    <div class="dca-field" id="dcaDayField">
+                        <label id="dcaDayLabel">扣款日 (每月几号)</label>
+                        <select id="dcaDaySelect"></select>
+                    </div>
+                    <div class="dca-field">
+                        <label>每期金额 (元)</label>
+                        <input type="number" id="dcaAmount" value="1000" min="10" step="100">
+                    </div>
+                    <div class="dca-field">
+                        <label>测算周期</label>
+                        <select id="dcaRange">
+                            <option value="half">近半年内</option>
+                            <option value="year" selected>近一年内</option>
+                            <option value="ytd">今年以来</option>
+                            <option value="all">统计区间全序列</option>
+                        </select>
+                    </div>
+                    <button class="dca-run-btn" id="dcaRunBtn">🚀 刷新测算图表</button>
+                </div>
+
+                <div class="dca-results-grid">
+                    <div class="dca-result-card">
+                        <div class="dca-result-title">累计投入期数 / 本金</div>
+                        <div class="dca-result-value" id="resTotalInvest">--</div>
+                    </div>
+                    <div class="dca-result-card">
+                        <div class="dca-result-title">定投期末总资产</div>
+                        <div class="dca-result-value" id="resTotalAsset" style="color: var(--link-color);">--</div>
+                    </div>
+                    <div class="dca-result-card">
+                        <div class="dca-result-title">总收益额 (元)</div>
+                        <div class="dca-result-value" id="resProfit">--</div>
+                    </div>
+                    <div class="dca-result-card">
+                        <div class="dca-result-title">定投总收益率</div>
+                        <div class="dca-result-value" id="resReturnRate">--</div>
+                    </div>
+                    <div class="dca-result-card">
+                        <div class="dca-result-title">持仓均价 / 最新价</div>
+                        <div class="dca-result-value" id="resAvgPrice">--</div>
+                    </div>
+                </div>
+
+                <div class="dca-chart-box">
+                    <canvas id="dcaChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         var fundNavData = {"002891": {"dates": ["2025-01-02", "2025-01-03", "2025-01-06", "2025-01-07", "2025-01-08", "2025-01-09", "2025-01-10", "2025-01-13", "2025-01-14", "2025-01-15", "2025-01-16", "2025-01-17", "2025-01-20", "2025-01-21", "2025-01-22", "2025-01-23", "2025-01-24", "2025-01-27", "2025-02-05", "2025-02-06", "2025-02-07", "2025-02-10", "2025-02-11", "2025-02-12", "2025-02-13", "2025-02-14", "2025-02-17", "2025-02-18", "2025-02-19", "2025-02-20", "2025-02-21", "2025-02-24", "2025-02-25", "2025-02-26", "2025-02-27", "2025-02-28", "2025-03-03", "2025-03-04", "2025-03-05", "2025-03-06", "2025-03-07", "2025-03-10", "2025-03-11", "2025-03-12", "2025-03-13", "2025-03-14", "2025-03-17", "2025-03-18", "2025-03-19", "2025-03-20", "2025-03-21", "2025-03-24", "2025-03-25", "2025-03-26", "2025-03-27", "2025-03-28", "2025-03-31", "2025-04-01", "2025-04-02", "2025-04-03", "2025-04-07", "2025-04-08", "2025-04-09", "2025-04-10", "2025-04-11", "2025-04-14", "2025-04-15", "2025-04-16", "2025-04-17", "2025-04-18", "2025-04-21", "2025-04-22", "2025-04-23", "2025-04-24", "2025-04-25", "2025-04-28", "2025-04-29", "2025-04-30", "2025-05-06", "2025-05-07", "2025-05-08", "2025-05-09", "2025-05-12", "2025-05-13", "2025-05-14", "2025-05-15", "2025-05-16", "2025-05-19", "2025-05-20", "2025-05-21", "2025-05-22", "2025-05-23", "2025-05-26", "2025-05-27", "2025-05-28", "2025-05-29", "2025-05-30", "2025-06-03", "2025-06-04", "2025-06-05", "2025-06-06", "2025-06-09", "2025-06-10", "2025-06-11", "2025-06-12", "2025-06-13", "2025-06-16", "2025-06-17", "2025-06-18", "2025-06-19", "2025-06-20", "2025-06-23", "2025-06-24", "2025-06-25", "2025-06-26", "2025-06-27", "2025-06-30", "2025-07-01", "2025-07-02", "2025-07-03", "2025-07-04", "2025-07-07", "2025-07-08", "2025-07-09", "2025-07-10", "2025-07-11", "2025-07-14", "2025-07-15", "2025-07-16", "2025-07-17", "2025-07-18", "2025-07-21", "2025-07-22", "2025-07-23", "2025-07-24", "2025-07-25", "2025-07-28", "2025-07-29", "2025-07-30", "2025-07-31", "2025-08-01", "2025-08-04", "2025-08-05", "2025-08-06", "2025-08-07", "2025-08-08", "2025-08-11", "2025-08-12", "2025-08-13", "2025-08-14", "2025-08-15", "2025-08-18", "2025-08-19", "2025-08-20", "2025-08-21", "2025-08-22", "2025-08-25", "2025-08-26", "2025-08-27", "2025-08-28", "2025-08-29", "2025-09-01", "2025-09-02", "2025-09-03", "2025-09-04", "2025-09-05", "2025-09-08", "2025-09-09", "2025-09-10", "2025-09-11", "2025-09-12", "2025-09-15", "2025-09-16", "2025-09-17", "2025-09-18", "2025-09-19", "2025-09-22", "2025-09-23", "2025-09-24", "2025-09-25", "2025-09-26", "2025-09-29", "2025-09-30", "2025-10-09", "2025-10-10", "2025-10-13", "2025-10-14", "2025-10-15", "2025-10-16", "2025-10-17", "2025-10-20", "2025-10-21", "2025-10-22", "2025-10-23", "2025-10-24", "2025-10-27", "2025-10-28", "2025-10-29", "2025-10-30", "2025-10-31", "2025-11-03", "2025-11-04", "2025-11-05", "2025-11-06", "2025-11-07", "2025-11-10", "2025-11-11", "2025-11-12", "2025-11-13", "2025-11-14", "2025-11-17", "2025-11-18", "2025-11-19", "2025-11-20", "2025-11-21", "2025-11-24", "2025-11-25", "2025-11-26", "2025-11-27", "2025-11-28", "2025-12-01", "2025-12-02", "2025-12-03", "2025-12-04", "2025-12-05", "2025-12-08", "2025-12-09", "2025-12-10", "2025-12-11", "2025-12-12", "2025-12-15", "2025-12-16", "2025-12-17", "2025-12-18", "2025-12-19", "2025-12-22", "2025-12-23", "2025-12-24", "2025-12-25", "2025-12-26", "2025-12-29", "2025-12-30", "2025-12-31", "2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09", "2026-01-12", "2026-01-13", "2026-01-14", "2026-01-15", "2026-01-16", "2026-01-19", "2026-01-20", "2026-01-21", "2026-01-22", "2026-01-23", "2026-01-26", "2026-01-27", "2026-01-28", "2026-01-29", "2026-01-30", "2026-02-02", "2026-02-03", "2026-02-04", "2026-02-05", "2026-02-06", "2026-02-09", "2026-02-10", "2026-02-11", "2026-02-12", "2026-02-13", "2026-02-24", "2026-02-25", "2026-02-26", "2026-02-27", "2026-03-02", "2026-03-03", "2026-03-04", "2026-03-05", "2026-03-06", "2026-03-09", "2026-03-10", "2026-03-11", "2026-03-12", "2026-03-13", "2026-03-16", "2026-03-17", "2026-03-18", "2026-03-19", "2026-03-20", "2026-03-23", "2026-03-24", "2026-03-25", "2026-03-26", "2026-03-27", "2026-03-30", "2026-03-31", "2026-04-01", "2026-04-02", "2026-04-03", "2026-04-07", "2026-04-08", "2026-04-09", "2026-04-10", "2026-04-13", "2026-04-14", "2026-04-15", "2026-04-16", "2026-04-17", "2026-04-20", "2026-04-21", "2026-04-22", "2026-04-23", "2026-04-24", "2026-04-27", "2026-04-28", "2026-04-29", "2026-04-30", "2026-05-06", "2026-05-07", "2026-05-08", "2026-05-11", "2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15", "2026-05-18", "2026-05-19", "2026-05-20", "2026-05-21", "2026-05-22", "2026-05-25", "2026-05-26", "2026-05-27", "2026-05-28", "2026-05-29", "2026-06-01", "2026-06-02", "2026-06-03", "2026-06-04", "2026-06-05", "2026-06-08", "2026-06-09", "2026-06-10", "2026-06-11", "2026-06-12", "2026-06-15", "2026-06-16", "2026-06-17", "2026-06-18", "2026-06-22", "2026-06-23", "2026-06-24", "2026-06-25", "2026-06-26", "2026-06-29", "2026-06-30", "2026-07-01", "2026-07-02", "2026-07-03", "2026-07-06", "2026-07-07", "2026-07-08", "2026-07-09", "2026-07-10", "2026-07-13", "2026-07-14", "2026-07-15", "2026-07-16", "2026-07-17", "2026-07-20", "2026-07-21", "2026-07-22", "2026-07-23", "2026-07-24", "2026-07-27", "2026-07-28", "2026-07-29", "2026-07-30", "2026-07-31", "2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14", "2026-08-17", "2026-08-18", "2026-08-19", "2026-08-20", "2026-08-21", "2026-08-24", "2026-08-25", "2026-08-26", "2026-08-27", "2026-08-28", "2026-08-31", "2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-07", "2026-09-08", "2026-09-09", "2026-09-10"], "navs": [1.361, 1.362, 1.366, 1.366, 1.365, 1.371, 1.357, 1.351, 1.351, 1.367, 1.358, 1.37, 1.371, 1.373, 1.389, 1.389, 1.385, 1.344, 1.369, 1.378, 1.364, 1.377, 1.373, 1.376, 1.391, 1.395, 1.395, 1.394, 1.392, 1.384, 1.361, 1.346, 1.331, 1.335, 1.302, 1.319, 1.291, 1.288, 1.303, 1.272, 1.278, 1.238, 1.238, 1.252, 1.232, 1.254, 1.254, 1.237, 1.245, 1.243, 1.245, 1.265, 1.27, 1.249, 1.245, 1.218, 1.217, 1.225, 1.233, 1.179, 1.12, 1.108, 1.189, 1.155, 1.17, 1.174, 1.174, 1.151, 1.149, 1.149, 1.13, 1.149, 1.168, 1.19, 1.193, 1.193, 1.197, 1.199, 1.209, 1.21, 1.22, 1.218, 1.248, 1.265, 1.269, 1.268, 1.27, 1.27, 1.266, 1.254, 1.258, 1.252, 1.252, 1.272, 1.269, 1.266, 1.266, 1.276, 1.282, 1.272, 1.285, 1.288, 1.295, 1.289, 1.292, 1.28, 1.296, 1.287, 1.292, 1.291, 1.284, 1.296, 1.314, 1.317, 1.327, 1.328, 1.331, 1.315, 1.323, 1.334, 1.335, 1.322, 1.324, 1.336, 1.333, 1.333, 1.337, 1.345, 1.35, 1.36, 1.355, 1.36, 1.345, 1.351, 1.356, 1.366, 1.377, 1.381, 1.383, 1.381, 1.353, 1.383, 1.373, 1.379, 1.385, 1.4, 1.398, 1.418, 1.41, 1.408, 1.405, 1.402, 1.374, 1.368, 1.36, 1.384, 1.38, 1.387, 1.386, 1.4, 1.378, 1.379, 1.372, 1.387, 1.397, 1.407, 1.417, 1.424, 1.454, 1.45, 1.456, 1.473, 1.475, 1.47, 1.48, 1.495, 1.506, 1.49, 1.476, 1.471, 1.473, 1.487, 1.522, 1.564, 1.503, 1.551, 1.519, 1.547, 1.556, 1.552, 1.561, 1.547, 1.528, 1.551, 1.588, 1.617, 1.636, 1.674, 1.65, 1.655, 1.67, 1.617, 1.658, 1.639, 1.635, 1.701, 1.675, 1.676, 1.603, 1.618, 1.606, 1.574, 1.6, 1.514, 1.527, 1.615, 1.613, 1.641, 1.641, 1.669, 1.651, 1.647, 1.636, 1.656, 1.67, 1.678, 1.688, 1.705, 1.704, 1.624, 1.611, 1.609, 1.57, 1.609, 1.655, 1.679, 1.681, 1.69, 1.688, 1.685, 1.671, 1.666, 1.65, 1.681, 1.722, 1.72, 1.678, 1.721, 1.745, 1.745, 1.727, 1.745, 1.746, 1.743, 1.742, 1.791, 1.802, 1.79, 1.781, 1.829, 1.865, 1.856, 1.838, 1.889, 1.901, 1.825, 1.816, 1.874, 1.913, 1.89, 1.916, 1.91, 1.891, 1.975, 2.01, 1.97, 1.965, 2.015, 1.91, 1.922, 1.887, 1.805, 1.879, 1.936, 1.946, 1.879, 1.885, 1.918, 1.912, 1.944, 1.97, 1.892, 1.913, 1.955, 1.963, 1.841, 1.84, 1.761, 1.837, 1.905, 1.943, 1.953, 1.971, 2.122, 2.17, 2.221, 2.255, 2.287, 2.264, 2.341, 2.379, 2.373, 2.35, 2.429, 2.38, 2.461, 2.454, 2.382, 2.427, 2.501, 2.711, 2.668, 2.79, 2.877, 2.821, 2.888, 2.859, 2.788, 2.708, 2.698, 2.75, 2.84, 2.877, 2.903, 2.99, 2.959, 2.963, 2.955, 3.006, 3.143, 3.166, 3.136, 2.875, 2.951, 2.922, 2.845, 3.028, 3.081, 3.285, 3.156, 3.198, 3.344, 3.481, 3.178, 3.183, 3.366, 3.189, 3.282, 3.389, 3.198, 2.951, 2.971, 2.994, 2.824, 2.837, 2.992, 2.972, 2.786, 2.894, 2.79, 2.601, 2.507, 2.536, 2.766, 2.751, 2.727, 2.564, 2.515, 2.326, 2.196, 2.421, 2.48, 2.523, 2.686, 2.634, 2.6, 2.655, 2.577, 2.612, 2.722, 2.756, 2.794, 2.891, 2.717, 2.628, 2.668, 2.653, 2.555, 2.607, 2.617, 2.672, 2.591, 2.605, 2.555, 2.552, 2.567, 2.655, 2.688, 2.744, 2.764, 2.685]}, "161125": {"dates": ["2025-01-02", "2025-01-03", "2025-01-06", "2025-01-07", "2025-01-08", "2025-01-09", "2025-01-10", "2025-01-13", "2025-01-14", "2025-01-15", "2025-01-16", "2025-01-17", "2025-01-20", "2025-01-21", "2025-01-22", "2025-01-23", "2025-01-24", "2025-01-27", "2025-02-05", "2025-02-06", "2025-02-07", "2025-02-10", "2025-02-11", "2025-02-12", "2025-02-13", "2025-02-14", "2025-02-17", "2025-02-18", "2025-02-19", "2025-02-20", "2025-02-21", "2025-02-24", "2025-02-25", "2025-02-26", "2025-02-27", "2025-02-28", "2025-03-03", "2025-03-04", "2025-03-05", "2025-03-06", "2025-03-07", "2025-03-10", "2025-03-11", "2025-03-12", "2025-03-13", "2025-03-14", "2025-03-17", "2025-03-18", "2025-03-19", "2025-03-20", "2025-03-21", "2025-03-24", "2025-03-25", "2025-03-26", "2025-03-27", "2025-03-28", "2025-03-31", "2025-04-01", "2025-04-02", "2025-04-03", "2025-04-07", "2025-04-08", "2025-04-09", "2025-04-10", "2025-04-11", "2025-04-14", "2025-04-15", "2025-04-16", "2025-04-17", "2025-04-18", "2025-04-21", "2025-04-22", "2025-04-23", "2025-04-24", "2025-04-25", "2025-04-28", "2025-04-29", "2025-04-30", "2025-05-06", "2025-05-07", "2025-05-08", "2025-05-09", "2025-05-12", "2025-05-13", "2025-05-14", "2025-05-15", "2025-05-16", "2025-05-19", "2025-05-20", "2025-05-21", "2025-05-22", "2025-05-23", "2025-05-26", "2025-05-27", "2025-05-28", "2025-05-29", "2025-05-30", "2025-06-03", "2025-06-04", "2025-06-05", "2025-06-06", "2025-06-09", "2025-06-10", "2025-06-11", "2025-06-12", "2025-06-13", "2025-06-16", "2025-06-17", "2025-06-18", "2025-06-19", "2025-06-20", "2025-06-23", "2025-06-24", "2025-06-25", "2025-06-26", "2025-06-27", "2025-06-30", "2025-07-01", "2025-07-02", "2025-07-03", "2025-07-04", "2025-07-07", "2025-07-08", "2025-07-09", "2025-07-10", "2025-07-11", "2025-07-14", "2025-07-15", "2025-07-16", "2025-07-17", "2025-07-18", "2025-07-21", "2025-07-22", "2025-07-23", "2025-07-24", "2025-07-25", "2025-07-28", "2025-07-29", "2025-07-30", "2025-07-31", "2025-08-01", "2025-08-04", "2025-08-05", "2025-08-06", "2025-08-07", "2025-08-08", "2025-08-11", "2025-08-12", "2025-08-13", "2025-08-14", "2025-08-15", "2025-08-18", "2025-08-19", "2025-08-20", "2025-08-21", "2025-08-22", "2025-08-25", "2025-08-26", "2025-08-27", "2025-08-28", "2025-08-29", "2025-09-01", "2025-09-02", "2025-09-03", "2025-09-04", "2025-09-05", "2025-09-08", "2025-09-09", "2025-09-10", "2025-09-11", "2025-09-12", "2025-09-15", "2025-09-16", "2025-09-17", "2025-09-18", "2025-09-19", "2025-09-22", "2025-09-23", "2025-09-24", "2025-09-25", "2025-09-26", "2025-09-29", "2025-09-30", "2025-10-09", "2025-10-10", "2025-10-13", "2025-10-14", "2025-10-15", "2025-10-16", "2025-10-17", "2025-10-20", "2025-10-21", "2025-10-22", "2025-10-23", "2025-10-24", "2025-10-27", "2025-10-28", "2025-10-29", "2025-10-30", "2025-10-31", "2025-11-03", "2025-11-04", "2025-11-05", "2025-11-06", "2025-11-07", "2025-11-10", "2025-11-11", "2025-11-12", "2025-11-13", "2025-11-14", "2025-11-17", "2025-11-18", "2025-11-19", "2025-11-20", "2025-11-21", "2025-11-24", "2025-11-25", "2025-11-26", "2025-11-27", "2025-11-28", "2025-12-01", "2025-12-02", "2025-12-03", "2025-12-04", "2025-12-05", "2025-12-08", "2025-12-09", "2025-12-10", "2025-12-11", "2025-12-12", "2025-12-15", "2025-12-16", "2025-12-17", "2025-12-18", "2025-12-19", "2025-12-22", "2025-12-23", "2025-12-24", "2025-12-25", "2025-12-26", "2025-12-29", "2025-12-30", "2025-12-31", "2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09", "2026-01-12", "2026-01-13", "2026-01-14", "2026-01-15", "2026-01-16", "2026-01-19", "2026-01-20", "2026-01-21", "2026-01-22", "2026-01-23", "2026-01-26", "2026-01-27", "2026-01-28", "2026-01-29", "2026-01-30", "2026-02-02", "2026-02-03", "2026-02-04", "2026-02-05", "2026-02-06", "2026-02-09", "2026-02-10", "2026-02-11", "2026-02-12", "2026-02-13", "2026-02-24", "2026-02-25", "2026-02-26", "2026-02-27", "2026-03-02", "2026-03-03", "2026-03-04", "2026-03-05", "2026-03-06", "2026-03-09", "2026-03-10", "2026-03-11", "2026-03-12", "2026-03-13", "2026-03-16", "2026-03-17", "2026-03-18", "2026-03-19", "2026-03-20", "2026-03-23", "2026-03-24", "2026-03-25", "2026-03-26", "2026-03-27", "2026-03-30", "2026-03-31", "2026-04-01", "2026-04-02", "2026-04-03", "2026-04-07", "2026-04-08", "2026-04-09", "2026-04-10", "2026-04-13", "2026-04-14", "2026-04-15", "2026-04-16", "2026-04-17", "2026-04-20", "2026-04-21", "2026-04-22", "2026-04-23", "2026-04-24", "2026-04-27", "2026-04-28", "2026-04-29", "2026-04-30", "2026-05-06", "2026-05-07", "2026-05-08", "2026-05-11", "2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15", "2026-05-18", "2026-05-19", "2026-05-20", "2026-05-21", "2026-05-22", "2026-05-25", "2026-05-26", "2026-05-27", "2026-05-28", "2026-05-29", "2026-06-01", "2026-06-02", "2026-06-03", "2026-06-04", "2026-06-05", "2026-06-08", "2026-06-09", "2026-06-10", "2026-06-11", "2026-06-12", "2026-06-15", "2026-06-16", "2026-06-17", "2026-06-18", "2026-06-22", "2026-06-23", "2026-06-24", "2026-06-25", "2026-06-26", "2026-06-29", "2026-06-30", "2026-07-01", "2026-07-02", "2026-07-03", "2026-07-06", "2026-07-07", "2026-07-08", "2026-07-09", "2026-07-10", "2026-07-13", "2026-07-14", "2026-07-15", "2026-07-16", "2026-07-17", "2026-07-20", "2026-07-21", "2026-07-22", "2026-07-23", "2026-07-24", "2026-07-27", "2026-07-28", "2026-07-29", "2026-07-30", "2026-07-31", "2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14", "2026-08-17", "2026-08-18", "2026-08-19", "2026-08-20", "2026-08-21", "2026-08-24", "2026-08-25", "2026-08-26", "2026-08-27", "2026-08-28", "2026-08-31", "2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-07", "2026-09-08", "2026-09-09", "2026-09-10"], "navs": [2.5767, 2.6075, 2.6211, 2.5934, 2.5974, 2.5973, 2.5597, 2.5631, 2.5655, 2.6106, 2.6051, 2.6301, 2.6297, 2.6452, 2.6605, 2.6742, 2.667, 2.6295, 2.6496, 2.6587, 2.6349, 2.652, 2.6532, 2.6463, 2.6724, 2.6722, 2.6718, 2.6779, 2.6842, 2.6736, 2.6296, 2.6177, 2.6063, 2.6067, 2.5676, 2.6062, 2.5624, 2.5326, 2.5584, 2.5146, 2.5283, 2.4651, 2.4479, 2.4571, 2.4256, 2.4757, 2.4891, 2.4651, 2.4892, 2.486, 2.4882, 2.5302, 2.5343, 2.5059, 2.4983, 2.451, 2.4648, 2.4735, 2.4897, 2.3787, 2.2423, 2.2104, 2.4108, 2.3324, 2.3723, 2.3908, 2.3866, 2.337, 2.3384, 2.3378, 2.2854, 2.3399, 2.3782, 2.4233, 2.4393, 2.4398, 2.4527, 2.4557, 2.4712, 2.4812, 2.497, 2.4963, 2.5728, 2.588, 2.5895, 2.6004, 2.617, 2.6186, 2.6094, 2.5695, 2.5672, 2.5515, 2.5483, 2.5996, 2.5864, 2.5966, 2.5945, 2.6198, 2.6206, 2.6068, 2.6318, 2.6344, 2.6476, 2.6398, 2.6489, 2.6196, 2.6438, 2.6213, 2.621, 2.6198, 2.6132, 2.6375, 2.6634, 2.6637, 2.6821, 2.6958, 2.7075, 2.7027, 2.7153, 2.7362, 2.7366, 2.7149, 2.7141, 2.7299, 2.7361, 2.7261, 2.7302, 2.7204, 2.7296, 2.7409, 2.7422, 2.7466, 2.7459, 2.7645, 2.7652, 2.7769, 2.7789, 2.7727, 2.7668, 2.7592, 2.7174, 2.7515, 2.7377, 2.7581, 2.7535, 2.7754, 2.7696, 2.7996, 2.8055, 2.8058, 2.7997, 2.7975, 2.7831, 2.7775, 2.7636, 2.8044, 2.7869, 2.7989, 2.802, 2.8087, 2.7904, 2.7917, 2.7745, 2.7886, 2.8087, 2.8008, 2.8049, 2.8113, 2.8212, 2.8426, 2.8408, 2.8551, 2.8503, 2.8471, 2.8625, 2.8772, 2.8884, 2.8715, 2.8642, 2.8523, 2.8692, 2.8739, 2.8839, 2.9044, 2.8282, 2.8681, 2.8643, 2.8745, 2.8563, 2.8697, 2.8994, 2.8978, 2.8835, 2.898, 2.9201, 2.9518, 2.9574, 2.9567, 2.9298, 2.9377, 2.9418, 2.91, 2.9204, 2.8886, 2.891, 2.9332, 2.9391, 2.9397, 2.8953, 2.8934, 2.868, 2.8471, 2.8577, 2.8168, 2.8417, 2.8823, 2.9062, 2.9241, 2.9234, 2.9383, 2.9227, 2.9307, 2.9375, 2.9397, 2.9458, 2.9368, 2.9346, 2.9524, 2.9557, 2.924, 2.9205, 2.9118, 2.8787, 2.9006, 2.9235, 2.9419, 2.9527, 2.9597, 2.9567, 2.9547, 2.9439, 2.9406, 2.9181, 2.9386, 2.9537, 2.9446, 2.945, 2.9603, 2.964, 2.9583, 2.9441, 2.949, 2.9478, 2.9466, 2.8881, 2.9197, 2.9348, 2.9326, 2.943, 2.9547, 2.9507, 2.9475, 2.9325, 2.9477, 2.9213, 2.9045, 2.8727, 2.9259, 2.9362, 2.9248, 2.9239, 2.8823, 2.8815, 2.9032, 2.9219, 2.904, 2.8924, 2.8943, 2.8635, 2.8855, 2.8661, 2.8313, 2.8581, 2.8467, 2.8422, 2.803, 2.7888, 2.8174, 2.8206, 2.7825, 2.7777, 2.7355, 2.7702, 2.7567, 2.7698, 2.7289, 2.6883, 2.6809, 2.7542, 2.767, 2.7648, 2.7665, 2.7775, 2.8374, 2.8529, 2.8502, 2.8776, 2.9075, 2.9293, 2.9377, 2.9715, 2.9657, 2.9456, 2.9765, 2.9654, 2.9889, 2.9884, 2.9749, 2.9745, 3.0044, 3.0634, 3.0491, 3.0744, 3.0785, 3.0722, 3.0895, 3.1107, 3.0751, 3.0736, 3.0518, 3.0838, 3.087, 3.099, 3.0964, 3.1132, 3.1138, 3.1286, 3.1322, 3.1395, 3.1443, 3.1221, 3.1353, 3.0549, 3.065, 3.0553, 3.0077, 3.0583, 3.0712, 3.1186, 3.1027, 3.0663, 3.0991, 3.0888, 3.0476, 3.0457, 3.0459, 3.0425, 3.0768, 3.0971, 3.0893, 3.09, 3.0882, 3.1104, 3.0965, 3.0891, 3.1112, 3.1218, 3.0975, 3.1092, 3.1171, 3.1019, 3.0731, 3.0679, 3.0922, 3.0889, 3.0523, 3.0552, 3.0544, 3.0612, 3.0159, 3.063, 3.0834, 3.1268, 3.1807, 3.1743, 3.1692, 3.1882, 3.1856, 3.1765, 3.1837, 3.2036, 3.1982, 3.1822, 3.1628, 3.1671, 3.1393, 3.1526, 3.1451, 3.1551, 3.1534, 3.1753, 3.1665, 3.1572, 3.1351, 3.1496, 3.1804, 3.1684, 3.1685, 3.1513, 3.1353, 3.1179]}, "022365": {"dates": ["2025-01-02", "2025-01-03", "2025-01-06", "2025-01-07", "2025-01-08", "2025-01-09", "2025-01-10", "2025-01-13", "2025-01-14", "2025-01-15", "2025-01-16", "2025-01-17", "2025-01-20", "2025-01-21", "2025-01-22", "2025-01-23", "2025-01-24", "2025-01-27", "2025-02-05", "2025-02-06", "2025-02-07", "2025-02-10", "2025-02-11", "2025-02-12", "2025-02-13", "2025-02-14", "2025-02-17", "2025-02-18", "2025-02-19", "2025-02-20", "2025-02-21", "2025-02-24", "2025-02-25", "2025-02-26", "2025-02-27", "2025-02-28", "2025-03-03", "2025-03-04", "2025-03-05", "2025-03-06", "2025-03-07", "2025-03-10", "2025-03-11", "2025-03-12", "2025-03-13", "2025-03-14", "2025-03-17", "2025-03-18", "2025-03-19", "2025-03-20", "2025-03-21", "2025-03-24", "2025-03-25", "2025-03-26", "2025-03-27", "2025-03-28", "2025-03-31", "2025-04-01", "2025-04-02", "2025-04-03", "2025-04-07", "2025-04-08", "2025-04-09", "2025-04-10", "2025-04-11", "2025-04-14", "2025-04-15", "2025-04-16", "2025-04-17", "2025-04-18", "2025-04-21", "2025-04-22", "2025-04-23", "2025-04-24", "2025-04-25", "2025-04-28", "2025-04-29", "2025-04-30", "2025-05-06", "2025-05-07", "2025-05-08", "2025-05-09", "2025-05-12", "2025-05-13", "2025-05-14", "2025-05-15", "2025-05-16", "2025-05-19", "2025-05-20", "2025-05-21", "2025-05-22", "2025-05-23", "2025-05-26", "2025-05-27", "2025-05-28", "2025-05-29", "2025-05-30", "2025-06-03", "2025-06-04", "2025-06-05", "2025-06-06", "2025-06-09", "2025-06-10", "2025-06-11", "2025-06-12", "2025-06-13", "2025-06-16", "2025-06-17", "2025-06-18", "2025-06-19", "2025-06-20", "2025-06-23", "2025-06-24", "2025-06-25", "2025-06-26", "2025-06-27", "2025-06-30", "2025-07-01", "2025-07-02", "2025-07-03", "2025-07-04", "2025-07-07", "2025-07-08", "2025-07-09", "2025-07-10", "2025-07-11", "2025-07-14", "2025-07-15", "2025-07-16", "2025-07-17", "2025-07-18", "2025-07-21", "2025-07-22", "2025-07-23", "2025-07-24", "2025-07-25", "2025-07-28", "2025-07-29", "2025-07-30", "2025-07-31", "2025-08-01", "2025-08-04", "2025-08-05", "2025-08-06", "2025-08-07", "2025-08-08", "2025-08-11", "2025-08-12", "2025-08-13", "2025-08-14", "2025-08-15", "2025-08-18", "2025-08-19", "2025-08-20", "2025-08-21", "2025-08-22", "2025-08-25", "2025-08-26", "2025-08-27", "2025-08-28", "2025-08-29", "2025-09-01", "2025-09-02", "2025-09-03", "2025-09-04", "2025-09-05", "2025-09-08", "2025-09-09", "2025-09-10", "2025-09-11", "2025-09-12", "2025-09-15", "2025-09-16", "2025-09-17", "2025-09-18", "2025-09-19", "2025-09-22", "2025-09-23", "2025-09-24", "2025-09-25", "2025-09-26", "2025-09-29", "2025-09-30", "2025-10-09", "2025-10-10", "2025-10-13", "2025-10-14", "2025-10-15", "2025-10-16", "2025-10-17", "2025-10-20", "2025-10-21", "2025-10-22", "2025-10-23", "2025-10-24", "2025-10-27", "2025-10-28", "2025-10-29", "2025-10-30", "2025-10-31", "2025-11-03", "2025-11-04", "2025-11-05", "2025-11-06", "2025-11-07", "2025-11-10", "2025-11-11", "2025-11-12", "2025-11-13", "2025-11-14", "2025-11-17", "2025-11-18", "2025-11-19", "2025-11-20", "2025-11-21", "2025-11-24", "2025-11-25", "2025-11-26", "2025-11-27", "2025-11-28", "2025-12-01", "2025-12-02", "2025-12-03", "2025-12-04", "2025-12-05", "2025-12-08", "2025-12-09", "2025-12-10", "2025-12-11", "2025-12-12", "2025-12-15", "2025-12-16", "2025-12-17", "2025-12-18", "2025-12-19", "2025-12-22", "2025-12-23", "2025-12-24", "2025-12-25", "2025-12-26", "2025-12-29", "2025-12-30", "2025-12-31", "2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09", "2026-01-12", "2026-01-13", "2026-01-14", "2026-01-15", "2026-01-16", "2026-01-19", "2026-01-20", "2026-01-21", "2026-01-22", "2026-01-23", "2026-01-26", "2026-01-27", "2026-01-28", "2026-01-29", "2026-01-30", "2026-02-02", "2026-02-03", "2026-02-04", "2026-02-05", "2026-02-06", "2026-02-09", "2026-02-10", "2026-02-11", "2026-02-12", "2026-02-13", "2026-02-24", "2026-02-25", "2026-02-26", "2026-02-27", "2026-03-02", "2026-03-03", "2026-03-04", "2026-03-05", "2026-03-06", "2026-03-09", "2026-03-10", "2026-03-11", "2026-03-12", "2026-03-13", "2026-03-16", "2026-03-17", "2026-03-18", "2026-03-19", "2026-03-20", "2026-03-23", "2026-03-24", "2026-03-25", "2026-03-26", "2026-03-27", "2026-03-30", "2026-03-31", "2026-04-01", "2026-04-02", "2026-04-03", "2026-04-07", "2026-04-08", "2026-04-09", "2026-04-10", "2026-04-13", "2026-04-14", "2026-04-15", "2026-04-16", "2026-04-17", "2026-04-20", "2026-04-21", "2026-04-22", "2026-04-23", "2026-04-24", "2026-04-27", "2026-04-28", "2026-04-29", "2026-04-30", "2026-05-06", "2026-05-07", "2026-05-08", "2026-05-11", "2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15", "2026-05-18", "2026-05-19", "2026-05-20", "2026-05-21", "2026-05-22", "2026-05-25", "2026-05-26", "2026-05-27", "2026-05-28", "2026-05-29", "2026-06-01", "2026-06-02", "2026-06-03", "2026-06-04", "2026-06-05", "2026-06-08", "2026-06-09", "2026-06-10", "2026-06-11", "2026-06-12", "2026-06-15", "2026-06-16", "2026-06-17", "2026-06-18", "2026-06-22", "2026-06-23", "2026-06-24", "2026-06-25", "2026-06-26", "2026-06-29", "2026-06-30", "2026-07-01", "2026-07-02", "2026-07-03", "2026-07-06", "2026-07-07", "2026-07-08", "2026-07-09", "2026-07-10", "2026-07-13", "2026-07-14", "2026-07-15", "2026-07-16", "2026-07-17", "2026-07-20", "2026-07-21", "2026-07-22", "2026-07-23", "2026-07-24", "2026-07-27", "2026-07-28", "2026-07-29", "2026-07-30", "2026-07-31", "2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14", "2026-08-17", "2026-08-18", "2026-08-19", "2026-08-20", "2026-08-21", "2026-08-24", "2026-08-25", "2026-08-26", "2026-08-27", "2026-08-28", "2026-08-31", "2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-07", "2026-09-08", "2026-09-09", "2026-09-10", "2026-09-11"], "navs": [1.086, 1.0515, 1.0367, 1.0734, 1.0867, 1.0981, 1.1041, 1.1165, 1.1627, 1.1426, 1.1326, 1.147, 1.1566, 1.1908, 1.1839, 1.1834, 1.1992, 1.1599, 1.1692, 1.2146, 1.2503, 1.256, 1.241, 1.2548, 1.2177, 1.2264, 1.2499, 1.2238, 1.2477, 1.2409, 1.375, 1.3736, 1.3755, 1.3816, 1.371, 1.3103, 1.2675, 1.2521, 1.31, 1.3843, 1.3651, 1.3506, 1.4042, 1.4132, 1.378, 1.399, 1.3871, 1.4198, 1.3999, 1.3721, 1.3395, 1.3205, 1.2364, 1.2407, 1.2176, 1.2328, 1.2609, 1.2302, 1.2473, 1.2229, 1.0442, 1.0355, 1.0727, 1.1096, 1.1308, 1.1399, 1.1288, 1.0812, 1.0816, 1.0815, 1.118, 1.0922, 1.1254, 1.0758, 1.0856, 1.1038, 1.1299, 1.1689, 1.2195, 1.2046, 1.2145, 1.1998, 1.2273, 1.2119, 1.2347, 1.1992, 1.2091, 1.1919, 1.1974, 1.1937, 1.1935, 1.1688, 1.1871, 1.1628, 1.2025, 1.2309, 1.2139, 1.2009, 1.2706, 1.3694, 1.3899, 1.4096, 1.4076, 1.4061, 1.4562, 1.4639, 1.5156, 1.5083, 1.5824, 1.5723, 1.5559, 1.5305, 1.5222, 1.5433, 1.5667, 1.6176, 1.6648, 1.6731, 1.6308, 1.6831, 1.6772, 1.657, 1.7595, 1.751, 1.7682, 1.7544, 1.7667, 1.9175, 1.8965, 2.0072, 1.9737, 1.9625, 1.9644, 1.9682, 1.9383, 1.9382, 2.0378, 2.1639, 2.1667, 2.1935, 2.1406, 2.1275, 2.1634, 2.1582, 2.1503, 2.1461, 2.2046, 2.2945, 2.4802, 2.3745, 2.3689, 2.4508, 2.5194, 2.4975, 2.4381, 2.5213, 2.704, 2.6831, 2.7779, 3.0327, 3.11, 3.2347, 3.0896, 3.1338, 2.9483, 3.0682, 2.9822, 2.9699, 3.077, 3.2661, 3.2576, 3.2269, 3.2388, 3.2654, 3.3107, 3.3441, 3.4014, 3.4108, 3.3524, 3.3826, 3.2653, 3.365, 3.3204, 3.3552, 3.2451, 3.2019, 3.0334, 3.1253, 3.133, 3.002, 3.1095, 3.3247, 3.3441, 3.2335, 3.45, 3.6495, 3.6903, 3.7381, 3.5992, 3.3879, 3.3945, 3.3714, 3.3594, 3.4634, 3.4408, 3.4049, 3.3294, 3.3255, 3.3157, 3.2003, 3.2251, 3.2279, 3.2391, 3.2622, 3.0867, 3.0487, 3.1702, 3.3148, 3.2795, 3.2859, 3.3396, 3.3427, 3.354, 3.3828, 3.4028, 3.5807, 3.6736, 3.666, 3.5688, 3.5857, 3.5538, 3.5191, 3.6916, 3.6089, 3.5939, 3.7351, 3.7513, 3.831, 3.8019, 3.793, 3.8342, 3.8254, 3.7523, 3.8158, 3.7626, 3.7992, 3.7324, 3.7178, 3.6811, 3.5854, 3.6668, 3.7609, 3.7812, 3.7464, 3.6104, 3.7085, 3.8653, 3.6986, 3.7155, 3.8509, 3.8775, 3.7895, 3.8949, 3.8051, 3.804, 3.6995, 3.6472, 3.6302, 3.7409, 3.7691, 3.7318, 3.7404, 3.7037, 3.8203, 3.8852, 3.9844, 3.886, 3.915, 3.8139, 3.762, 3.812, 3.7884, 3.7009, 3.8174, 3.7814, 3.7129, 3.736, 3.8019, 3.7085, 3.8488, 3.7715, 3.8272, 3.6812, 3.7647, 3.8595, 3.7685, 3.7866, 3.8056, 3.7169, 3.8343, 3.7687, 3.8555, 3.8583, 4.114, 4.1605, 4.2932, 4.2965, 4.4113, 4.3124, 4.4197, 4.6036, 4.6126, 4.6534, 4.8457, 4.8396, 4.7224, 4.8076, 4.747, 4.7616, 4.7571, 4.8317, 4.961, 4.9715, 5.1319, 5.1711, 5.3528, 5.1705, 5.1011, 5.1819, 5.1708, 5.2126, 5.1416, 5.4687, 5.7114, 5.8301, 5.7842, 5.9362, 5.8748, 5.7375, 5.9116, 5.9643, 6.0043, 5.8332, 5.7658, 5.9176, 5.7963, 5.7265, 5.7168, 5.9234, 5.9531, 6.0827, 6.2276, 6.2594, 6.0622, 6.1413, 6.312, 6.0798, 5.9914, 6.2272, 6.0825, 5.7269, 5.8121, 5.7642, 5.7237, 5.6813, 5.9395, 5.6945, 5.556, 5.7779, 5.633, 5.5247, 5.1416, 5.0476, 5.4024, 5.1928, 5.2232, 5.1138, 5.3187, 4.8284, 4.8706, 4.4703, 4.7079, 4.6633, 5.0701, 5.1869, 5.2594, 5.4068, 5.3111, 5.3212, 5.4153, 5.3765, 5.4487, 5.6866, 5.5989, 5.222, 5.2566, 5.4028, 5.1753, 5.1514, 5.1819, 5.3544, 5.2887, 5.3567, 5.2353, 5.1199, 5.1133, 5.0611, 5.3901, 5.3845, 5.4055, 5.3774, 5.4018]}, "025500": {"dates": ["2025-09-12", "2025-09-15", "2025-09-16", "2025-09-17", "2025-09-18", "2025-09-19", "2025-09-22", "2025-09-23", "2025-09-24", "2025-09-25", "2025-09-26", "2025-09-29", "2025-09-30", "2025-10-09", "2025-10-10", "2025-10-13", "2025-10-14", "2025-10-15", "2025-10-16", "2025-10-17", "2025-10-20", "2025-10-21", "2025-10-22", "2025-10-23", "2025-10-24", "2025-10-27", "2025-10-28", "2025-10-29", "2025-10-30", "2025-10-31", "2025-11-03", "2025-11-04", "2025-11-05", "2025-11-06", "2025-11-07", "2025-11-10", "2025-11-11", "2025-11-12", "2025-11-13", "2025-11-14", "2025-11-17", "2025-11-18", "2025-11-19", "2025-11-20", "2025-11-21", "2025-11-24", "2025-11-25", "2025-11-26", "2025-11-27", "2025-11-28", "2025-12-01", "2025-12-02", "2025-12-03", "2025-12-04", "2025-12-05", "2025-12-08", "2025-12-09", "2025-12-10", "2025-12-11", "2025-12-12", "2025-12-15", "2025-12-16", "2025-12-17", "2025-12-18", "2025-12-19", "2025-12-22", "2025-12-23", "2025-12-24", "2025-12-25", "2025-12-26", "2025-12-29", "2025-12-30", "2025-12-31", "2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09", "2026-01-12", "2026-01-13", "2026-01-14", "2026-01-15", "2026-01-16", "2026-01-19", "2026-01-20", "2026-01-21", "2026-01-22", "2026-01-23", "2026-01-26", "2026-01-27", "2026-01-28", "2026-01-29", "2026-01-30", "2026-02-02", "2026-02-03", "2026-02-04", "2026-02-05", "2026-02-06", "2026-02-09", "2026-02-10", "2026-02-11", "2026-02-12", "2026-02-13", "2026-02-24", "2026-02-25", "2026-02-26", "2026-02-27", "2026-03-02", "2026-03-03", "2026-03-04", "2026-03-05", "2026-03-06", "2026-03-09", "2026-03-10", "2026-03-11", "2026-03-12", "2026-03-13", "2026-03-16", "2026-03-17", "2026-03-18", "2026-03-19", "2026-03-20", "2026-03-23", "2026-03-24", "2026-03-25", "2026-03-26", "2026-03-27", "2026-03-30", "2026-03-31", "2026-04-01", "2026-04-02", "2026-04-03", "2026-04-07", "2026-04-08", "2026-04-09", "2026-04-10", "2026-04-13", "2026-04-14", "2026-04-15", "2026-04-16", "2026-04-17", "2026-04-20", "2026-04-21", "2026-04-22", "2026-04-23", "2026-04-24", "2026-04-27", "2026-04-28", "2026-04-29", "2026-04-30", "2026-05-06", "2026-05-07", "2026-05-08", "2026-05-11", "2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15", "2026-05-18", "2026-05-19", "2026-05-20", "2026-05-21", "2026-05-22", "2026-05-25", "2026-05-26", "2026-05-27", "2026-05-28", "2026-05-29", "2026-06-01", "2026-06-02", "2026-06-03", "2026-06-04", "2026-06-05", "2026-06-08", "2026-06-09", "2026-06-10", "2026-06-11", "2026-06-12", "2026-06-15", "2026-06-16", "2026-06-17", "2026-06-18", "2026-06-22", "2026-06-23", "2026-06-24", "2026-06-25", "2026-06-26", "2026-06-29", "2026-06-30", "2026-07-01", "2026-07-02", "2026-07-03", "2026-07-06", "2026-07-07", "2026-07-08", "2026-07-09", "2026-07-10", "2026-07-13", "2026-07-14", "2026-07-15", "2026-07-16", "2026-07-17", "2026-07-20", "2026-07-21", "2026-07-22", "2026-07-23", "2026-07-24", "2026-07-27", "2026-07-28", "2026-07-29", "2026-07-30", "2026-07-31", "2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14", "2026-08-17", "2026-08-18", "2026-08-19", "2026-08-20", "2026-08-21", "2026-08-24", "2026-08-25", "2026-08-26", "2026-08-27", "2026-08-28", "2026-08-31", "2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-07", "2026-09-08", "2026-09-09", "2026-09-10", "2026-09-11"], "navs": [1.0, 0.9969, 1.0073, 1.015, 1.0358, 1.0583, 1.0787, 1.076, 1.0467, 1.0466, 0.9962, 1.0206, 0.9992, 0.9892, 0.989, 0.9833, 0.9409, 0.9541, 0.9909, 0.9378, 0.9338, 0.9655, 0.9524, 0.9535, 1.0531, 1.0911, 1.0846, 1.091, 1.0808, 1.0495, 1.0698, 1.0437, 1.0405, 1.0797, 1.0961, 1.1377, 1.1075, 1.1242, 1.1573, 1.0811, 1.0882, 1.0602, 1.0464, 1.0143, 0.9325, 0.9351, 0.952, 0.9691, 0.9669, 0.9977, 1.0109, 0.9963, 0.9892, 0.9873, 0.9832, 1.0494, 1.0445, 1.0323, 1.0261, 1.0411, 1.0059, 0.9852, 1.03, 1.0427, 1.0096, 1.0301, 1.0319, 1.0715, 1.0792, 1.1024, 1.0928, 1.0923, 1.0668, 1.1568, 1.1976, 1.2359, 1.2095, 1.1851, 1.2086, 1.183, 1.1947, 1.2383, 1.3416, 1.3289, 1.3571, 1.3833, 1.397, 1.3818, 1.3832, 1.4246, 1.4521, 1.4009, 1.4264, 1.2871, 1.3321, 1.2709, 1.2474, 1.2218, 1.2518, 1.2322, 1.2075, 1.2434, 1.2438, 1.2796, 1.2482, 1.2601, 1.248, 1.2082, 1.1135, 1.1775, 1.1969, 1.2375, 1.242, 1.2732, 1.2528, 1.2299, 1.2352, 1.3168, 1.2825, 1.3566, 1.3106, 1.2746, 1.2058, 1.2322, 1.2671, 1.2251, 1.2198, 1.2087, 1.1457, 1.1783, 1.1433, 1.1325, 1.1561, 1.2419, 1.2432, 1.2936, 1.3178, 1.3907, 1.3631, 1.3912, 1.393, 1.4124, 1.4261, 1.4571, 1.4085, 1.4083, 1.44, 1.4336, 1.4543, 1.4719, 1.6285, 1.6505, 1.6243, 1.7821, 1.7675, 1.8362, 1.8239, 1.7995, 1.8346, 1.8313, 1.8735, 1.7618, 1.8245, 1.9136, 1.8637, 1.8667, 1.8746, 1.8173, 1.7139, 1.7268, 1.775, 1.8843, 1.7779, 1.7093, 1.8104, 1.7831, 1.7993, 1.8073, 1.9437, 1.9733, 2.166, 2.2432, 2.3602, 2.3375, 2.4752, 2.64, 2.6433, 2.7319, 2.7607, 2.746, 2.528, 2.5669, 2.5824, 2.4617, 2.3912, 2.5889, 2.4281, 2.1901, 2.2796, 2.1231, 1.9649, 1.7194, 1.6059, 1.81, 1.7389, 1.6758, 1.648, 1.6513, 1.4952, 1.4866, 1.4708, 1.507, 1.4012, 1.4738, 1.5692, 1.5748, 1.6436, 1.6231, 1.6183, 1.656, 1.6067, 1.6536, 1.7589, 1.754, 1.6355, 1.653, 1.6626, 1.5911, 1.5912, 1.5816, 1.6824, 1.6431, 1.6709, 1.6165, 1.5854, 1.5871, 1.5299, 1.606, 1.6121, 1.5837, 1.5836, 1.543]}, "XAU": {"dates": ["2025-01-02", "2025-01-03", "2025-01-06", "2025-01-07", "2025-01-08", "2025-01-09", "2025-01-10", "2025-01-13", "2025-01-14", "2025-01-15", "2025-01-16", "2025-01-17", "2025-01-20", "2025-01-21", "2025-01-22", "2025-01-23", "2025-01-24", "2025-01-27", "2025-01-28", "2025-01-29", "2025-01-30", "2025-01-31", "2025-02-03", "2025-02-04", "2025-02-05", "2025-02-06", "2025-02-07", "2025-02-10", "2025-02-11", "2025-02-12", "2025-02-13", "2025-02-14", "2025-02-17", "2025-02-18", "2025-02-19", "2025-02-20", "2025-02-21", "2025-02-24", "2025-02-25", "2025-02-26", "2025-02-27", "2025-02-28", "2025-03-03", "2025-03-04", "2025-03-05", "2025-03-06", "2025-03-07", "2025-03-10", "2025-03-11", "2025-03-12", "2025-03-13", "2025-03-14", "2025-03-17", "2025-03-18", "2025-03-19", "2025-03-20", "2025-03-21", "2025-03-24", "2025-03-25", "2025-03-26", "2025-03-27", "2025-03-28", "2025-03-31", "2025-04-01", "2025-04-02", "2025-04-03", "2025-04-04", "2025-04-07", "2025-04-08", "2025-04-09", "2025-04-10", "2025-04-11", "2025-04-14", "2025-04-15", "2025-04-16", "2025-04-17", "2025-04-21", "2025-04-22", "2025-04-23", "2025-04-24", "2025-04-25", "2025-04-28", "2025-04-29", "2025-04-30", "2025-05-01", "2025-05-02", "2025-05-05", "2025-05-06", "2025-05-07", "2025-05-08", "2025-05-09", "2025-05-12", "2025-05-13", "2025-05-14", "2025-05-15", "2025-05-16", "2025-05-19", "2025-05-20", "2025-05-21", "2025-05-22", "2025-05-23", "2025-05-26", "2025-05-27", "2025-05-28", "2025-05-29", "2025-05-30", "2025-06-02", "2025-06-03", "2025-06-04", "2025-06-05", "2025-06-06", "2025-06-09", "2025-06-10", "2025-06-11", "2025-06-12", "2025-06-13", "2025-06-16", "2025-06-17", "2025-06-18", "2025-06-19", "2025-06-20", "2025-06-23", "2025-06-24", "2025-06-25", "2025-06-26", "2025-06-27", "2025-06-30", "2025-07-01", "2025-07-02", "2025-07-03", "2025-07-04", "2025-07-07", "2025-07-08", "2025-07-09", "2025-07-10", "2025-07-11", "2025-07-14", "2025-07-15", "2025-07-16", "2025-07-17", "2025-07-18", "2025-07-21", "2025-07-22", "2025-07-23", "2025-07-24", "2025-07-25", "2025-07-28", "2025-07-29", "2025-07-30", "2025-07-31", "2025-08-01", "2025-08-04", "2025-08-05", "2025-08-06", "2025-08-07", "2025-08-08", "2025-08-11", "2025-08-12", "2025-08-13", "2025-08-14", "2025-08-15", "2025-08-18", "2025-08-19", "2025-08-20", "2025-08-21", "2025-08-22", "2025-08-25", "2025-08-26", "2025-08-27", "2025-08-28", "2025-08-29", "2025-09-01", "2025-09-02", "2025-09-03", "2025-09-04", "2025-09-05", "2025-09-08", "2025-09-09", "2025-09-10", "2025-09-11", "2025-09-12", "2025-09-15", "2025-09-16", "2025-09-17", "2025-09-18", "2025-09-19", "2025-09-22", "2025-09-23", "2025-09-24", "2025-09-25", "2025-09-26", "2025-09-29", "2025-09-30", "2025-10-01", "2025-10-02", "2025-10-03", "2025-10-06", "2025-10-07", "2025-10-08", "2025-10-09", "2025-10-10", "2025-10-13", "2025-10-14", "2025-10-15", "2025-10-16", "2025-10-17", "2025-10-20", "2025-10-21", "2025-10-22", "2025-10-23", "2025-10-24", "2025-10-27", "2025-10-28", "2025-10-29", "2025-10-30", "2025-10-31", "2025-11-03", "2025-11-04", "2025-11-05", "2025-11-06", "2025-11-07", "2025-11-10", "2025-11-11", "2025-11-12", "2025-11-13", "2025-11-14", "2025-11-17", "2025-11-18", "2025-11-19", "2025-11-20", "2025-11-21", "2025-11-24", "2025-11-25", "2025-11-26", "2025-11-27", "2025-11-28", "2025-12-01", "2025-12-02", "2025-12-03", "2025-12-04", "2025-12-05", "2025-12-08", "2025-12-09", "2025-12-10", "2025-12-11", "2025-12-12", "2025-12-15", "2025-12-16", "2025-12-17", "2025-12-18", "2025-12-19", "2025-12-22", "2025-12-23", "2025-12-24", "2025-12-26", "2025-12-29", "2025-12-30", "2025-12-31", "2026-01-02", "2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09", "2026-01-12", "2026-01-13", "2026-01-14", "2026-01-15", "2026-01-16", "2026-01-19", "2026-01-20", "2026-01-21", "2026-01-22", "2026-01-23", "2026-01-26", "2026-01-27", "2026-01-28", "2026-01-29", "2026-01-30", "2026-02-02", "2026-02-03", "2026-02-04", "2026-02-05", "2026-02-06", "2026-02-09", "2026-02-10", "2026-02-11", "2026-02-12", "2026-02-13", "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20", "2026-02-23", "2026-02-24", "2026-02-25", "2026-02-26", "2026-02-27", "2026-03-02", "2026-03-03", "2026-03-04", "2026-03-05", "2026-03-06", "2026-03-09", "2026-03-10", "2026-03-11", "2026-03-12", "2026-03-13", "2026-03-16", "2026-03-17", "2026-03-18", "2026-03-19", "2026-03-20", "2026-03-23", "2026-03-24", "2026-03-25", "2026-03-26", "2026-03-27", "2026-03-30", "2026-03-31", "2026-04-01", "2026-04-02", "2026-04-06", "2026-04-07", "2026-04-08", "2026-04-09", "2026-04-10", "2026-04-13", "2026-04-14", "2026-04-15", "2026-04-16", "2026-04-17", "2026-04-20", "2026-04-21", "2026-04-22", "2026-04-23", "2026-04-24", "2026-04-27", "2026-04-28", "2026-04-29", "2026-04-30", "2026-05-01", "2026-05-04", "2026-05-05", "2026-05-06", "2026-05-07", "2026-05-08", "2026-05-11", "2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15", "2026-05-18", "2026-05-19", "2026-05-20", "2026-05-21", "2026-05-22", "2026-05-25", "2026-05-26", "2026-05-27", "2026-05-28", "2026-05-29", "2026-06-01", "2026-06-02", "2026-06-03", "2026-06-04", "2026-06-05", "2026-06-08", "2026-06-09", "2026-06-10", "2026-06-11", "2026-06-12", "2026-06-15", "2026-06-16", "2026-06-17", "2026-06-18", "2026-06-19", "2026-06-22", "2026-06-23", "2026-06-24", "2026-06-25", "2026-06-26", "2026-06-29", "2026-06-30", "2026-07-01", "2026-07-02", "2026-07-03", "2026-07-06", "2026-07-07", "2026-07-08", "2026-07-09", "2026-07-10", "2026-07-13", "2026-07-14", "2026-07-15", "2026-07-16", "2026-07-17", "2026-07-20", "2026-07-21", "2026-07-22", "2026-07-23", "2026-07-24", "2026-07-27", "2026-07-28", "2026-07-29", "2026-07-30", "2026-07-31", "2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14", "2026-08-17", "2026-08-18", "2026-08-19", "2026-08-20", "2026-08-21", "2026-08-24", "2026-08-25", "2026-08-26", "2026-08-27", "2026-08-28", "2026-08-31", "2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-07", "2026-09-08", "2026-09-09", "2026-09-10", "2026-09-11"], "navs": [2671.2, 2652.7, 2646.7, 2663.1, 2679.9, 2692.4, 2717.3, 2681.2, 2693.1, 2722.5, 2746.8, 2740.0, 2731.0, 2758.6, 2766.0, 2761.8, 2805.0, 2770.7, 2798.9, 2796.4, 2851.7, 2831.4, 2850.5, 2874.1, 2885.0, 2880.0, 2886.2, 2936.8, 2926.3, 2928.9, 2957.2, 2893.6, 2911.1, 2954.3, 2949.4, 2955.6, 2949.6, 2968.8, 2928.5, 2931.6, 2887.8, 2867.0, 2904.0, 2928.2, 2929.0, 2919.6, 2917.5, 2893.0, 2922.6, 2943.3, 3001.1, 2993.2, 3009.9, 3041.5, 3057.4, 3052.7, 3028.2, 3045.9, 3054.4, 3056.1, 3099.0, 3117.7, 3157.3, 3148.4, 3189.3, 3137.8, 3056.1, 2998.8, 2998.0, 3099.6, 3193.7, 3254.8, 3226.7, 3246.9, 3357.5, 3341.2, 3435.1, 3391.6, 3301.4, 3361.1, 3330.2, 3354.4, 3327.6, 3299.2, 3247.8, 3247.2, 3343.5, 3441.3, 3372.4, 3310.1, 3329.1, 3241.6, 3254.5, 3180.7, 3243.6, 3205.2, 3231.8, 3320.3, 3345.2, 3323.3, 3386.0, 3370.3, 3327.1, 3312.0, 3342.2, 3313.0, 3406.3, 3376.9, 3397.2, 3376.0, 3331.0, 3346.5, 3344.6, 3375.9, 3406.2, 3452.5, 3403.9, 3406.4, 3386.7, 3387.2, 3384.4, 3384.0, 3338.2, 3346.7, 3341.3, 3286.0, 3314.8, 3349.7, 3368.4, 3336.0, 3346.5, 3346.4, 3310.8, 3322.3, 3333.0, 3370.3, 3352.1, 3330.3, 3354.0, 3345.2, 3355.2, 3410.3, 3443.9, 3455.1, 3429.2, 3395.2, 3370.9, 3382.8, 3327.8, 3342.3, 3415.7, 3428.5, 3435.0, 3431.6, 3482.3, 3458.2, 3393.7, 3399.5, 3406.8, 3382.1, 3381.7, 3378.0, 3358.8, 3392.1, 3383.3, 3417.0, 3410.6, 3443.0, 3451.8, 3476.8, 3516.1, 3545.6, 3599.5, 3619.6, 3602.2, 3639.6, 3677.4, 3663.5, 3680.4, 3673.1, 3680.7, 3719.4, 3727.5, 3694.4, 3678.1, 3719.4, 3781.1, 3796.7, 3768.4, 3780.3, 3789.8, 3862.7, 3887.3, 3892.6, 3880.8, 3912.0, 3984.1, 4007.6, 4060.1, 3991.3, 4035.4, 4129.9, 4159.3, 4224.7, 4344.0, 4267.1, 4373.9, 4138.5, 4116.0, 4142.8, 4125.8, 3997.0, 3967.6, 3941.0, 4038.2, 4013.3, 4013.4, 3941.2, 3990.0, 3984.8, 4007.7, 4123.0, 4133.1, 4200.8, 4174.5, 4082.2, 4045.4, 4066.9, 4078.1, 4076.6, 4099.0, 4169.6, 4164.7, 4196.0, 4189.6, 4255.1, 4264.5, 4238.2, 4234.1, 4237.9, 4227.3, 4219.7, 4236.2, 4258.0, 4309.2, 4329.6, 4334.3, 4332.2, 4371.0, 4363.7, 4368.7, 4480.2, 4514.7, 4505.1, 4561.9, 4349.9, 4352.6, 4332.1, 4341.9, 4459.5, 4505.8, 4466.5, 4487.5, 4518.1, 4608.4, 4594.3, 4633.1, 4620.4, 4600.9, 4676.3, 4768.8, 4835.6, 4938.4, 5019.9, 5042.9, 5217.3, 5446.5, 5410.4, 4909.0, 4681.2, 4968.5, 4986.4, 4796.1, 4987.8, 5082.3, 5047.2, 5107.6, 4941.4, 5062.8, 5013.1, 4896.2, 4996.0, 5014.2, 5130.0, 5247.4, 5160.4, 5181.7, 5201.3, 5296.2, 5335.7, 5098.5, 5151.6, 5092.6, 5180.7, 5147.9, 5196.7, 5183.8, 5083.6, 5023.0, 5011.4, 5011.3, 4822.5, 4650.4, 4525.5, 4442.1, 4505.0, 4535.4, 4407.4, 4521.2, 4540.5, 4699.0, 4783.9, 4701.7, 4675.6, 4731.1, 4744.9, 4790.2, 4770.7, 4766.2, 4864.1, 4813.4, 4810.5, 4848.8, 4840.6, 4738.4, 4758.2, 4708.6, 4725.1, 4697.7, 4609.4, 4557.2, 4635.6, 4625.5, 4532.5, 4567.5, 4702.2, 4694.9, 4723.3, 4745.5, 4722.3, 4696.3, 4655.3, 4543.3, 4570.6, 4485.3, 4546.2, 4543.8, 4543.3, 4604.8, 4541.3, 4488.2, 4527.0, 4569.4, 4514.8, 4519.2, 4462.7, 4502.4, 4353.8, 4353.7, 4284.7, 4094.1, 4233.5, 4239.9, 4330.6, 4352.8, 4275.9, 4227.9, 4172.2, 4209.7, 4128.5, 4016.3, 4041.5, 4102.4, 4030.4, 4021.2, 4044.1, 4135.5, 4186.8, 4176.1, 4116.6, 4085.6, 4132.4, 4128.4, 4008.3, 4057.9, 4066.7, 3979.8, 4022.7, 4011.8, 4081.6, 4134.7, 4052.1, 4055.2, 4138.0, 4088.2, 4125.9, 4162.3, 4097.6, 4110.9, 4134.1, 4307.7, 4298.4, 4400.8, 4448.5, 4427.7, 4468.6, 4406.7, 4431.9, 4473.1, 4389.4, 4580.7, 4574.8, 4661.6, 4709.7, 4715.7, 4647.8, 4654.5, 4503.8, 4497.3, 4375.7, 4434.0, 4519.9, 4477.1, 4451.9, 4400.0, 4446.9, 4358.3, 4390.0]}, "BTC": {"dates": ["2025-01-01", "2025-01-02", "2025-01-03", "2025-01-04", "2025-01-05", "2025-01-06", "2025-01-07", "2025-01-08", "2025-01-09", "2025-01-10", "2025-01-11", "2025-01-12", "2025-01-13", "2025-01-14", "2025-01-15", "2025-01-16", "2025-01-17", "2025-01-18", "2025-01-19", "2025-01-20", "2025-01-21", "2025-01-22", "2025-01-23", "2025-01-24", "2025-01-25", "2025-01-26", "2025-01-27", "2025-01-28", "2025-01-29", "2025-01-30", "2025-01-31", "2025-02-01", "2025-02-02", "2025-02-03", "2025-02-04", "2025-02-05", "2025-02-06", "2025-02-07", "2025-02-08", "2025-02-09", "2025-02-10", "2025-02-11", "2025-02-12", "2025-02-13", "2025-02-14", "2025-02-15", "2025-02-16", "2025-02-17", "2025-02-18", "2025-02-19", "2025-02-20", "2025-02-21", "2025-02-22", "2025-02-23", "2025-02-24", "2025-02-25", "2025-02-26", "2025-02-27", "2025-02-28", "2025-03-01", "2025-03-02", "2025-03-03", "2025-03-04", "2025-03-05", "2025-03-06", "2025-03-07", "2025-03-08", "2025-03-09", "2025-03-10", "2025-03-11", "2025-03-12", "2025-03-13", "2025-03-14", "2025-03-15", "2025-03-16", "2025-03-17", "2025-03-18", "2025-03-19", "2025-03-20", "2025-03-21", "2025-03-22", "2025-03-23", "2025-03-24", "2025-03-25", "2025-03-26", "2025-03-27", "2025-03-28", "2025-03-29", "2025-03-30", "2025-03-31", "2025-04-01", "2025-04-02", "2025-04-03", "2025-04-04", "2025-04-05", "2025-04-06", "2025-04-07", "2025-04-08", "2025-04-09", "2025-04-10", "2025-04-11", "2025-04-12", "2025-04-13", "2025-04-14", "2025-04-15", "2025-04-16", "2025-04-17", "2025-04-18", "2025-04-19", "2025-04-20", "2025-04-21", "2025-04-22", "2025-04-23", "2025-04-24", "2025-04-25", "2025-04-26", "2025-04-27", "2025-04-28", "2025-04-29", "2025-04-30", "2025-05-01", "2025-05-02", "2025-05-03", "2025-05-04", "2025-05-05", "2025-05-06", "2025-05-07", "2025-05-08", "2025-05-09", "2025-05-10", "2025-05-11", "2025-05-12", "2025-05-13", "2025-05-14", "2025-05-15", "2025-05-16", "2025-05-17", "2025-05-18", "2025-05-19", "2025-05-20", "2025-05-21", "2025-05-22", "2025-05-23", "2025-05-24", "2025-05-25", "2025-05-26", "2025-05-27", "2025-05-28", "2025-05-29", "2025-05-30", "2025-05-31", "2025-06-01", "2025-06-02", "2025-06-03", "2025-06-04", "2025-06-05", "2025-06-06", "2025-06-07", "2025-06-08", "2025-06-09", "2025-06-10", "2025-06-11", "2025-06-12", "2025-06-13", "2025-06-14", "2025-06-15", "2025-06-16", "2025-06-17", "2025-06-18", "2025-06-19", "2025-06-20", "2025-06-21", "2025-06-22", "2025-06-23", "2025-06-24", "2025-06-25", "2025-06-26", "2025-06-27", "2025-06-28", "2025-06-29", "2025-06-30", "2025-07-01", "2025-07-02", "2025-07-03", "2025-07-04", "2025-07-05", "2025-07-06", "2025-07-07", "2025-07-08", "2025-07-09", "2025-07-10", "2025-07-11", "2025-07-12", "2025-07-13", "2025-07-14", "2025-07-15", "2025-07-16", "2025-07-17", "2025-07-18", "2025-07-19", "2025-07-20", "2025-07-21", "2025-07-22", "2025-07-23", "2025-07-24", "2025-07-25", "2025-07-26", "2025-07-27", "2025-07-28", "2025-07-29", "2025-07-30", "2025-07-31", "2025-08-01", "2025-08-02", "2025-08-03", "2025-08-04", "2025-08-05", "2025-08-06", "2025-08-07", "2025-08-08", "2025-08-09", "2025-08-10", "2025-08-11", "2025-08-12", "2025-08-13", "2025-08-14", "2025-08-15", "2025-08-16", "2025-08-17", "2025-08-18", "2025-08-19", "2025-08-20", "2025-08-21", "2025-08-22", "2025-08-23", "2025-08-24", "2025-08-25", "2025-08-26", "2025-08-27", "2025-08-28", "2025-08-29", "2025-08-30", "2025-08-31", "2025-09-01", "2025-09-02", "2025-09-03", "2025-09-04", "2025-09-05", "2025-09-06", "2025-09-07", "2025-09-08", "2025-09-09", "2025-09-10", "2025-09-11", "2025-09-12", "2025-09-13", "2025-09-14", "2025-09-15", "2025-09-16", "2025-09-17", "2025-09-18", "2025-09-19", "2025-09-20", "2025-09-21", "2025-09-22", "2025-09-23", "2025-09-24", "2025-09-25", "2025-09-26", "2025-09-27", "2025-09-28", "2025-09-29", "2025-09-30", "2025-10-01", "2025-10-02", "2025-10-03", "2025-10-04", "2025-10-05", "2025-10-06", "2025-10-07", "2025-10-08", "2025-10-09", "2025-10-10", "2025-10-11", "2025-10-12", "2025-10-13", "2025-10-14", "2025-10-15", "2025-10-16", "2025-10-17", "2025-10-18", "2025-10-19", "2025-10-20", "2025-10-21", "2025-10-22", "2025-10-23", "2025-10-24", "2025-10-25", "2025-10-26", "2025-10-27", "2025-10-28", "2025-10-29", "2025-10-30", "2025-10-31", "2025-11-01", "2025-11-02", "2025-11-03", "2025-11-04", "2025-11-05", "2025-11-06", "2025-11-07", "2025-11-08", "2025-11-09", "2025-11-10", "2025-11-11", "2025-11-12", "2025-11-13", "2025-11-14", "2025-11-15", "2025-11-16", "2025-11-17", "2025-11-18", "2025-11-19", "2025-11-20", "2025-11-21", "2025-11-22", "2025-11-23", "2025-11-24", "2025-11-25", "2025-11-26", "2025-11-27", "2025-11-28", "2025-11-29", "2025-11-30", "2025-12-01", "2025-12-02", "2025-12-03", "2025-12-04", "2025-12-05", "2025-12-06", "2025-12-07", "2025-12-08", "2025-12-09", "2025-12-10", "2025-12-11", "2025-12-12", "2025-12-13", "2025-12-14", "2025-12-15", "2025-12-16", "2025-12-17", "2025-12-18", "2025-12-19", "2025-12-20", "2025-12-21", "2025-12-22", "2025-12-23", "2025-12-24", "2025-12-25", "2025-12-26", "2025-12-27", "2025-12-28", "2025-12-29", "2025-12-30", "2025-12-31", "2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04", "2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09", "2026-01-10", "2026-01-11", "2026-01-12", "2026-01-13", "2026-01-14", "2026-01-15", "2026-01-16", "2026-01-17", "2026-01-18", "2026-01-19", "2026-01-20", "2026-01-21", "2026-01-22", "2026-01-23", "2026-01-24", "2026-01-25", "2026-01-26", "2026-01-27", "2026-01-28", "2026-01-29", "2026-01-30", "2026-01-31", "2026-02-01", "2026-02-02", "2026-02-03", "2026-02-04", "2026-02-05", "2026-02-06", "2026-02-07", "2026-02-08", "2026-02-09", "2026-02-10", "2026-02-11", "2026-02-12", "2026-02-13", "2026-02-14", "2026-02-15", "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20", "2026-02-21", "2026-02-22", "2026-02-23", "2026-02-24", "2026-02-25", "2026-02-26", "2026-02-27", "2026-02-28", "2026-03-01", "2026-03-02", "2026-03-03", "2026-03-04", "2026-03-05", "2026-03-06", "2026-03-07", "2026-03-08", "2026-03-09", "2026-03-10", "2026-03-11", "2026-03-12", "2026-03-13", "2026-03-14", "2026-03-15", "2026-03-16", "2026-03-17", "2026-03-18", "2026-03-19", "2026-03-20", "2026-03-21", "2026-03-22", "2026-03-23", "2026-03-24", "2026-03-25", "2026-03-26", "2026-03-27", "2026-03-28", "2026-03-29", "2026-03-30", "2026-03-31", "2026-04-01", "2026-04-02", "2026-04-03", "2026-04-04", "2026-04-05", "2026-04-06", "2026-04-07", "2026-04-08", "2026-04-09", "2026-04-10", "2026-04-11", "2026-04-12", "2026-04-13", "2026-04-14", "2026-04-15", "2026-04-16", "2026-04-17", "2026-04-18", "2026-04-19", "2026-04-20", "2026-04-21", "2026-04-22", "2026-04-23", "2026-04-24", "2026-04-25", "2026-04-26", "2026-04-27", "2026-04-28", "2026-04-29", "2026-04-30", "2026-05-01", "2026-05-02", "2026-05-03", "2026-05-04", "2026-05-05", "2026-05-06", "2026-05-07", "2026-05-08", "2026-05-09", "2026-05-10", "2026-05-11", "2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15", "2026-05-16", "2026-05-17", "2026-05-18", "2026-05-19", "2026-05-20", "2026-05-21", "2026-05-22", "2026-05-23", "2026-05-24", "2026-05-25", "2026-05-26", "2026-05-27", "2026-05-28", "2026-05-29", "2026-05-30", "2026-05-31", "2026-06-01", "2026-06-02", "2026-06-03", "2026-06-04", "2026-06-05", "2026-06-06", "2026-06-07", "2026-06-08", "2026-06-09", "2026-06-10", "2026-06-11", "2026-06-12", "2026-06-13", "2026-06-14", "2026-06-15", "2026-06-16", "2026-06-17", "2026-06-18", "2026-06-19", "2026-06-20", "2026-06-21", "2026-06-22", "2026-06-23", "2026-06-24", "2026-06-25", "2026-06-26", "2026-06-27", "2026-06-28", "2026-06-29", "2026-06-30", "2026-07-01", "2026-07-02", "2026-07-03", "2026-07-04", "2026-07-05", "2026-07-06", "2026-07-07", "2026-07-08", "2026-07-09", "2026-07-10", "2026-07-11", "2026-07-12", "2026-07-13", "2026-07-14", "2026-07-15", "2026-07-16", "2026-07-17", "2026-07-18", "2026-07-19", "2026-07-20", "2026-07-21", "2026-07-22", "2026-07-23", "2026-07-24", "2026-07-25", "2026-07-26", "2026-07-27", "2026-07-28", "2026-07-29", "2026-07-30", "2026-07-31", "2026-08-01", "2026-08-02", "2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-08", "2026-08-09", "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14", "2026-08-15", "2026-08-16", "2026-08-17", "2026-08-18", "2026-08-19", "2026-08-20", "2026-08-21", "2026-08-22", "2026-08-23", "2026-08-24", "2026-08-25", "2026-08-26", "2026-08-27", "2026-08-28", "2026-08-29", "2026-08-30", "2026-08-31", "2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-05", "2026-09-06", "2026-09-07", "2026-09-08", "2026-09-09", "2026-09-10", "2026-09-11"], "navs": [94591.79, 96984.79, 98174.18, 98220.5, 98363.61, 102235.6, 96954.61, 95060.61, 92552.49, 94726.11, 94599.99, 94545.06, 94536.1, 96560.86, 100497.35, 99987.3, 104077.48, 104556.23, 101331.57, 102260.01, 106143.82, 103706.66, 103910.34, 104870.5, 104746.85, 102620.0, 102082.83, 101335.52, 103733.24, 104722.94, 102429.56, 100635.65, 97700.59, 101328.52, 97763.13, 96612.43, 96554.35, 96506.8, 96444.74, 96462.75, 97430.82, 95778.2, 97869.99, 96608.14, 97500.48, 97569.66, 96118.12, 95780.0, 95671.74, 96644.37, 98305.0, 96181.98, 96551.01, 96258.0, 91552.88, 88680.4, 84250.09, 84708.58, 84349.94, 86064.53, 94270.0, 86220.61, 87281.98, 90606.01, 89931.89, 86801.75, 86222.45, 80734.37, 78595.86, 82932.99, 83680.12, 81115.78, 83983.2, 84338.44, 82574.53, 84010.03, 82715.03, 86845.94, 84223.39, 84088.79, 83840.59, 86082.5, 87498.16, 87392.87, 86909.17, 87232.01, 84424.38, 82648.54, 82389.99, 82550.01, 85158.34, 82516.29, 83213.09, 83889.87, 83537.99, 78430.0, 79163.24, 76322.42, 82615.22, 79607.3, 83423.84, 85276.9, 83760.0, 84591.58, 83643.99, 84030.38, 84947.91, 84474.69, 85077.01, 85179.24, 87516.23, 93442.99, 93691.08, 93980.47, 94638.68, 94628.0, 93749.3, 95011.18, 94256.82, 94172.0, 96489.91, 96887.14, 95856.42, 94277.62, 94733.68, 96834.02, 97030.5, 103261.6, 102971.99, 104809.53, 104118.0, 102791.32, 104103.72, 103507.82, 103763.71, 103463.9, 103126.65, 106454.26, 105573.74, 106849.99, 109643.99, 111696.21, 107318.3, 107761.91, 109004.19, 109434.79, 108938.17, 107781.78, 105589.75, 103985.48, 104591.88, 105642.93, 105857.99, 105376.89, 104696.86, 101508.68, 104288.44, 105552.15, 105734.0, 110263.02, 110274.39, 108645.12, 105671.73, 106066.59, 105414.64, 105594.01, 106794.53, 104551.17, 104886.78, 104658.59, 103297.99, 102120.01, 100963.87, 105333.93, 106083.0, 107340.58, 106947.06, 107047.59, 107296.79, 108356.93, 107146.5, 105681.14, 108849.6, 109584.78, 107984.24, 108198.12, 109203.84, 108262.94, 108922.98, 111233.99, 116010.0, 117527.66, 117420.0, 119086.64, 119841.18, 117758.09, 118630.43, 119177.56, 117924.84, 117840.0, 117265.12, 117380.36, 119954.42, 118755.99, 118340.99, 117614.31, 117919.99, 119415.55, 118062.32, 117950.76, 117840.3, 115764.08, 113297.93, 112546.35, 114208.8, 115055.03, 114129.75, 114992.27, 117472.01, 116674.74, 116462.25, 119294.01, 118686.0, 120134.08, 123306.43, 118295.09, 117342.05, 117380.66, 117405.01, 116227.05, 112872.94, 114271.24, 112500.0, 116935.99, 115438.05, 113493.59, 110111.98, 111763.22, 111262.01, 112566.9, 108377.4, 108816.33, 108246.35, 109237.42, 111240.01, 111705.71, 110730.87, 110659.99, 110187.97, 111137.34, 112065.23, 111546.39, 113960.0, 115482.69, 116029.42, 115918.29, 115268.01, 115349.71, 116788.96, 116447.59, 117073.53, 115632.38, 115685.63, 115232.29, 112650.99, 111998.8, 113307.0, 108994.49, 109643.46, 109635.85, 112163.95, 114311.96, 114048.93, 118594.99, 120529.35, 122232.0, 122391.0, 123482.31, 124658.54, 121332.95, 123306.0, 121662.4, 112774.5, 110644.4, 114958.8, 115166.0, 113028.14, 110763.28, 108194.28, 106431.68, 107185.01, 108642.78, 110532.09, 108297.67, 107567.44, 110078.18, 111004.89, 111646.27, 114559.4, 114107.65, 112898.45, 110021.29, 108322.88, 109608.01, 110098.1, 110540.68, 106583.04, 101497.22, 103885.16, 101346.04, 103339.08, 102312.94, 104722.96, 106011.13, 103058.99, 101654.37, 99692.02, 94594.0, 95596.24, 94261.44, 92215.14, 92960.83, 91554.96, 86637.23, 85129.43, 84739.74, 86830.0, 88300.01, 87369.96, 90484.02, 91333.95, 90890.7, 90802.44, 90360.0, 86286.01, 91277.88, 93429.95, 92078.06, 89330.04, 89236.79, 90395.31, 90634.34, 92678.8, 92015.37, 92513.38, 90268.42, 90240.01, 88172.17, 86432.08, 87863.42, 86243.22, 85516.41, 88136.94, 88360.9, 88658.86, 88620.79, 87486.0, 87669.45, 87225.27, 87369.56, 87877.01, 87952.71, 87237.13, 88485.49, 87648.22, 88839.04, 89995.13, 90628.01, 91529.73, 93859.71, 93747.97, 91364.16, 91099.99, 90641.28, 90504.7, 91013.65, 91296.2, 95414.0, 96951.78, 95604.8, 95550.94, 95147.77, 93673.14, 92631.0, 88427.66, 89454.73, 89559.67, 89600.26, 89225.34, 86670.36, 88347.08, 89250.0, 89299.99, 84650.16, 84260.49, 78741.09, 76968.21, 78738.61, 75770.21, 73165.83, 62909.86, 70580.26, 69289.38, 70330.38, 70138.0, 68841.29, 67082.52, 66272.17, 68853.96, 69822.95, 68832.58, 68892.43, 67503.52, 66461.0, 67003.73, 68020.01, 67975.93, 67643.4, 64656.02, 64058.15, 67988.04, 67485.18, 65872.1, 66973.26, 65776.47, 68830.06, 68338.0, 72666.77, 70890.72, 68114.02, 67262.91, 65971.2, 68432.16, 69948.63, 70191.86, 70541.34, 70930.0, 71211.95, 72815.24, 74884.67, 73909.36, 71246.54, 69930.0, 70510.73, 68918.12, 67859.0, 70906.45, 70556.74, 71336.53, 68820.31, 66407.28, 66377.03, 66010.93, 66797.37, 68284.48, 68113.92, 66901.99, 66964.3, 67300.42, 69034.18, 68853.66, 71924.22, 71069.93, 71787.97, 72962.7, 73043.16, 70740.98, 74417.99, 74131.55, 74809.99, 75154.29, 77072.0, 75691.76, 73801.79, 75840.97, 76336.15, 78178.23, 78257.48, 77437.13, 77625.0, 78657.55, 77371.32, 76342.77, 75780.0, 76346.57, 78231.13, 78686.85, 78568.57, 79861.01, 80905.52, 81447.01, 80006.0, 80193.17, 80678.4, 82210.07, 81745.65, 80504.47, 79313.61, 81089.99, 79113.21, 78148.05, 77457.67, 77001.87, 76834.36, 77552.23, 77615.52, 75539.5, 76752.01, 77064.96, 77322.01, 75930.01, 74449.3, 73617.51, 73460.78, 73884.38, 73674.39, 71408.9, 66760.83, 64142.75, 63885.99, 61056.47, 60884.62, 63332.01, 63085.99, 61730.0, 61510.99, 63625.99, 63580.01, 64458.01, 65746.45, 66328.74, 65675.01, 64509.4, 62958.01, 63543.91, 64298.01, 63311.99, 64020.01, 62734.57, 61077.99, 59794.0, 60097.27, 60029.0, 59577.01, 60260.21, 58624.71, 60024.0, 61560.0, 62583.26, 63144.01, 63650.0, 64042.02, 63363.99, 62290.0, 63230.0, 64161.72, 63819.0, 63780.0, 62334.52, 65043.98, 64756.28, 63830.2, 63931.67, 64834.22, 64722.54, 65255.51, 66556.16, 66114.49, 65098.97, 64139.99, 64375.0, 65399.99, 63755.86, 63915.0, 63984.28, 64780.02, 62887.88, 62823.64, 63570.0, 63520.0, 64106.56, 64665.23, 64323.61, 64923.19, 64962.6, 64901.59, 63970.01, 63600.0, 63479.99, 63490.86, 63043.56, 63086.01, 62900.0, 64532.1, 64725.42, 69334.79, 73025.15, 78338.03, 77074.93, 77734.0, 78992.75, 78539.14, 79023.75, 80249.58, 77845.87, 78230.0, 77682.0, 78581.29, 77439.0, 77340.01, 81270.37, 79660.77, 79831.75, 80341.83, 79112.01, 78455.8, 78306.43, 76568.72, 77225.7]}, "NDX": {"dates": ["2025-01-02", "2025-01-03", "2025-01-06", "2025-01-07", "2025-01-08", "2025-01-10", "2025-01-13", "2025-01-14", "2025-01-15", "2025-01-16", "2025-01-17", "2025-01-21", "2025-01-22", "2025-01-23", "2025-01-24", "2025-01-27", "2025-01-28", "2025-01-29", "2025-01-30", "2025-01-31", "2025-02-03", "2025-02-04", "2025-02-05", "2025-02-06", "2025-02-07", "2025-02-10", "2025-02-11", "2025-02-12", "2025-02-13", "2025-02-14", "2025-02-18", "2025-02-19", "2025-02-20", "2025-02-21", "2025-02-24", "2025-02-25", "2025-02-26", "2025-02-27", "2025-02-28", "2025-03-03", "2025-03-04", "2025-03-05", "2025-03-06", "2025-03-07", "2025-03-10", "2025-03-11", "2025-03-12", "2025-03-13", "2025-03-14", "2025-03-17", "2025-03-18", "2025-03-19", "2025-03-20", "2025-03-21", "2025-03-24", "2025-03-25", "2025-03-26", "2025-03-27", "2025-03-28", "2025-03-31", "2025-04-01", "2025-04-02", "2025-04-03", "2025-04-04", "2025-04-07", "2025-04-08", "2025-04-09", "2025-04-10", "2025-04-11", "2025-04-14", "2025-04-15", "2025-04-16", "2025-04-17", "2025-04-21", "2025-04-22", "2025-04-23", "2025-04-24", "2025-04-25", "2025-04-28", "2025-04-29", "2025-04-30", "2025-05-01", "2025-05-02", "2025-05-05", "2025-05-06", "2025-05-07", "2025-05-08", "2025-05-09", "2025-05-12", "2025-05-13", "2025-05-14", "2025-05-15", "2025-05-16", "2025-05-19", "2025-05-20", "2025-05-21", "2025-05-22", "2025-05-23", "2025-05-27", "2025-05-28", "2025-05-29", "2025-05-30", "2025-06-02", "2025-06-03", "2025-06-04", "2025-06-05", "2025-06-06", "2025-06-09", "2025-06-10", "2025-06-11", "2025-06-12", "2025-06-13", "2025-06-16", "2025-06-17", "2025-06-18", "2025-06-20", "2025-06-23", "2025-06-24", "2025-06-25", "2025-06-26", "2025-06-27", "2025-06-30", "2025-07-01", "2025-07-02", "2025-07-03", "2025-07-07", "2025-07-08", "2025-07-09", "2025-07-10", "2025-07-11", "2025-07-14", "2025-07-15", "2025-07-16", "2025-07-17", "2025-07-18", "2025-07-21", "2025-07-22", "2025-07-23", "2025-07-24", "2025-07-25", "2025-07-28", "2025-07-29", "2025-07-30", "2025-07-31", "2025-08-01", "2025-08-04", "2025-08-05", "2025-08-06", "2025-08-07", "2025-08-08", "2025-08-11", "2025-08-12", "2025-08-13", "2025-08-14", "2025-08-15", "2025-08-18", "2025-08-19", "2025-08-20", "2025-08-21", "2025-08-22", "2025-08-25", "2025-08-26", "2025-08-27", "2025-08-28", "2025-08-29", "2025-09-02", "2025-09-03", "2025-09-04", "2025-09-05", "2025-09-08", "2025-09-09", "2025-09-10", "2025-09-11", "2025-09-12", "2025-09-15", "2025-09-16", "2025-09-17", "2025-09-18", "2025-09-19", "2025-09-22", "2025-09-23", "2025-09-24", "2025-09-25", "2025-09-26", "2025-09-29", "2025-09-30", "2025-10-01", "2025-10-02", "2025-10-03", "2025-10-06", "2025-10-07", "2025-10-08", "2025-10-09", "2025-10-10", "2025-10-13", "2025-10-14", "2025-10-15", "2025-10-16", "2025-10-17", "2025-10-20", "2025-10-21", "2025-10-22", "2025-10-23", "2025-10-24", "2025-10-27", "2025-10-28", "2025-10-29", "2025-10-30", "2025-10-31", "2025-11-03", "2025-11-04", "2025-11-05", "2025-11-06", "2025-11-07", "2025-11-10", "2025-11-11", "2025-11-12", "2025-11-13", "2025-11-14", "2025-11-17", "2025-11-18", "2025-11-19", "2025-11-20", "2025-11-21", "2025-11-24", "2025-11-25", "2025-11-26", "2025-11-28", "2025-12-01", "2025-12-02", "2025-12-03", "2025-12-04", "2025-12-05", "2025-12-08", "2025-12-09", "2025-12-10", "2025-12-11", "2025-12-12", "2025-12-15", "2025-12-16", "2025-12-17", "2025-12-18", "2025-12-19", "2025-12-22", "2025-12-23", "2025-12-24", "2025-12-26", "2025-12-29", "2025-12-30", "2025-12-31", "2026-01-02", "2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09", "2026-01-12", "2026-01-13", "2026-01-14", "2026-01-15", "2026-01-16", "2026-01-20", "2026-01-21", "2026-01-22", "2026-01-23", "2026-01-26", "2026-01-27", "2026-01-28", "2026-01-29", "2026-01-30", "2026-02-02", "2026-02-03", "2026-02-04", "2026-02-05", "2026-02-06", "2026-02-09", "2026-02-10", "2026-02-11", "2026-02-12", "2026-02-13", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20", "2026-02-23", "2026-02-24", "2026-02-25", "2026-02-26", "2026-02-27", "2026-03-02", "2026-03-03", "2026-03-04", "2026-03-05", "2026-03-06", "2026-03-09", "2026-03-10", "2026-03-11", "2026-03-12", "2026-03-13", "2026-03-16", "2026-03-17", "2026-03-18", "2026-03-19", "2026-03-20", "2026-03-23", "2026-03-24", "2026-03-25", "2026-03-26", "2026-03-27", "2026-03-30", "2026-03-31", "2026-04-01", "2026-04-02", "2026-04-06", "2026-04-07", "2026-04-08", "2026-04-09", "2026-04-10", "2026-04-13", "2026-04-14", "2026-04-15", "2026-04-16", "2026-04-17", "2026-04-20", "2026-04-21", "2026-04-22", "2026-04-23", "2026-04-24", "2026-04-27", "2026-04-28", "2026-04-29", "2026-04-30", "2026-05-01", "2026-05-04", "2026-05-05", "2026-05-06", "2026-05-07", "2026-05-08", "2026-05-11", "2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15", "2026-05-18", "2026-05-19", "2026-05-20", "2026-05-21", "2026-05-22", "2026-05-26", "2026-05-27", "2026-05-28", "2026-05-29", "2026-06-01", "2026-06-02", "2026-06-03", "2026-06-04", "2026-06-05", "2026-06-08", "2026-06-09", "2026-06-10", "2026-06-11", "2026-06-12", "2026-06-15", "2026-06-16", "2026-06-17", "2026-06-18", "2026-06-22", "2026-06-23", "2026-06-24", "2026-06-25", "2026-06-26", "2026-06-29", "2026-06-30", "2026-07-01", "2026-07-02", "2026-07-06", "2026-07-07", "2026-07-08", "2026-07-09", "2026-07-10", "2026-07-13", "2026-07-14", "2026-07-15", "2026-07-16", "2026-07-17", "2026-07-20", "2026-07-21", "2026-07-22", "2026-07-23", "2026-07-24", "2026-07-27", "2026-07-28", "2026-07-29", "2026-07-30", "2026-07-31", "2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14", "2026-08-17", "2026-08-18", "2026-08-19", "2026-08-20", "2026-08-21", "2026-08-24", "2026-08-25", "2026-08-26", "2026-08-27", "2026-08-28", "2026-08-31", "2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-08", "2026-09-09", "2026-09-10", "2026-09-11"], "navs": [20975.623, 21326.1562, 21559.5, 21173.043, 21180.9648, 20847.582, 20784.7246, 20757.4102, 21237.8516, 21091.252, 21441.1543, 21566.5059, 21852.9961, 21900.9297, 21774.0117, 21127.2793, 21463.0371, 21411.457, 21508.123, 21478.0469, 21297.582, 21566.918, 21658.1641, 21774.0645, 21491.3086, 21756.7344, 21693.5215, 21719.2617, 22030.7148, 22114.6895, 22164.6055, 22175.5977, 22068.0566, 21614.0801, 21352.0801, 21087.2461, 21132.9199, 20550.9531, 20884.4082, 20425.584, 20352.5273, 20628.4648, 20052.6348, 20201.373, 19430.9531, 19376.959, 19596.0195, 19225.4824, 19704.6348, 19812.2363, 19483.3594, 19736.6621, 19677.6094, 19753.9648, 20180.4453, 20287.8262, 19916.9922, 19798.6211, 19281.4004, 19278.4473, 19436.4219, 19581.7773, 18521.4746, 17397.6953, 17430.6816, 17090.4023, 19145.0625, 18343.5723, 18690.0547, 18796.0215, 18830.2266, 18257.6426, 18258.0918, 17808.3008, 18276.4062, 18693.2578, 19214.4004, 19432.5586, 19427.2891, 19544.9453, 19571.0176, 19786.709, 20102.6133, 19967.9414, 19791.3457, 19867.9727, 20063.5645, 20061.4492, 20868.1484, 21197.6992, 21319.207, 21335.8223, 21427.9355, 21447.0527, 21367.373, 21080.3594, 21112.4707, 20915.6543, 21414.9902, 21318.168, 21363.9512, 21340.9922, 21491.748, 21662.582, 21721.918, 21547.4316, 21761.7891, 21797.8672, 21941.9199, 21860.8008, 21913.3203, 21631.0391, 21937.5684, 21719.0781, 21719.6895, 21626.3867, 21856.3301, 22190.5215, 22237.7422, 22447.291, 22534.2031, 22679.0098, 22478.1348, 22641.8867, 22866.9707, 22685.5684, 22702.25, 22864.9062, 22829.2617, 22780.5977, 22855.6328, 22884.5879, 22907.9668, 23078.0352, 23065.4746, 23180.0625, 23063.5781, 23162.4062, 23219.8652, 23272.2461, 23356.2695, 23308.3027, 23345.4141, 23218.123, 22763.3125, 23188.6074, 23018.5605, 23315.043, 23389.5293, 23611.2656, 23526.6348, 23839.1973, 23849.0391, 23832.4414, 23712.0703, 23713.7578, 23384.7695, 23249.5703, 23142.5801, 23498.1152, 23425.6055, 23525.293, 23565.8457, 23703.4512, 23415.4199, 23231.1074, 23414.8398, 23633.0117, 23652.4434, 23762.3008, 23839.7969, 23849.2695, 23992.5625, 24092.1934, 24293.7812, 24274.25, 24223.6875, 24454.8945, 24626.2461, 24761.0742, 24580.168, 24503.5664, 24397.3105, 24503.8477, 24611.3516, 24679.9883, 24800.8633, 24892.7637, 24785.5215, 24978.5586, 24840.2266, 25136.623, 25098.1758, 24221.7461, 24750.252, 24579.3164, 24745.3574, 24657.2422, 24817.9531, 25141.0176, 25127.1309, 24879.0059, 25097.416, 25358.1621, 25821.5449, 26012.1562, 26119.8457, 25734.8125, 25858.127, 25972.9434, 25435.7031, 25620.0312, 25130.041, 25059.8086, 25611.7363, 25533.4863, 25517.3281, 24993.4629, 25008.2422, 24799.918, 24503.0957, 24640.5156, 24054.3789, 24239.5742, 24873.8535, 25018.3594, 25236.9395, 25434.8887, 25342.8496, 25555.8574, 25606.5449, 25581.6992, 25692.0508, 25627.9512, 25668.6875, 25776.4375, 25686.6855, 25196.7344, 25067.2656, 25132.9395, 24647.6055, 25019.3672, 25346.1777, 25461.7012, 25587.8301, 25656.1465, 25644.3906, 25525.5605, 25462.5605, 25249.8457, 25206.168, 25401.3203, 25639.7051, 25653.8965, 25507.1016, 25766.2578, 25787.6641, 25741.9531, 25465.9434, 25547.0742, 25529.2637, 24987.5664, 25326.582, 25518.3516, 25605.4668, 25713.209, 25939.7441, 26022.791, 25884.2949, 25552.3867, 25738.6133, 25338.6211, 24891.2383, 24548.6895, 25075.7715, 25268.1406, 25127.6387, 25201.2598, 24687.6113, 24732.7324, 24701.5957, 24898.8672, 24797.3398, 25012.6191, 24708.9414, 24977.0449, 25329.0352, 25034.3711, 24960.0352, 24992.6016, 24720.084, 25093.6777, 25020.4141, 24643.0156, 24967.248, 24956.4707, 24965.0059, 24533.582, 24380.7344, 24655.3418, 24780.418, 24425.0938, 24355.2754, 23898.1543, 24188.5898, 24002.4473, 24162.9766, 23586.9941, 23132.7715, 22953.377, 23740.1895, 24019.9883, 24045.5332, 24192.166, 24202.3711, 24903.166, 25082.0859, 25116.3379, 25383.7168, 25841.9961, 26204.5801, 26333.0, 26672.4336, 26590.3438, 26479.4707, 26937.2754, 26782.625, 27303.666, 27305.6777, 27029.0117, 27186.9844, 27452.1191, 27710.3574, 27651.8184, 28015.0605, 28599.1719, 28563.9473, 29234.9941, 29320.6562, 29064.7988, 29366.9434, 29580.2988, 29125.1992, 28994.3691, 28818.8438, 29297.6973, 29357.2715, 29481.6426, 30001.3184, 29973.5723, 30223.8887, 30333.1797, 30513.8613, 30660.6016, 30571.2363, 30407.8105, 28957.5996, 29414.2578, 29084.5, 28508.0273, 29446.1758, 29635.9473, 30543.918, 29968.1289, 29670.9473, 30406.1934, 30347.082, 29347.2734, 29220.0566, 29440.3223, 29118.2383, 29774.752, 30276.3477, 29809.1328, 29329.2129, 29697.873, 29173.0176, 29252.5625, 29727.0977, 29825.1094, 29264.1035, 29586.2871, 29502.5957, 29025.7695, 28592.6582, 28604.2344, 29155.1797, 28998.0996, 28454.8086, 28128.3418, 28039.2109, 27763.1348, 27192.3066, 28106.3457, 28274.1953, 28776.8027, 29733.1602, 29487.791, 29373.334, 29722.3027, 29621.8047, 29525.4785, 29742.6035, 30084.502, 30046.1406, 29995.3809, 29490.957, 29426.0234, 29213.1641, 29308.8594, 29023.1816, 29209.2285, 29224.5215, 29641.5605, 29433.4277, 29456.9727, 29077.2207, 29143.3301, 29482.3203, 29544.1543, 29507.7012, 29421.5527, 29103.5137, 29368.4395]}};
+        var fundNames = {"002891": "华夏移动互联混合人民币(002891)基金", "161125": "易方达标普500指数人民币A(161125)基金", "022365": "永赢科技智选混合发起C(022365)基金", "025500": "东方阿尔法科技智选混合发起C(025500)基金", "XAU": "伦敦金 (XAU)", "BTC": "比特币 (BTC/USDT)", "NDX": "纳斯达克100指数"};
 
+        // Tab 切换
         document.querySelectorAll('.nav-tab-btn').forEach(btn => {
             btn.addEventListener('click', function() {
                 document.querySelectorAll('.nav-tab-btn').forEach(b => b.classList.remove('active'));
@@ -2077,6 +2472,7 @@
             });
         });
 
+        // 主题切换
         (function() {
             const toggle = document.getElementById('themeToggle');
             const currentTheme = localStorage.getItem('theme') || 'light';
@@ -2091,6 +2487,285 @@
             });
         })();
 
+        // 自选管理模块 (Local Storage)
+        const FavManager = {
+            STORAGE_KEY: 'fav_funds_list',
+            getFavs: function() {
+                try {
+                    return JSON.parse(localStorage.getItem(this.STORAGE_KEY)) || [];
+                } catch (e) {
+                    return [];
+                }
+            },
+            isFav: function(code) {
+                return this.getFavs().includes(code);
+            },
+            toggleFav: function(code) {
+                let favs = this.getFavs();
+                if (favs.includes(code)) {
+                    favs = favs.filter(c => c !== code);
+                } else {
+                    favs.push(code);
+                }
+                localStorage.setItem(this.STORAGE_KEY, JSON.stringify(favs));
+                return favs.includes(code);
+            }
+        };
+
+        // 定投回测计算核心函数
+        function computeDCA(code, freq, targetDay, perAmount, range) {
+            const raw = fundNavData[code];
+            if (!raw || !raw.dates || raw.dates.length < 2) return null;
+
+            const allDates = raw.dates;
+            const allNavs = raw.navs;
+            const latestDate = new Date(allDates[allDates.length - 1]);
+            let startDate = new Date(latestDate);
+
+            if (range === 'half') {
+                startDate.setMonth(latestDate.getMonth() - 6);
+            } else if (range === 'year') {
+                startDate.setFullYear(latestDate.getFullYear() - 1);
+            } else if (range === 'ytd') {
+                startDate = new Date(latestDate.getFullYear(), 0, 1);
+            } else {
+                startDate = new Date(allDates[0]);
+            }
+
+            const filtered = [];
+            for (let i = 0; i < allDates.length; i++) {
+                const d = new Date(allDates[i]);
+                if (d >= startDate) {
+                    filtered.push({ date: allDates[i], dt: d, nav: allNavs[i] });
+                }
+            }
+
+            if (filtered.length < 2) return null;
+
+            let totalInvest = 0;
+            let totalShares = 0;
+            let investCount = 0;
+            let lastInvestKey = '';
+
+            const timelineDates = [];
+            const timelineCost = [];
+            const timelineValue = [];
+
+            filtered.forEach(item => {
+                let shouldBuy = false;
+                const dayOfWeek = item.dt.getDay(); 
+                const dayOfMonth = item.dt.getDate();
+
+                if (freq === 'daily') {
+                    shouldBuy = true;
+                } else if (freq === 'weekly') {
+                    const oneJan = new Date(item.dt.getFullYear(), 0, 1);
+                    const weekNum = Math.ceil((((item.dt - oneJan) / 86400000) + oneJan.getDay() + 1) / 7);
+                    const weekKey = `${item.dt.getFullYear()}-W${weekNum}`;
+                    if (dayOfWeek >= targetDay && lastInvestKey !== weekKey) {
+                        shouldBuy = true;
+                        lastInvestKey = weekKey;
+                    }
+                } else if (freq === 'biweekly') {
+                    const oneJan = new Date(item.dt.getFullYear(), 0, 1);
+                    const weekNum = Math.ceil((((item.dt - oneJan) / 86400000) + oneJan.getDay() + 1) / 7);
+                    const biweekBlock = Math.floor(weekNum / 2);
+                    const biweekKey = `${item.dt.getFullYear()}-BW${biweekBlock}`;
+                    if (dayOfWeek >= targetDay && lastInvestKey !== biweekKey) {
+                        shouldBuy = true;
+                        lastInvestKey = biweekKey;
+                    }
+                } else {
+                    const monthKey = `${item.dt.getFullYear()}-${item.dt.getMonth() + 1}`;
+                    if (dayOfMonth >= targetDay && lastInvestKey !== monthKey) {
+                        shouldBuy = true;
+                        lastInvestKey = monthKey;
+                    }
+                }
+
+                if (shouldBuy) {
+                    const buyShares = perAmount / item.nav;
+                    totalShares += buyShares;
+                    totalInvest += perAmount;
+                    investCount++;
+                }
+
+                const currentVal = totalShares * item.nav;
+                timelineDates.push(item.date);
+                timelineCost.push(Number(totalInvest.toFixed(2)));
+                timelineValue.push(Number(currentVal.toFixed(2)));
+            });
+
+            const latestItem = filtered[filtered.length - 1];
+            const finalAsset = totalShares * latestItem.nav;
+            const profit = finalAsset - totalInvest;
+            const returnRate = totalInvest > 0 ? (profit / totalInvest) * 100 : 0;
+            const avgPrice = totalShares > 0 ? totalInvest / totalShares : 0;
+
+            return {
+                investCount, totalInvest, finalAsset, profit, returnRate, avgPrice,
+                latestNav: latestItem.nav, timelineDates, timelineCost, timelineValue
+            };
+        }
+
+        function buildDayOptions(freqSelectId, daySelectId, labelId) {
+            const freq = document.getElementById(freqSelectId).value;
+            const daySelect = document.getElementById(daySelectId);
+            const label = labelId ? document.getElementById(labelId) : null;
+            
+            daySelect.innerHTML = '';
+            if (freq === 'daily') {
+                if (label) label.parentElement.style.display = 'none';
+                else daySelect.style.display = 'none';
+            } else if (freq === 'weekly' || freq === 'biweekly') {
+                if (label) {
+                    label.parentElement.style.display = 'flex';
+                    label.textContent = freq === 'weekly' ? '扣款日 (每周几)' : '扣款日 (每两周周几)';
+                } else {
+                    daySelect.style.display = 'inline-block';
+                }
+                const weeks = ['周一', '周二', '周三', '周四', '周五'];
+                weeks.forEach((w, i) => {
+                    const opt = document.createElement('option');
+                    opt.value = i + 1; opt.textContent = w;
+                    if (i === 0) opt.selected = true;
+                    daySelect.appendChild(opt);
+                });
+            } else {
+                if (label) {
+                    label.parentElement.style.display = 'flex';
+                    label.textContent = '扣款日 (每月几号)';
+                } else {
+                    daySelect.style.display = 'inline-block';
+                }
+                for (let i = 1; i <= 28; i++) {
+                    const opt = document.createElement('option');
+                    opt.value = i; opt.textContent = i + ' 号';
+                    if (i === 1) opt.selected = true;
+                    daySelect.appendChild(opt);
+                }
+            }
+        }
+
+        function updateTableDca() {
+            const freq = document.getElementById('gDcaFreq').value;
+            const targetDay = parseInt(document.getElementById('gDcaDaySelect').value) || 1;
+            const range = document.getElementById('gDcaRange').value;
+
+            const headerTitle = document.getElementById('dcaHeaderTitle');
+            if (headerTitle) {
+                const map = {'daily':'日','weekly':'周','biweekly':'双周','monthly':'月'};
+                headerTitle.textContent = (map[freq] || '') + '定投';
+            }
+
+            document.querySelectorAll('#fundTable tbody tr.fund-row').forEach(row => {
+                const code = row.getAttribute('data-code');
+                const res = computeDCA(code, freq, targetDay, 1000, range);
+                const dcaCell = row.querySelector('.dca-col');
+                
+                if (dcaCell) {
+                    if (res && res.returnRate !== undefined) {
+                        const rate = res.returnRate;
+                        dcaCell.setAttribute('data-val', rate);
+                        const sign = rate > 0 ? '+' : '';
+                        const colorClass = rate > 0 ? 'gain-positive' : (rate < 0 ? 'gain-negative' : '');
+                        dcaCell.className = `dca-col ${colorClass}`;
+                        dcaCell.innerHTML = `${sign}${rate.toFixed(2)}%`;
+                    } else {
+                        dcaCell.setAttribute('data-val', -9999);
+                        dcaCell.className = 'dca-col';
+                        dcaCell.innerHTML = '--';
+                    }
+                }
+            });
+
+            if (currentSortCol === 21) {
+                isAscending = !isAscending; 
+                sortTable(21);
+            }
+        }
+
+        let currentDcaCode = null;
+        let dcaChartInstance = null;
+
+        // 初始化定投测算弹窗交互
+        (function() {
+            const modal = document.getElementById('dcaModal');
+            const closeBtn = document.getElementById('closeDcaModal');
+            const modalTitle = document.getElementById('dcaModalTitle');
+            const freqSelect = document.getElementById('dcaFreq');
+            const runBtn = document.getElementById('dcaRunBtn');
+
+            buildDayOptions('dcaFreq', 'dcaDaySelect', 'dcaDayLabel');
+            freqSelect.addEventListener('change', () => buildDayOptions('dcaFreq', 'dcaDaySelect', 'dcaDayLabel'));
+
+            buildDayOptions('gDcaFreq', 'gDcaDaySelect', null);
+            document.getElementById('gDcaFreq').addEventListener('change', () => buildDayOptions('gDcaFreq', 'gDcaDaySelect', null));
+            document.getElementById('gDcaApplyBtn').addEventListener('click', updateTableDca);
+
+            document.getElementById('gDcaToggleBtn').addEventListener('click', function() {
+                document.getElementById('gDcaCard').classList.toggle('collapsed');
+            });
+
+            window.openDcaModal = function(code) {
+                currentDcaCode = code;
+                const name = fundNames[code] || code;
+                modalTitle.textContent = `📊 定投测算: [${code}] ${name}`;
+                modal.classList.add('show');
+                runBacktestModal();
+            };
+
+            closeBtn.addEventListener('click', () => modal.classList.remove('show'));
+            modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('show'); });
+            runBtn.addEventListener('click', runBacktestModal);
+
+            function runBacktestModal() {
+                if (!currentDcaCode) return;
+                const freq = freqSelect.value;
+                const targetDay = parseInt(document.getElementById('dcaDaySelect').value) || 1;
+                const perAmount = parseFloat(document.getElementById('dcaAmount').value) || 1000;
+                const range = document.getElementById('dcaRange').value;
+
+                const res = computeDCA(currentDcaCode, freq, targetDay, perAmount, range);
+                if (!res) return;
+
+                document.getElementById('resTotalInvest').innerHTML = `${res.investCount} 期 / <strong>${res.totalInvest.toLocaleString()}</strong> 元`;
+                document.getElementById('resTotalAsset').innerHTML = `<strong>${res.finalAsset.toFixed(2)}</strong> 元`;
+                
+                const profitElem = document.getElementById('resProfit');
+                profitElem.textContent = `${res.profit >= 0 ? '+' : ''}${res.profit.toFixed(2)}`;
+                profitElem.style.color = res.profit >= 0 ? '#d93025' : '#188038';
+
+                const rateElem = document.getElementById('resReturnRate');
+                rateElem.textContent = `${res.returnRate >= 0 ? '+' : ''}${res.returnRate.toFixed(2)}%`;
+                rateElem.style.color = res.returnRate >= 0 ? '#d93025' : '#188038';
+
+                document.getElementById('resAvgPrice').innerHTML = `${res.avgPrice.toFixed(4)} / ${res.latestNav.toFixed(4)}`;
+
+                const ctx = document.getElementById('dcaChart').getContext('2d');
+                if (dcaChartInstance) dcaChartInstance.destroy();
+
+                dcaChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: res.timelineDates,
+                        datasets: [
+                            { label: '总资产 (元)', data: res.timelineValue, borderColor: '#1a73e8', backgroundColor: 'rgba(26, 115, 232, 0.08)', fill: true, pointRadius: 0, borderWidth: 2, tension: 0.1 },
+                            { label: '累计本金 (元)', data: res.timelineCost, borderColor: '#e67e22', borderDash: [4, 4], pointRadius: 0, borderWidth: 1.5, fill: false }
+                        ]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+                        plugins: { legend: { display: true, position: 'top', labels: { font: { size: 10 }, boxWidth: 12 } } },
+                        scales: {
+                            x: { ticks: { maxTicksLimit: 8, font: { size: 9 } }, grid: { display: false } },
+                            y: { ticks: { font: { size: 9 } }, grid: { color: 'rgba(0,0,0,0.05)' } }
+                        }
+                    }
+                });
+            }
+        })();
+
         document.addEventListener('DOMContentLoaded', function() {
             const catBtns = document.querySelectorAll('.cat-btn');
             const searchInput = document.getElementById('searchInput');
@@ -2100,9 +2775,43 @@
             let currentSub = 'all';
             let searchKeyword = '';
 
+            updateTableDca();
+
+            function syncFavDisplay() {
+                document.querySelectorAll('.star-btn').forEach(btn => {
+                    const code = btn.getAttribute('data-code');
+                    const isF = FavManager.isFav(code);
+                    const td = btn.closest('td');
+                    if (isF) {
+                        btn.classList.add('starred');
+                        btn.textContent = '★';
+                        if (td) td.setAttribute('data-val', '1');
+                    } else {
+                        btn.classList.remove('starred');
+                        btn.textContent = '☆';
+                        if (td) td.setAttribute('data-val', '0');
+                    }
+                });
+            }
+            syncFavDisplay();
+
+            document.getElementById('fundTable').addEventListener('click', function(e) {
+                const starBtn = e.target.closest('.star-btn');
+                if (starBtn) {
+                    e.stopPropagation();
+                    const code = starBtn.getAttribute('data-code');
+                    FavManager.toggleFav(code);
+                    syncFavDisplay();
+                    if (currentMacro === 'favorites') {
+                        applyFilters();
+                    }
+                }
+            });
+
             function applyFilters() {
                 let hasVisible = false;
                 const keyword = searchKeyword.trim().toLowerCase();
+                const favList = FavManager.getFavs();
 
                 allRows.forEach(row => {
                     if (row.classList.contains('holding-row')) return;
@@ -2114,7 +2823,9 @@
                     const code = codeCell ? codeCell.textContent.toLowerCase() : '';
 
                     let matchCategory = false;
-                    if (currentMacro === 'all') {
+                    if (currentMacro === 'favorites') {
+                        matchCategory = favList.includes(code.toUpperCase()) || favList.includes(code.toLowerCase());
+                    } else if (currentMacro === 'all') {
                         matchCategory = true;
                     } else if (currentSub === 'all') {
                         matchCategory = (macro === currentMacro);
@@ -2142,7 +2853,11 @@
                 if (emptyRow) {
                     emptyRow.style.display = hasVisible ? 'none' : '';
                     if (!hasVisible) {
-                        emptyRow.querySelector('td').textContent = keyword ? '未找到匹配基金' : '当前分类暂无数据';
+                        if (currentMacro === 'favorites') {
+                            emptyRow.querySelector('td').textContent = '您尚未收藏任何基金，请点击表格首列 ☆ 进行添加';
+                        } else {
+                            emptyRow.querySelector('td').textContent = keyword ? '未找到匹配基金' : '当前分类暂无数据';
+                        }
                     }
                 }
             }
@@ -2168,6 +2883,7 @@
         var chartInstances = {};
         var holderChartInstances = {};
 
+        // 注册饼图百分比标签插件
         const pieLabelsPlugin = {
             id: 'pieLabels',
             afterDraw(chart) {
@@ -2193,6 +2909,37 @@
             }
         };
         Chart.register(pieLabelsPlugin);
+
+        // 注册专业十字光标插件（Crosshair）
+        const fundCrosshairPlugin = {
+            id: 'fundCrosshairPlugin',
+            afterDraw(chart) {
+                if (!chart._crosshair) return;
+                const ctx = chart.ctx;
+                const { left, right, top, bottom } = chart.chartArea;
+                const { x, y } = chart._crosshair;
+
+                if (x < left || x > right || y < top || y > bottom) return;
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.setLineDash([4, 4]);
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--footer-text').trim() || '#70757a';
+
+                // 绘制垂直准星
+                ctx.moveTo(x, top);
+                ctx.lineTo(x, bottom);
+
+                // 绘制水平准星
+                ctx.moveTo(left, y);
+                ctx.lineTo(right, y);
+
+                ctx.stroke();
+                ctx.restore();
+            }
+        };
+        Chart.register(fundCrosshairPlugin);
 
         function filterNavData(data, period) {
             if (!data || !data.dates || data.dates.length === 0) return { dates: [], navs: [] };
@@ -2275,6 +3022,7 @@
             });
         }
 
+        // 优化后的双轴折线图构建函数（左轴净值，右轴涨幅，含十字准星与浮窗）
         function initChart(code) {
             const canvas = document.getElementById(`chart-${code}`);
             if (!canvas) return;
@@ -2295,6 +3043,10 @@
             }
 
             const filtered = filterNavData(data, currentPeriod);
+            const baseNav = filtered.navs.length > 0 ? filtered.navs[0] : 1.0;
+            const textColor = getComputedStyle(document.documentElement).getPropertyValue('--footer-text').trim() || '#70757a';
+            const borderColor = getComputedStyle(document.documentElement).getPropertyValue('--border').trim() || '#e0e0e0';
+
             const ctx = canvas.getContext('2d');
             const chart = new Chart(ctx, {
                 type: 'line',
@@ -2306,18 +3058,120 @@
                         borderColor: '#1a73e8',
                         backgroundColor: 'rgba(26,115,232,0.1)',
                         pointRadius: 1.5,
+                        pointHoverRadius: 5,
+                        pointHoverBackgroundColor: '#1a73e8',
                         fill: true,
-                        tension: 0.1
+                        tension: 0.1,
+                        yAxisID: 'y'
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: false } }
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    onHover: function(event, activeElements, chart) {
+                        const rect = chart.canvas.getBoundingClientRect();
+                        const x = event.native ? event.native.offsetX : (event.x - rect.left);
+                        const y = event.native ? event.native.offsetY : (event.y - rect.top);
+                        if (x >= chart.chartArea.left && x <= chart.chartArea.right &&
+                            y >= chart.chartArea.top && y <= chart.chartArea.bottom) {
+                            chart._crosshair = { x, y };
+                        } else {
+                            chart._crosshair = null;
+                        }
+                        chart.draw();
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            enabled: true,
+                            mode: 'index',
+                            intersect: false,
+                            displayColors: false,
+                            callbacks: {
+                                title: function(items) {
+                                    return items.length ? `时间: ${items[0].label}` : '';
+                                },
+                                label: function(context) {
+                                    const nav = Number(context.parsed.y);
+                                    let gainText = '--';
+                                    if (baseNav && baseNav > 0) {
+                                        const gain = ((nav - baseNav) / baseNav) * 100.0;
+                                        const sign = gain >= 0 ? '+' : '';
+                                        gainText = `${sign}${gain.toFixed(2)}%`;
+                                    }
+                                    return [`净值: ${nav.toFixed(4)}`, `涨幅: ${gainText}`];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: {
+                                maxTicksLimit: 8,
+                                font: { size: 9 },
+                                color: textColor
+                            },
+                            grid: { display: false }
+                        },
+                        // 左轴：净值显示
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            ticks: {
+                                font: { size: 9 },
+                                color: textColor,
+                                callback: function(val) { return val.toFixed(4); }
+                            },
+                            grid: { color: borderColor }
+                        },
+                        // 右轴：涨幅显示（以本周期起点净值为基准联动）
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            ticks: {
+                                font: { size: 9 },
+                                color: textColor,
+                                callback: function(val) {
+                                    if (!baseNav || baseNav <= 0) return '0.00%';
+                                    const pct = ((val - baseNav) / baseNav) * 100.0;
+                                    return `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+                                }
+                            },
+                            grid: { drawOnChartArea: false }
+                        }
+                    }
                 }
             });
+
+            // 当鼠标移出图表时，清除十字准星
+            canvas.addEventListener('mouseleave', function() {
+                if (chart) {
+                    chart._crosshair = null;
+                    chart.draw();
+                }
+            });
+
             chartInstances[code] = chart;
 
+            // 联动双轴比例
+            function syncYAxes(chartObj) {
+                if (!chartObj) return;
+                const yScale = chartObj.scales.y;
+                const y1Scale = chartObj.scales.y1;
+                if (yScale && y1Scale) {
+                    y1Scale.options.min = yScale.min;
+                    y1Scale.options.max = yScale.max;
+                }
+            }
+            syncYAxes(chart);
+
+            // 周期筛选切换事件
             if (container && !container._eventsBound) {
                 const btns = container.querySelectorAll('.period-btn');
                 btns.forEach(btn => {
@@ -2328,9 +3182,27 @@
                         const period = this.dataset.period;
                         const fData = filterNavData(data, period);
                         if (chartInstances[code]) {
-                            chartInstances[code].data.labels = fData.dates;
-                            chartInstances[code].data.datasets[0].data = fData.navs;
-                            chartInstances[code].update();
+                            const curChart = chartInstances[code];
+                            curChart.data.labels = fData.dates;
+                            curChart.data.datasets[0].data = fData.navs;
+                            const newBaseNav = fData.navs.length > 0 ? fData.navs[0] : 1.0;
+                            curChart.options.plugins.tooltip.callbacks.label = function(context) {
+                                const nav = Number(context.parsed.y);
+                                let gainText = '--';
+                                if (newBaseNav && newBaseNav > 0) {
+                                    const gain = ((nav - newBaseNav) / newBaseNav) * 100.0;
+                                    const sign = gain >= 0 ? '+' : '';
+                                    gainText = `${sign}${gain.toFixed(2)}%`;
+                                }
+                                return [`净值: ${nav.toFixed(4)}`, `涨幅: ${gainText}`];
+                            };
+                            curChart.options.scales.y1.ticks.callback = function(val) {
+                                if (!newBaseNav || newBaseNav <= 0) return '0.00%';
+                                const pct = ((val - newBaseNav) / newBaseNav) * 100.0;
+                                return `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+                            };
+                            curChart.update();
+                            syncYAxes(curChart);
                         }
                     });
                 });
@@ -2341,8 +3213,16 @@
         document.addEventListener('DOMContentLoaded', function() {
             const table = document.getElementById('fundTable');
             table.addEventListener('click', function(e) {
+                const dcaBtn = e.target.closest('.dca-btn');
+                if (dcaBtn) {
+                    e.stopPropagation();
+                    const code = dcaBtn.dataset.code;
+                    window.openDcaModal(code);
+                    return;
+                }
+
                 const target = e.target.closest('tr.fund-row');
-                if (!target || e.target.tagName === 'A') return;
+                if (!target || e.target.tagName === 'A' || e.target.closest('.star-btn')) return;
                 const code = target.dataset.code;
                 const hRow = document.querySelector(`.holding-row[data-code="${code}"]`);
                 if (hRow) {

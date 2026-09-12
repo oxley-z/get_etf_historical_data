@@ -136,10 +136,9 @@ def get_direct_opener():
 
 
 # ==============================================================================
-# 来自 demo.py 的多源宏观指标获取模块
+# 多源宏观指标获取模块（带来源说明与 URL）
 # ==============================================================================
 def fetch_from_yahoo_finance(opener, symbol: str, timeout: int = 5) -> float:
-    """通用源: Yahoo Finance Chart API v8"""
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(symbol)}?interval=1d&range=5d"
     req = urllib.request.Request(url, headers=DEFAULT_HEADERS)
     with opener.open(req, timeout=timeout) as resp:
@@ -156,7 +155,6 @@ def fetch_from_yahoo_finance(opener, symbol: str, timeout: int = 5) -> float:
     return 0.0
 
 def fetch_from_cboe_quote(opener, symbol: str, timeout: int = 5) -> float:
-    """通用源: CBOE 官方延时行情接口"""
     url = f"https://cdn.cboe.com/api/global/delayed_quotes/quotes/{symbol}.json"
     req = urllib.request.Request(url, headers=DEFAULT_HEADERS)
     with opener.open(req, timeout=timeout) as resp:
@@ -167,25 +165,21 @@ def fetch_from_cboe_quote(opener, symbol: str, timeout: int = 5) -> float:
             return round(float(price), 2)
     return 0.0
 
-def get_vix(opener) -> tuple[float, str]:
-    """指标 1: VIX 波动率指数 (多源获取，失败为 0.0)"""
-    # 源 1: Yahoo Finance (^VIX)
+def get_vix(opener) -> tuple[float, str, str]:
     try:
         val = fetch_from_yahoo_finance(opener, "^VIX")
         if val > 0:
-            return val, "Yahoo Finance (^VIX)"
+            return val, "Yahoo Finance (^VIX)", "https://finance.yahoo.com/quote/%5EVIX/"
     except Exception:
         pass
 
-    # 源 2: CBOE 官方接口 (_VIX)
     try:
         val = fetch_from_cboe_quote(opener, "_VIX")
         if val > 0:
-            return val, "CBOE 官方 (_VIX)"
+            return val, "CBOE 官方 (_VIX)", "https://www.cboe.com/us/indices/dashboard/vix/"
     except Exception:
         pass
 
-    # 源 3: 新浪外盘接口 (gb_$vix)
     try:
         url = "https://hq.sinajs.cn/list=gb_$vix"
         req = urllib.request.Request(url, headers={**DEFAULT_HEADERS, "Referer": "https://finance.sina.com.cn/"})
@@ -195,15 +189,13 @@ def get_vix(opener) -> tuple[float, str]:
             if match:
                 parts = match.group(1).split(",")
                 if len(parts) > 1 and float(parts[1]) > 0:
-                    return round(float(parts[1]), 2), "新浪财经 (gb_$vix)"
+                    return round(float(parts[1]), 2), "新浪财经 (gb_$vix)", "https://stock.finance.sina.com.cn/usstock/quotes/$VIX.html"
     except Exception:
         pass
 
-    return 0.0, "获取失败"
+    return 0.0, "获取失败", "https://cn.investing.com/indices/volatility-s-p-500"
 
-def get_cnn_fear_greed(opener) -> tuple[float, str, str]:
-    """指标 2: CNN 恐慌与贪婪指数 (多源获取，失败为 0.0)"""
-    # 源 1: CNN Dataviz 官方端点
+def get_cnn_fear_greed(opener) -> tuple[float, str, str, str]:
     try:
         url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
         req = urllib.request.Request(url, headers={
@@ -219,11 +211,10 @@ def get_cnn_fear_greed(opener) -> tuple[float, str, str]:
                 "neutral": "中性观望", "greed": "贪婪", "extreme greed": "极度贪婪"
             }
             if score is not None:
-                return round(float(score), 1), cls_map.get(raw_cls, raw_cls.capitalize()), "CNN 官方接口"
+                return round(float(score), 1), cls_map.get(raw_cls, raw_cls.capitalize()), "CNN 官方接口", "https://edition.cnn.com/markets/fear-and-greed"
     except Exception:
         pass
 
-    # 源 2: Alternative.me 情绪接口
     try:
         url = "https://api.alternative.me/fng/?limit=1"
         req = urllib.request.Request(url, headers=DEFAULT_HEADERS)
@@ -233,15 +224,13 @@ def get_cnn_fear_greed(opener) -> tuple[float, str, str]:
             if items and items[0].get("value") is not None:
                 score = round(float(items[0]["value"]), 1)
                 rating = items[0].get("value_classification", "Neutral")
-                return score, rating, "Alternative 情绪源"
+                return score, rating, "Alternative 情绪源", "https://alternative.me/crypto/fear-and-greed-index/"
     except Exception:
         pass
 
-    return 0.0, "暂无数据", "获取失败"
+    return 0.0, "暂无数据", "获取失败", "https://edition.cnn.com/markets/fear-and-greed"
 
-def get_usd_cny(opener) -> tuple[float, str]:
-    """指标 3: USD/CNY 汇率 (多源获取，失败为 0.0)"""
-    # 源 1: 新浪外汇实时接口 (fx_susdcny)
+def get_usd_cny(opener) -> tuple[float, str, str]:
     try:
         url = "https://hq.sinajs.cn/list=fx_susdcny"
         req = urllib.request.Request(url, headers={**DEFAULT_HEADERS, "Referer": "https://finance.sina.com.cn/"})
@@ -252,11 +241,10 @@ def get_usd_cny(opener) -> tuple[float, str]:
                 parts = match.group(1).split(",")
                 for idx in [1, 8]:
                     if len(parts) > idx and float(parts[idx]) > 0:
-                        return round(float(parts[idx]), 4), "新浪外汇 (fx_susdcny)"
+                        return round(float(parts[idx]), 4), "新浪外汇 (实时)", "https://finance.sina.com.cn/money/forex/hq/USDCNY.shtml"
     except Exception:
         pass
 
-    # 源 2: 开放汇率 API (open.er-api.com)
     try:
         url = "https://open.er-api.com/v6/latest/USD"
         req = urllib.request.Request(url, headers=DEFAULT_HEADERS)
@@ -264,128 +252,93 @@ def get_usd_cny(opener) -> tuple[float, str]:
             data = json.loads(resp.read().decode("utf-8"))
             rate = data.get("rates", {}).get("CNY")
             if rate is not None and float(rate) > 0:
-                return round(float(rate), 4), "Open Exchange API"
+                return round(float(rate), 4), "Open Exchange API", "https://open.er-api.com/"
     except Exception:
         pass
 
-    # 源 3: Yahoo Finance (USDCNY=X)
     try:
         val = fetch_from_yahoo_finance(opener, "USDCNY=X")
         if val > 0:
-            return round(val, 4), "Yahoo Finance (USDCNY=X)"
+            return round(val, 4), "Yahoo Finance (USDCNY=X)", "https://finance.yahoo.com/quote/USDCNY=X/"
     except Exception:
         pass
 
-    return 0.0, "获取失败"
+    return 0.0, "获取失败", "https://cn.investing.com/currencies/usd-cny"
 
-def get_vxn(opener) -> tuple[float, str]:
-    """指标 4: VXN 纳指波动率 (多源获取，失败为 0.0)"""
-    # 源 1: Yahoo Finance (^VXN)
+def get_vxn(opener) -> tuple[float, str, str]:
     try:
         val = fetch_from_yahoo_finance(opener, "^VXN")
         if val > 0:
-            return val, "Yahoo Finance (^VXN)"
+            return val, "Yahoo Finance (^VXN)", "https://finance.yahoo.com/quote/%5EVXN/"
     except Exception:
         pass
 
-    # 源 2: CBOE 官方接口 (_VXN)
     try:
         val = fetch_from_cboe_quote(opener, "_VXN")
         if val > 0:
-            return val, "CBOE 官方 (_VXN)"
+            return val, "CBOE 官方 (_VXN)", "https://www.cboe.com/us/indices/dashboard/vxn/"
     except Exception:
         pass
 
-    return 0.0, "获取失败"
+    return 0.0, "获取失败", "https://cn.investing.com/indices/cboe-nasdaq-100-voltility"
 
-def get_skew(opener) -> tuple[float, str]:
-    """指标 5: SKEW 黑天鹅指数 (多源获取，失败为 0.0)"""
-    # 源 1: Yahoo Finance (^SKEW)
+def get_skew(opener) -> tuple[float, str, str]:
     try:
         val = fetch_from_yahoo_finance(opener, "^SKEW")
         if val > 0:
-            return val, "Yahoo Finance (^SKEW)"
+            return val, "Yahoo Finance (^SKEW)", "https://finance.yahoo.com/quote/SKEW/"
     except Exception:
         pass
 
-    # 源 2: CBOE 官方接口 (_SKEW)
     try:
         val = fetch_from_cboe_quote(opener, "_SKEW")
         if val > 0:
-            return val, "CBOE 官方 (_SKEW)"
+            return val, "CBOE 官方 (_SKEW)", "https://www.cboe.com/us/indices/dashboard/SKEW/"
     except Exception:
         pass
 
-    return 0.0, "获取失败"
+    return 0.0, "获取失败", "https://sc.macromicro.me/series/4407/cboe-skew"
 
 
 def fetch_home_market_metrics(opener):
-    """
-    重构后的首页指标抓取函数：
-    多源降级获取 CNN、VIX、USD/CNY、VXN、SKEW，若获取失败统一返回 0.0
-    """
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # 1. CNN 恐慌指数
-    fng_score, fng_rating, fng_src = get_cnn_fear_greed(opener)
-    
-    # 2. VIX
-    vix_val, vix_src = get_vix(opener)
-    if vix_val <= 0:
-        vix_status = "数据暂缺"
-    else:
-        vix_status = "极度恐慌" if vix_val >= 30 else ("警惕波动" if vix_val >= 20 else ("温和震荡" if vix_val >= 15 else "平稳低波"))
+    fng_score, fng_rating, fng_src, fng_url = get_cnn_fear_greed(opener)
+    vix_val, vix_src, vix_url = get_vix(opener)
+    vix_status = "数据暂缺" if vix_val <= 0 else ("极度恐慌" if vix_val >= 30 else ("警惕波动" if vix_val >= 20 else ("温和震荡" if vix_val >= 15 else "平稳低波")))
 
-    # 3. USD/CNY
-    usdcny_val, usdcny_src = get_usd_cny(opener)
-    if usdcny_val <= 0:
-        usdcny_status = "数据暂缺"
-    else:
-        usdcny_status = "美元走强" if usdcny_val >= 7.30 else ("区间震荡" if usdcny_val >= 7.15 else "人民币升值")
+    usdcny_val, usdcny_src, usdcny_url = get_usd_cny(opener)
+    usdcny_status = "数据暂缺" if usdcny_val <= 0 else ("美元走强" if usdcny_val >= 7.30 else ("区间震荡" if usdcny_val >= 7.15 else "人民币升值"))
 
-    # 4. VXN
-    vxn_val, vxn_src = get_vxn(opener)
-    if vxn_val <= 0:
-        vxn_status = "数据暂缺"
-    else:
-        vxn_status = "科技股极恐" if vxn_val >= 30 else ("杀估值抛压" if vxn_val >= 22 else "波动平缓")
+    vxn_val, vxn_src, vxn_url = get_vxn(opener)
+    vxn_status = "数据暂缺" if vxn_val <= 0 else ("科技股极恐" if vxn_val >= 30 else ("杀估值抛压" if vxn_val >= 22 else "波动平缓"))
 
-    # 5. SKEW
-    skew_val, skew_src = get_skew(opener)
-    if skew_val <= 0:
-        skew_status = "数据暂缺"
-    else:
-        skew_status = "尾部黑天鹅预警" if skew_val >= 140 else ("风险积聚" if skew_val >= 132 else "常态平稳")
+    skew_val, skew_src, skew_url = get_skew(opener)
+    skew_status = "数据暂缺" if skew_val <= 0 else ("尾部黑天鹅预警" if skew_val >= 140 else ("风险积聚" if skew_val >= 132 else "常态平稳"))
 
     metrics = {
         "fng": {
-            "score": fng_score,
-            "rating": fng_rating,
-            "time": now_str,
-            "source": fng_src
+            "score": fng_score, "rating": fng_rating, "time": now_str,
+            "source": fng_src, "url": fng_url
         },
         "vix": {
-            "val": vix_val,
-            "status": vix_status,
-            "time": now_str,
+            "val": vix_val, "status": vix_status, "time": now_str,
+            "source": vix_src, "url": vix_url,
             "desc": "<15 平稳低波 | 15~20 正常震荡 | 20~30 警惕波动 | >30 极度恐慌"
         },
         "usdcny": {
-            "val": usdcny_val,
-            "status": usdcny_status,
-            "time": now_str,
+            "val": usdcny_val, "status": usdcny_status, "time": now_str,
+            "source": usdcny_src, "url": usdcny_url,
             "desc": "美元兑人民币汇率，QDII换汇成本及折溢价关键锚"
         },
         "vxn": {
-            "val": vxn_val,
-            "status": vxn_status,
-            "time": now_str,
+            "val": vxn_val, "status": vxn_status, "time": now_str,
+            "source": vxn_src, "url": vxn_url,
             "desc": "纳斯达克100期权隐波，监测科技成长股杀估值抛压"
         },
         "skew": {
-            "val": skew_val,
-            "status": skew_status,
-            "time": now_str,
+            "val": skew_val, "status": skew_status, "time": now_str,
+            "source": skew_src, "url": skew_url,
             "desc": "基准100。>135提示期权市场尾部极度对冲成本升高"
         }
     }
@@ -856,7 +809,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
     INDEX_SET_LOCAL = {"NDX", "SPX", "SOXX", "SOXL"}
     PRECIOUS_METALS_LOCAL = {"XAU", "AUM", "XAG"}
     CRYPTO_LOCAL = {"BTC", "ETH", "SOL", "BNB"}
-    col_count = 20
+    col_count = 22
 
     def date_to_label(date_str):
         if 'Q' in date_str: return date_str
@@ -965,10 +918,12 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
 
         rows_html += f"""
         <tr data-group="{group}" data-macro="{macro_category}" class="fund-row" data-code="{r['code']}">
+            <td class="fav-col" data-val="0"><button class="star-btn" data-code="{r['code']}" title="点击添加/取消自选">☆</button></td>
             <td class="code" data-val="{r['code']}">{r['code']}</td>
             <td class="name" data-val="{r['name']}">
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
                     <a href="{fund_url}" target="_blank" title="点击查看行情/概况" style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{r['name']}</a>
+                    <button class="dca-btn" data-code="{r['code']}" title="启动定投回测测算小工具">📊 定投</button>
                 </div>
                 <div class="redemption-sub" style="white-space: normal; line-height: 1.6;">赎回:<br>{redemption_lines}</div>
             </td>
@@ -1008,6 +963,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
             <td data-val="{r['half_year_gain'] if r['half_year_gain'] is not None else -9999}" class="{gain_class(r['half_year_gain'])}">{format_gain(r['half_year_gain'])}</td>
             <td data-val="{r['year_gain'] if r['year_gain'] is not None else -9999}" class="{gain_class(r['year_gain'])}">{format_gain(r['year_gain'])}</td>
             <td data-val="{r['ytd_gain'] if r['ytd_gain'] is not None else -9999}" class="{gain_class(r['ytd_gain'])}">{format_gain(r['ytd_gain'])}</td>
+            <td class="dca-col" data-val="-9999">--</td>
         </tr>
         """
 
@@ -1308,7 +1264,6 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
             gap: 14px;
         }}
         
-        /* 5列自适应宏观指标矩阵 */
         .macro-metrics-grid {{
             display: grid;
             grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -1358,6 +1313,19 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
             padding-top: 6px;
             margin-top: 4px;
         }}
+        .metric-source-link {{
+            font-size: 11px;
+            color: var(--link-color);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            margin-top: 6px;
+            padding-top: 4px;
+            border-top: 1px solid var(--border);
+            word-break: break-all;
+        }}
+        .metric-source-link:hover {{ text-decoration: underline; }}
 
         .fng-bar-track {{
             height: 6px;
@@ -1424,6 +1392,17 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
         }}
         .cat-btn:hover {{ background: var(--btn-active-bg); color: var(--btn-active-text); }}
         .cat-btn.active {{ background: var(--btn-active-bg); color: var(--btn-active-text); border-color: var(--btn-active-bg); }}
+        .cat-btn.fav-filter {{
+            background: rgba(230,126,34,0.15);
+            color: #e67e22;
+            border-color: #e67e22;
+            font-weight: 700;
+        }}
+        .cat-btn.fav-filter.active {{
+            background: #e67e22;
+            color: #fff;
+            border-color: #e67e22;
+        }}
         .search-box-wrap {{ width: 260px; flex-shrink: 0; }}
         .search-box-wrap input {{
             width: 100%;
@@ -1437,6 +1416,68 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
             outline: none;
             box-sizing: border-box;
         }}
+
+        /* 定投全局参数配置条 */
+        .global-dca-filter-card {{
+            background: var(--table-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 6px 12px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+            font-size: 11px;
+            flex-shrink: 0;
+            transition: all 0.3s ease;
+        }}
+        .global-dca-filter-header {{
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            user-select: none;
+        }}
+        .global-dca-filter-title {{
+            font-weight: 700;
+            color: var(--link-color);
+        }}
+        #gDcaToggleIcon {{
+            font-size: 9px;
+            color: var(--footer-text);
+            transition: transform 0.2s;
+        }}
+        .global-dca-filter-body {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }}
+        .global-dca-filter-card.collapsed .global-dca-filter-body {{ display: none; }}
+        .global-dca-filter-card.collapsed #gDcaToggleIcon {{ transform: rotate(-90deg); }}
+        .global-dca-filter-card select {{
+            padding: 3px 8px;
+            border-radius: 6px;
+            border: 1px solid var(--input-border);
+            background: var(--input-bg);
+            color: var(--text);
+            font-size: 11px;
+            outline: none;
+        }}
+        .global-dca-filter-card button {{
+            background: var(--btn-active-bg);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 3px 10px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }}
+        .global-dca-filter-card button:hover {{ opacity: 0.9; }}
 
         .table-container {{ 
             width: 100%; 
@@ -1452,33 +1493,74 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
             border: 1px solid var(--border);
             margin-bottom: 6px;
         }}
-        table {{ width: 100%; min-width: 2400px; border-collapse: collapse; font-size: 12px; text-align: right; table-layout: fixed; }}
+        table {{ width: 100%; min-width: 2550px; border-collapse: collapse; font-size: 12px; text-align: right; table-layout: fixed; }}
         th, td {{ padding: 6px 8px; border-bottom: 1px solid var(--border); line-height: 1.4; overflow: hidden; text-overflow: ellipsis; box-sizing: border-box; }}
         #fundTable thead th {{ position: sticky; top: 0; z-index: 10; background-color: var(--header-bg); border-bottom: 2px solid var(--border); }}
-        th:nth-child(1), td:nth-child(1) {{ width: 60px; text-align: left; white-space: nowrap; }}
-        th:nth-child(2), td:nth-child(2) {{ width: 250px; min-width: 200px; text-align: left; white-space: normal; word-break: break-word; vertical-align: middle; }}
-        th:nth-child(3), td:nth-child(3) {{ width: 80px; text-align: left; white-space: nowrap; }}
-        th:nth-child(4), td:nth-child(4) {{ width: 130px; text-align: left; white-space: normal; word-break: break-word; }}
-        th:nth-child(5), td:nth-child(5) {{ width: 70px; text-align: left; white-space: nowrap; }}
-        th:nth-child(6), td:nth-child(6) {{ width: 100px; text-align: left; white-space: nowrap; }}
-        th:nth-child(7), td:nth-child(7), th:nth-child(8), td:nth-child(8) {{ width: 128px; white-space: nowrap; }}
-        th:nth-child(9), td:nth-child(9) {{ width: 85px; white-space: nowrap; }}
-        th:nth-child(10), td:nth-child(10), th:nth-child(11), td:nth-child(11), th:nth-child(12), td:nth-child(12) {{ width: 300px; white-space: nowrap; }}
-        th:nth-child(13), td:nth-child(13) {{ width: 80px; white-space: nowrap; }}
-        th:nth-child(14), td:nth-child(14) {{ width: 155px; min-width: 90px; white-space: normal; }}
-        th:nth-child(15), td:nth-child(15), th:nth-child(16), td:nth-child(16), th:nth-child(17), td:nth-child(17), th:nth-child(18), td:nth-child(18), th:nth-child(19), td:nth-child(19), th:nth-child(20), td:nth-child(20) {{ width: 80px; white-space: nowrap; }}
+        th:nth-child(1), td:nth-child(1) {{ width: 45px; text-align: center; white-space: nowrap; }}
+        th:nth-child(2), td:nth-child(2) {{ width: 65px; text-align: left; white-space: nowrap; }}
+        th:nth-child(3), td:nth-child(3) {{ width: 250px; min-width: 200px; text-align: left; white-space: normal; word-break: break-word; vertical-align: middle; }}
+        th:nth-child(4), td:nth-child(4) {{ width: 80px; text-align: left; white-space: nowrap; }}
+        th:nth-child(5), td:nth-child(5) {{ width: 130px; text-align: left; white-space: normal; word-break: break-word; }}
+        th:nth-child(6), td:nth-child(6) {{ width: 70px; text-align: left; white-space: nowrap; }}
+        th:nth-child(7), td:nth-child(7) {{ width: 100px; text-align: left; white-space: nowrap; }}
+        th:nth-child(8), td:nth-child(8), th:nth-child(9), td:nth-child(9) {{ width: 128px; white-space: nowrap; }}
+        th:nth-child(10), td:nth-child(10) {{ width: 85px; white-space: nowrap; }}
+        th:nth-child(11), td:nth-child(11), th:nth-child(12), td:nth-child(12), th:nth-child(13), td:nth-child(13) {{ width: 300px; white-space: nowrap; }}
+        th:nth-child(14), td:nth-child(14) {{ width: 80px; white-space: nowrap; }}
+        th:nth-child(15), td:nth-child(15) {{ width: 155px; min-width: 90px; white-space: normal; }}
+        th:nth-child(16), td:nth-child(16), th:nth-child(17), td:nth-child(17), th:nth-child(18), td:nth-child(18), th:nth-child(19), td:nth-child(19), th:nth-child(20), td:nth-child(20), th:nth-child(21), td:nth-child(21), th:nth-child(22), td:nth-child(22) {{ width: 80px; white-space: nowrap; }}
         th {{ background-color: var(--header-bg); color: var(--header-text); font-weight: 600; text-align: right; user-select: none; cursor: pointer; white-space: normal; word-break: keep-all; line-height: 1.25; height: 38px; vertical-align: middle; position: relative; }}
         th:hover {{ background-color: #e4e7eb; }}
         [data-theme="dark"] th:hover {{ background-color: #3d3d3d; }}
-        th:nth-child(1), th:nth-child(2), th:nth-child(3), th:nth-child(4), th:nth-child(5), th:nth-child(6) {{ text-align: left; }}
+        th:nth-child(1) {{ text-align: center; }}
+        th:nth-child(2), th:nth-child(3), th:nth-child(4), th:nth-child(5), th:nth-child(6), th:nth-child(7) {{ text-align: left; }}
         tr:hover {{ background-color: var(--hover-bg); }}
         
+        .star-btn {{
+            background: transparent;
+            border: none;
+            font-size: 16px;
+            color: #aaa;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+            transition: all 0.2s;
+        }}
+        .star-btn:hover {{ transform: scale(1.2); color: #f39c12; }}
+        .star-btn.starred {{ color: #f39c12; font-weight: bold; text-shadow: 0 0 2px rgba(243,156,18,0.5); }}
+
         .code {{ font-family: "SFMono-Regular", Consolas, monospace; font-weight: bold; color: #1a73e8; }}
         .name a {{ font-weight: 500; color: #1a73e8; text-decoration: none; }}
         .redemption-sub {{ font-size: 10px; color: var(--footer-text); margin-top: 2px; }}
         .highlight-rate {{ color: #d93025; font-weight: bold; }}
         .highlight-val {{ font-weight: 600; color: #e67e22; }}
         .fee-sub {{ font-size: 10px; color: var(--footer-text); }}
+
+        .dca-btn {{
+            background: #e8f0fe;
+            color: #1a73e8;
+            border: 1px solid #dadce0;
+            border-radius: 10px;
+            padding: 1px 5px;
+            font-size: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+        }}
+        .dca-btn:hover {{
+            background: #1a73e8;
+            color: #fff;
+            border-color: #1a73e8;
+            transform: scale(1.05);
+        }}
+        [data-theme="dark"] .dca-btn {{
+            background: #2a3b50;
+            color: #8ab4f8;
+            border-color: #3c4043;
+        }}
 
         .progress-container {{ background-color: var(--progress-track); border-radius: 6px; overflow: hidden; height: 20px; width: 100%; position: relative; }}
         .progress-bar {{ height: 100%; border-radius: 6px; min-width: 42px; display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; box-sizing: border-box; }}
@@ -1531,6 +1613,144 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
         .friend-card a {{ color: var(--link-color); text-decoration: none; font-weight: 600; font-size: 12px; display: block; }}
         .friend-desc {{ font-size: 10px; color: var(--footer-text); }}
 
+        /* 定投回测模态弹窗 */
+        .modal-overlay {{
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.45);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: blur(2px);
+        }}
+        .modal-overlay.show {{ display: flex; }}
+        .modal-card {{
+            background: var(--table-bg);
+            color: var(--text);
+            width: 92%;
+            max-width: 820px;
+            border-radius: 14px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            animation: modalFadeIn 0.2s ease;
+        }}
+        @keyframes modalFadeIn {{
+            from {{ transform: scale(0.96); opacity: 0; }}
+            to {{ transform: scale(1); opacity: 1; }}
+        }}
+        .modal-header {{
+            padding: 12px 18px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--header-bg);
+        }}
+        .modal-header h3 {{
+            margin: 0;
+            font-size: 15px;
+            color: var(--link-color);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }}
+        .modal-close {{
+            background: transparent;
+            border: none;
+            font-size: 20px;
+            color: var(--footer-text);
+            cursor: pointer;
+            line-height: 1;
+        }}
+        .modal-close:hover {{ color: #d93025; }}
+        .modal-body {{
+            padding: 14px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }}
+        .dca-controls {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+            background: var(--card-bg);
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }}
+        .dca-field {{
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }}
+        .dca-field select, .dca-field input {{
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid var(--input-border);
+            background: var(--input-bg);
+            color: var(--text);
+            font-size: 12px;
+            outline: none;
+        }}
+        .dca-run-btn {{
+            grid-column: 1 / -1;
+            background: var(--btn-active-bg);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            margin-top: 2px;
+        }}
+        .dca-run-btn:hover {{ opacity: 0.9; }}
+        
+        .dca-results-grid {{
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 8px;
+        }}
+        .dca-result-card {{
+            background: var(--hover-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 10px;
+            text-align: center;
+        }}
+        .dca-result-title {{
+            font-size: 10px;
+            color: var(--footer-text);
+            margin-bottom: 2px;
+        }}
+        .dca-result-value {{
+            font-size: 14px;
+            font-weight: 700;
+            font-family: "SFMono-Regular", Consolas, monospace;
+        }}
+        .dca-chart-box {{
+            height: 230px;
+            width: 100%;
+            position: relative;
+            background: var(--card-bg);
+            border-radius: 8px;
+            padding: 8px;
+            border: 1px solid var(--border);
+            box-sizing: border-box;
+        }}
+
         @media (max-width: 1200px) {{
             .macro-metrics-grid {{ grid-template-columns: repeat(2, 1fr); }}
         }}
@@ -1555,7 +1775,6 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
         <!-- 视图 1：首页 -->
         <section id="homeView" class="view-pane active">
             <div class="home-container">
-                <!-- 顶部 5 大宏观情绪与风险指标矩阵 -->
                 <div class="macro-metrics-grid">
                     <!-- 1. CNN 恐慌与贪婪指数 -->
                     <div class="metric-card">
@@ -1573,6 +1792,9 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
                         <div class="metric-desc">
                             0~25 极恐 | 26~45 恐惧 | 46~54 中性 | 55~75 贪婪 | 76~100 极贪
                         </div>
+                        <a href="{fng['url']}" target="_blank" class="metric-source-link" title="点击跳转至源数据官方网页">
+                            🔗 来源: {fng['source']} ↗
+                        </a>
                     </div>
 
                     <!-- 2. VIX 恐慌指数 -->
@@ -1588,6 +1810,9 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
                         <div class="metric-desc">
                             {vix['desc']}
                         </div>
+                        <a href="{vix['url']}" target="_blank" class="metric-source-link" title="点击跳转至源数据官方网页">
+                            🔗 来源: {vix['source']} ↗
+                        </a>
                     </div>
 
                     <!-- 3. USD/CNY 汇率 -->
@@ -1603,6 +1828,9 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
                         <div class="metric-desc">
                             {usdcny['desc']}
                         </div>
+                        <a href="{usdcny['url']}" target="_blank" class="metric-source-link" title="点击跳转至源数据官方网页">
+                            🔗 来源: {usdcny['source']} ↗
+                        </a>
                     </div>
 
                     <!-- 4. VXN 纳指波动率 -->
@@ -1618,6 +1846,9 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
                         <div class="metric-desc">
                             {vxn['desc']}
                         </div>
+                        <a href="{vxn['url']}" target="_blank" class="metric-source-link" title="点击跳转至源数据官方网页">
+                            🔗 来源: {vxn['source']} ↗
+                        </a>
                     </div>
 
                     <!-- 5. SKEW 黑天鹅指数 -->
@@ -1633,21 +1864,23 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
                         <div class="metric-desc">
                             {skew['desc']}
                         </div>
+                        <a href="{skew['url']}" target="_blank" class="metric-source-link" title="点击跳转至源数据官方网页">
+                            🔗 来源: {skew['source']} ↗
+                        </a>
                     </div>
                 </div>
 
-                <!-- 首页备忘与工具区 -->
                 <div class="home-grid-section">
                     <div class="home-card-box">
                         <div class="home-card-title">
                             <span>📌 宏观资产配置速览与逻辑备忘</span>
-                            <span style="font-size:11px; font-weight:normal; color:var(--link-color);">后续持续扩展</span>
+                            <span style="font-size:11px; font-weight:normal; color:var(--link-color);">数据源直通跳转</span>
                         </div>
                         <div class="home-card-body">
                             <p>• <strong>恐慌指标协同判断：</strong> 当 <strong>VIX 恐慌指数</strong> 显著飙升（>20）且 <strong>CNN 情绪指数</strong> 步入极度恐惧（0~25）时，通常对应全市场非理性杀跌的左侧加仓与定投翻倍窗口。</p>
                             <p>• <strong>汇率对冲与折溢价：</strong> 跟踪 <strong>USD/CNY 汇率</strong> 走势，当汇率波动较大时，QDII 基金的实际净值波动将叠加汇率损益，需警惕场内溢价过高风险。</p>
                             <div style="padding: 24px; text-align: center; background: var(--hover-bg); border-radius: 8px; margin-top: 10px; border: 1px dashed var(--border);">
-                                💡 首页后续内容扩充区域（可随时接入：大盘估值雷达、资金动向、重要财经日历）
+                                💡 每个宏观卡片底部均配有直达源头的官方链接（CNN、CBOE、新浪等），可随时点击校验一手数据。
                             </div>
                         </div>
                     </div>
@@ -1668,7 +1901,8 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
         <section id="fundView" class="view-pane">
             <div class="sub-filter-bar">
                 <div class="category-nav">
-                    <span class="category-title">市场大类:</span>
+                    <button class="cat-btn fav-filter" data-macro="favorites" data-sub="favorites">⭐ 我的自选</button>
+                    <span class="category-title" style="margin-left: 6px;">市场大类:</span>
                     <button class="cat-btn active" data-macro="all" data-sub="all">全部展示</button>
                     
                     <span class="category-title" style="margin-left: 8px;">美股:</span>
@@ -1697,30 +1931,56 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
                 </div>
             </div>
 
+            <!-- 全局动态定投筛选栏 -->
+            <div class="global-dca-filter-card" id="gDcaCard">
+                <div class="global-dca-filter-header" id="gDcaToggleBtn">
+                    <span class="global-dca-filter-title">📊 动态定投参数配置</span>
+                    <span id="gDcaToggleIcon">▼</span>
+                </div>
+                <div class="global-dca-filter-body" id="gDcaBody">
+                    <select id="gDcaFreq">
+                        <option value="daily">每日定投</option>
+                        <option value="weekly">每周定投</option>
+                        <option value="biweekly">双周定投</option>
+                        <option value="monthly" selected>每月定投</option>
+                    </select>
+                    <select id="gDcaDaySelect"></select>
+                    <select id="gDcaRange">
+                        <option value="half">近半年内</option>
+                        <option value="year" selected>近一年内</option>
+                        <option value="ytd">今年以来</option>
+                        <option value="all">统计区间全序列</option>
+                    </select>
+                    <button id="gDcaApplyBtn">计算并刷新排序</button>
+                </div>
+            </div>
+
             <div class="table-container">
                 <table id="fundTable">
                     <thead>
                         <tr>
-                            <th data-col="0" onclick="sortTable(0)">代码 <span class="sort-icon">⇅</span></th>
-                            <th data-col="1" onclick="sortTable(1)">基金名称 / 赎回费率阶梯 <span class="sort-icon">⇅</span></th>
-                            <th data-col="2" onclick="sortTable(2)">最新规模 <span class="sort-icon">⇅</span></th>
-                            <th data-col="3" onclick="sortTable(3)">运作费(管/托/销) <span class="sort-icon">⇅</span></th>
-                            <th data-col="4" onclick="sortTable(4)">申购费率 <span class="sort-icon">⇅</span></th>
-                            <th data-col="5" onclick="sortTable(5)">申购状态/限额 <span class="sort-icon">⇅</span></th>
-                            <th data-col="6" onclick="sortTable(6)">最高净值 <span class="sort-icon">⇅</span></th>
-                            <th data-col="7" onclick="sortTable(7)">最低净值 <span class="sort-icon">⇅</span></th>
-                            <th data-col="8" onclick="sortTable(8)">最新净值 <span class="sort-icon">⇅</span></th>
-                            <th data-col="9" onclick="sortTable(9)">最大回撤 <span class="sort-icon">⇅</span></th>
-                            <th data-col="10" onclick="sortTable(10)">自低点反弹 <span class="sort-icon">⇅</span></th>
-                            <th data-col="11" onclick="sortTable(11)">修复程度 <span class="sort-icon">⇅</span></th>
-                            <th data-col="12" onclick="sortTable(12)">修复时间 <span class="sort-icon">⇅</span></th>
-                            <th data-col="13" onclick="sortTable(13)">{col_today_title} <span class="sort-icon">⇅</span></th>
-                            <th data-col="14" onclick="sortTable(14)">近一周 <span class="sort-icon">⇅</span></th>
-                            <th data-col="15" onclick="sortTable(15)">近一月 <span class="sort-icon">⇅</span></th>
-                            <th data-col="16" onclick="sortTable(16)">近三月 <span class="sort-icon">⇅</span></th>
-                            <th data-col="17" onclick="sortTable(17)">近半年 <span class="sort-icon">⇅</span></th>
-                            <th data-col="18" onclick="sortTable(18)">近一年 <span class="sort-icon">⇅</span></th>
-                            <th data-col="19" onclick="sortTable(19)">今年内 <span class="sort-icon">⇅</span></th>
+                            <th data-col="0" onclick="sortTable(0)">收藏 <span class="sort-icon">⇅</span></th>
+                            <th data-col="1" onclick="sortTable(1)">代码 <span class="sort-icon">⇅</span></th>
+                            <th data-col="2" onclick="sortTable(2)">基金名称 / 赎回费率阶梯 <span class="sort-icon">⇅</span></th>
+                            <th data-col="3" onclick="sortTable(3)">最新规模 <span class="sort-icon">⇅</span></th>
+                            <th data-col="4" onclick="sortTable(4)">运作费(管/托/销) <span class="sort-icon">⇅</span></th>
+                            <th data-col="5" onclick="sortTable(5)">申购费率 <span class="sort-icon">⇅</span></th>
+                            <th data-col="6" onclick="sortTable(6)">申购状态/限额 <span class="sort-icon">⇅</span></th>
+                            <th data-col="7" onclick="sortTable(7)">最高净值 <span class="sort-icon">⇅</span></th>
+                            <th data-col="8" onclick="sortTable(8)">最低净值 <span class="sort-icon">⇅</span></th>
+                            <th data-col="9" onclick="sortTable(9)">最新净值 <span class="sort-icon">⇅</span></th>
+                            <th data-col="10" onclick="sortTable(10)">最大回撤 <span class="sort-icon">⇅</span></th>
+                            <th data-col="11" onclick="sortTable(11)">自低点反弹 <span class="sort-icon">⇅</span></th>
+                            <th data-col="12" onclick="sortTable(12)">修复程度 <span class="sort-icon">⇅</span></th>
+                            <th data-col="13" onclick="sortTable(13)">修复时间 <span class="sort-icon">⇅</span></th>
+                            <th data-col="14" onclick="sortTable(14)">{col_today_title} <span class="sort-icon">⇅</span></th>
+                            <th data-col="15" onclick="sortTable(15)">近一周 <span class="sort-icon">⇅</span></th>
+                            <th data-col="16" onclick="sortTable(16)">近一月 <span class="sort-icon">⇅</span></th>
+                            <th data-col="17" onclick="sortTable(17)">近三月 <span class="sort-icon">⇅</span></th>
+                            <th data-col="18" onclick="sortTable(18)">近半年 <span class="sort-icon">⇅</span></th>
+                            <th data-col="19" onclick="sortTable(19)">近一年 <span class="sort-icon">⇅</span></th>
+                            <th data-col="20" onclick="sortTable(20)">今年内 <span class="sort-icon">⇅</span></th>
+                            <th data-col="21" onclick="sortTable(21)"><span id="dcaHeaderTitle">月定投</span>收益 <span class="sort-icon">⇅</span></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1732,7 +1992,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
 
             <div class="footer-note">
                 <div class="footer-left">
-                    <span>💡 <strong>使用提示：</strong> 表格支持列宽拖拽调整与点击表头排序；点击基金行可展开查看前十大持仓、持有人结构饼图及走势。</span>
+                    <span>💡 <strong>使用提示：</strong> 点击首列 ☆ 添加自选；点击行内「📊 定投」呼出单只回测小工具；点击基金行展开双轴走势图（左轴净值，右轴涨幅，含十字光标）。</span>
                 </div>
                 <div class="footer-right">
                     <span>⏱️ 统计更新于: <strong>{update_time_str}</strong></span>
@@ -1741,9 +2001,79 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
         </section>
     </main>
 
+    <!-- 定投独立测算弹窗 -->
+    <div class="modal-overlay" id="dcaModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="dcaModalTitle">📊 智能定投/回测测算小工具</h3>
+                <button class="modal-close" id="closeDcaModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="dca-controls">
+                    <div class="dca-field">
+                        <label>定投频次</label>
+                        <select id="dcaFreq">
+                            <option value="daily">每日定投</option>
+                            <option value="weekly">每周定投</option>
+                            <option value="biweekly">每两周定投</option>
+                            <option value="monthly" selected>每月定投</option>
+                        </select>
+                    </div>
+                    <div class="dca-field" id="dcaDayField">
+                        <label id="dcaDayLabel">扣款日 (每月几号)</label>
+                        <select id="dcaDaySelect"></select>
+                    </div>
+                    <div class="dca-field">
+                        <label>每期金额 (元)</label>
+                        <input type="number" id="dcaAmount" value="1000" min="10" step="100">
+                    </div>
+                    <div class="dca-field">
+                        <label>测算周期</label>
+                        <select id="dcaRange">
+                            <option value="half">近半年内</option>
+                            <option value="year" selected>近一年内</option>
+                            <option value="ytd">今年以来</option>
+                            <option value="all">统计区间全序列</option>
+                        </select>
+                    </div>
+                    <button class="dca-run-btn" id="dcaRunBtn">🚀 刷新测算图表</button>
+                </div>
+
+                <div class="dca-results-grid">
+                    <div class="dca-result-card">
+                        <div class="dca-result-title">累计投入期数 / 本金</div>
+                        <div class="dca-result-value" id="resTotalInvest">--</div>
+                    </div>
+                    <div class="dca-result-card">
+                        <div class="dca-result-title">定投期末总资产</div>
+                        <div class="dca-result-value" id="resTotalAsset" style="color: var(--link-color);">--</div>
+                    </div>
+                    <div class="dca-result-card">
+                        <div class="dca-result-title">总收益额 (元)</div>
+                        <div class="dca-result-value" id="resProfit">--</div>
+                    </div>
+                    <div class="dca-result-card">
+                        <div class="dca-result-title">定投总收益率</div>
+                        <div class="dca-result-value" id="resReturnRate">--</div>
+                    </div>
+                    <div class="dca-result-card">
+                        <div class="dca-result-title">持仓均价 / 最新价</div>
+                        <div class="dca-result-value" id="resAvgPrice">--</div>
+                    </div>
+                </div>
+
+                <div class="dca-chart-box">
+                    <canvas id="dcaChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         var fundNavData = {json.dumps(nav_data_json, ensure_ascii=False)};
+        var fundNames = {json.dumps(fund_names_json, ensure_ascii=False)};
 
+        // Tab 切换
         document.querySelectorAll('.nav-tab-btn').forEach(btn => {{
             btn.addEventListener('click', function() {{
                 document.querySelectorAll('.nav-tab-btn').forEach(b => b.classList.remove('active'));
@@ -1754,6 +2084,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
             }});
         }});
 
+        // 主题切换
         (function() {{
             const toggle = document.getElementById('themeToggle');
             const currentTheme = localStorage.getItem('theme') || 'light';
@@ -1768,6 +2099,285 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
             }});
         }})();
 
+        // 自选管理模块 (Local Storage)
+        const FavManager = {{
+            STORAGE_KEY: 'fav_funds_list',
+            getFavs: function() {{
+                try {{
+                    return JSON.parse(localStorage.getItem(this.STORAGE_KEY)) || [];
+                }} catch (e) {{
+                    return [];
+                }}
+            }},
+            isFav: function(code) {{
+                return this.getFavs().includes(code);
+            }},
+            toggleFav: function(code) {{
+                let favs = this.getFavs();
+                if (favs.includes(code)) {{
+                    favs = favs.filter(c => c !== code);
+                }} else {{
+                    favs.push(code);
+                }}
+                localStorage.setItem(this.STORAGE_KEY, JSON.stringify(favs));
+                return favs.includes(code);
+            }}
+        }};
+
+        // 定投回测计算核心函数
+        function computeDCA(code, freq, targetDay, perAmount, range) {{
+            const raw = fundNavData[code];
+            if (!raw || !raw.dates || raw.dates.length < 2) return null;
+
+            const allDates = raw.dates;
+            const allNavs = raw.navs;
+            const latestDate = new Date(allDates[allDates.length - 1]);
+            let startDate = new Date(latestDate);
+
+            if (range === 'half') {{
+                startDate.setMonth(latestDate.getMonth() - 6);
+            }} else if (range === 'year') {{
+                startDate.setFullYear(latestDate.getFullYear() - 1);
+            }} else if (range === 'ytd') {{
+                startDate = new Date(latestDate.getFullYear(), 0, 1);
+            }} else {{
+                startDate = new Date(allDates[0]);
+            }}
+
+            const filtered = [];
+            for (let i = 0; i < allDates.length; i++) {{
+                const d = new Date(allDates[i]);
+                if (d >= startDate) {{
+                    filtered.push({{ date: allDates[i], dt: d, nav: allNavs[i] }});
+                }}
+            }}
+
+            if (filtered.length < 2) return null;
+
+            let totalInvest = 0;
+            let totalShares = 0;
+            let investCount = 0;
+            let lastInvestKey = '';
+
+            const timelineDates = [];
+            const timelineCost = [];
+            const timelineValue = [];
+
+            filtered.forEach(item => {{
+                let shouldBuy = false;
+                const dayOfWeek = item.dt.getDay(); 
+                const dayOfMonth = item.dt.getDate();
+
+                if (freq === 'daily') {{
+                    shouldBuy = true;
+                }} else if (freq === 'weekly') {{
+                    const oneJan = new Date(item.dt.getFullYear(), 0, 1);
+                    const weekNum = Math.ceil((((item.dt - oneJan) / 86400000) + oneJan.getDay() + 1) / 7);
+                    const weekKey = `${{item.dt.getFullYear()}}-W${{weekNum}}`;
+                    if (dayOfWeek >= targetDay && lastInvestKey !== weekKey) {{
+                        shouldBuy = true;
+                        lastInvestKey = weekKey;
+                    }}
+                }} else if (freq === 'biweekly') {{
+                    const oneJan = new Date(item.dt.getFullYear(), 0, 1);
+                    const weekNum = Math.ceil((((item.dt - oneJan) / 86400000) + oneJan.getDay() + 1) / 7);
+                    const biweekBlock = Math.floor(weekNum / 2);
+                    const biweekKey = `${{item.dt.getFullYear()}}-BW${{biweekBlock}}`;
+                    if (dayOfWeek >= targetDay && lastInvestKey !== biweekKey) {{
+                        shouldBuy = true;
+                        lastInvestKey = biweekKey;
+                    }}
+                }} else {{
+                    const monthKey = `${{item.dt.getFullYear()}}-${{item.dt.getMonth() + 1}}`;
+                    if (dayOfMonth >= targetDay && lastInvestKey !== monthKey) {{
+                        shouldBuy = true;
+                        lastInvestKey = monthKey;
+                    }}
+                }}
+
+                if (shouldBuy) {{
+                    const buyShares = perAmount / item.nav;
+                    totalShares += buyShares;
+                    totalInvest += perAmount;
+                    investCount++;
+                }}
+
+                const currentVal = totalShares * item.nav;
+                timelineDates.push(item.date);
+                timelineCost.push(Number(totalInvest.toFixed(2)));
+                timelineValue.push(Number(currentVal.toFixed(2)));
+            }});
+
+            const latestItem = filtered[filtered.length - 1];
+            const finalAsset = totalShares * latestItem.nav;
+            const profit = finalAsset - totalInvest;
+            const returnRate = totalInvest > 0 ? (profit / totalInvest) * 100 : 0;
+            const avgPrice = totalShares > 0 ? totalInvest / totalShares : 0;
+
+            return {{
+                investCount, totalInvest, finalAsset, profit, returnRate, avgPrice,
+                latestNav: latestItem.nav, timelineDates, timelineCost, timelineValue
+            }};
+        }}
+
+        function buildDayOptions(freqSelectId, daySelectId, labelId) {{
+            const freq = document.getElementById(freqSelectId).value;
+            const daySelect = document.getElementById(daySelectId);
+            const label = labelId ? document.getElementById(labelId) : null;
+            
+            daySelect.innerHTML = '';
+            if (freq === 'daily') {{
+                if (label) label.parentElement.style.display = 'none';
+                else daySelect.style.display = 'none';
+            }} else if (freq === 'weekly' || freq === 'biweekly') {{
+                if (label) {{
+                    label.parentElement.style.display = 'flex';
+                    label.textContent = freq === 'weekly' ? '扣款日 (每周几)' : '扣款日 (每两周周几)';
+                }} else {{
+                    daySelect.style.display = 'inline-block';
+                }}
+                const weeks = ['周一', '周二', '周三', '周四', '周五'];
+                weeks.forEach((w, i) => {{
+                    const opt = document.createElement('option');
+                    opt.value = i + 1; opt.textContent = w;
+                    if (i === 0) opt.selected = true;
+                    daySelect.appendChild(opt);
+                }});
+            }} else {{
+                if (label) {{
+                    label.parentElement.style.display = 'flex';
+                    label.textContent = '扣款日 (每月几号)';
+                }} else {{
+                    daySelect.style.display = 'inline-block';
+                }}
+                for (let i = 1; i <= 28; i++) {{
+                    const opt = document.createElement('option');
+                    opt.value = i; opt.textContent = i + ' 号';
+                    if (i === 1) opt.selected = true;
+                    daySelect.appendChild(opt);
+                }}
+            }}
+        }}
+
+        function updateTableDca() {{
+            const freq = document.getElementById('gDcaFreq').value;
+            const targetDay = parseInt(document.getElementById('gDcaDaySelect').value) || 1;
+            const range = document.getElementById('gDcaRange').value;
+
+            const headerTitle = document.getElementById('dcaHeaderTitle');
+            if (headerTitle) {{
+                const map = {{'daily':'日','weekly':'周','biweekly':'双周','monthly':'月'}};
+                headerTitle.textContent = (map[freq] || '') + '定投';
+            }}
+
+            document.querySelectorAll('#fundTable tbody tr.fund-row').forEach(row => {{
+                const code = row.getAttribute('data-code');
+                const res = computeDCA(code, freq, targetDay, 1000, range);
+                const dcaCell = row.querySelector('.dca-col');
+                
+                if (dcaCell) {{
+                    if (res && res.returnRate !== undefined) {{
+                        const rate = res.returnRate;
+                        dcaCell.setAttribute('data-val', rate);
+                        const sign = rate > 0 ? '+' : '';
+                        const colorClass = rate > 0 ? 'gain-positive' : (rate < 0 ? 'gain-negative' : '');
+                        dcaCell.className = `dca-col ${{colorClass}}`;
+                        dcaCell.innerHTML = `${{sign}}${{rate.toFixed(2)}}%`;
+                    }} else {{
+                        dcaCell.setAttribute('data-val', -9999);
+                        dcaCell.className = 'dca-col';
+                        dcaCell.innerHTML = '--';
+                    }}
+                }}
+            }});
+
+            if (currentSortCol === 21) {{
+                isAscending = !isAscending; 
+                sortTable(21);
+            }}
+        }}
+
+        let currentDcaCode = null;
+        let dcaChartInstance = null;
+
+        // 初始化定投测算弹窗交互
+        (function() {{
+            const modal = document.getElementById('dcaModal');
+            const closeBtn = document.getElementById('closeDcaModal');
+            const modalTitle = document.getElementById('dcaModalTitle');
+            const freqSelect = document.getElementById('dcaFreq');
+            const runBtn = document.getElementById('dcaRunBtn');
+
+            buildDayOptions('dcaFreq', 'dcaDaySelect', 'dcaDayLabel');
+            freqSelect.addEventListener('change', () => buildDayOptions('dcaFreq', 'dcaDaySelect', 'dcaDayLabel'));
+
+            buildDayOptions('gDcaFreq', 'gDcaDaySelect', null);
+            document.getElementById('gDcaFreq').addEventListener('change', () => buildDayOptions('gDcaFreq', 'gDcaDaySelect', null));
+            document.getElementById('gDcaApplyBtn').addEventListener('click', updateTableDca);
+
+            document.getElementById('gDcaToggleBtn').addEventListener('click', function() {{
+                document.getElementById('gDcaCard').classList.toggle('collapsed');
+            }});
+
+            window.openDcaModal = function(code) {{
+                currentDcaCode = code;
+                const name = fundNames[code] || code;
+                modalTitle.textContent = `📊 定投测算: [${{code}}] ${{name}}`;
+                modal.classList.add('show');
+                runBacktestModal();
+            }};
+
+            closeBtn.addEventListener('click', () => modal.classList.remove('show'));
+            modal.addEventListener('click', (e) => {{ if (e.target === modal) modal.classList.remove('show'); }});
+            runBtn.addEventListener('click', runBacktestModal);
+
+            function runBacktestModal() {{
+                if (!currentDcaCode) return;
+                const freq = freqSelect.value;
+                const targetDay = parseInt(document.getElementById('dcaDaySelect').value) || 1;
+                const perAmount = parseFloat(document.getElementById('dcaAmount').value) || 1000;
+                const range = document.getElementById('dcaRange').value;
+
+                const res = computeDCA(currentDcaCode, freq, targetDay, perAmount, range);
+                if (!res) return;
+
+                document.getElementById('resTotalInvest').innerHTML = `${{res.investCount}} 期 / <strong>${{res.totalInvest.toLocaleString()}}</strong> 元`;
+                document.getElementById('resTotalAsset').innerHTML = `<strong>${{res.finalAsset.toFixed(2)}}</strong> 元`;
+                
+                const profitElem = document.getElementById('resProfit');
+                profitElem.textContent = `${{res.profit >= 0 ? '+' : ''}}${{res.profit.toFixed(2)}}`;
+                profitElem.style.color = res.profit >= 0 ? '#d93025' : '#188038';
+
+                const rateElem = document.getElementById('resReturnRate');
+                rateElem.textContent = `${{res.returnRate >= 0 ? '+' : ''}}${{res.returnRate.toFixed(2)}}%`;
+                rateElem.style.color = res.returnRate >= 0 ? '#d93025' : '#188038';
+
+                document.getElementById('resAvgPrice').innerHTML = `${{res.avgPrice.toFixed(4)}} / ${{res.latestNav.toFixed(4)}}`;
+
+                const ctx = document.getElementById('dcaChart').getContext('2d');
+                if (dcaChartInstance) dcaChartInstance.destroy();
+
+                dcaChartInstance = new Chart(ctx, {{
+                    type: 'line',
+                    data: {{
+                        labels: res.timelineDates,
+                        datasets: [
+                            {{ label: '总资产 (元)', data: res.timelineValue, borderColor: '#1a73e8', backgroundColor: 'rgba(26, 115, 232, 0.08)', fill: true, pointRadius: 0, borderWidth: 2, tension: 0.1 }},
+                            {{ label: '累计本金 (元)', data: res.timelineCost, borderColor: '#e67e22', borderDash: [4, 4], pointRadius: 0, borderWidth: 1.5, fill: false }}
+                        ]
+                    }},
+                    options: {{
+                        responsive: true, maintainAspectRatio: false, interaction: {{ mode: 'index', intersect: false }},
+                        plugins: {{ legend: {{ display: true, position: 'top', labels: {{ font: {{ size: 10 }}, boxWidth: 12 }} }} }},
+                        scales: {{
+                            x: {{ ticks: {{ maxTicksLimit: 8, font: {{ size: 9 }} }}, grid: {{ display: false }} }},
+                            y: {{ ticks: {{ font: {{ size: 9 }} }}, grid: {{ color: 'rgba(0,0,0,0.05)' }} }}
+                        }}
+                    }}
+                }});
+            }}
+        }})();
+
         document.addEventListener('DOMContentLoaded', function() {{
             const catBtns = document.querySelectorAll('.cat-btn');
             const searchInput = document.getElementById('searchInput');
@@ -1777,9 +2387,43 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
             let currentSub = 'all';
             let searchKeyword = '';
 
+            updateTableDca();
+
+            function syncFavDisplay() {{
+                document.querySelectorAll('.star-btn').forEach(btn => {{
+                    const code = btn.getAttribute('data-code');
+                    const isF = FavManager.isFav(code);
+                    const td = btn.closest('td');
+                    if (isF) {{
+                        btn.classList.add('starred');
+                        btn.textContent = '★';
+                        if (td) td.setAttribute('data-val', '1');
+                    }} else {{
+                        btn.classList.remove('starred');
+                        btn.textContent = '☆';
+                        if (td) td.setAttribute('data-val', '0');
+                    }}
+                }});
+            }}
+            syncFavDisplay();
+
+            document.getElementById('fundTable').addEventListener('click', function(e) {{
+                const starBtn = e.target.closest('.star-btn');
+                if (starBtn) {{
+                    e.stopPropagation();
+                    const code = starBtn.getAttribute('data-code');
+                    FavManager.toggleFav(code);
+                    syncFavDisplay();
+                    if (currentMacro === 'favorites') {{
+                        applyFilters();
+                    }}
+                }}
+            }});
+
             function applyFilters() {{
                 let hasVisible = false;
                 const keyword = searchKeyword.trim().toLowerCase();
+                const favList = FavManager.getFavs();
 
                 allRows.forEach(row => {{
                     if (row.classList.contains('holding-row')) return;
@@ -1791,7 +2435,9 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
                     const code = codeCell ? codeCell.textContent.toLowerCase() : '';
 
                     let matchCategory = false;
-                    if (currentMacro === 'all') {{
+                    if (currentMacro === 'favorites') {{
+                        matchCategory = favList.includes(code.toUpperCase()) || favList.includes(code.toLowerCase());
+                    }} else if (currentMacro === 'all') {{
                         matchCategory = true;
                     }} else if (currentSub === 'all') {{
                         matchCategory = (macro === currentMacro);
@@ -1819,7 +2465,11 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
                 if (emptyRow) {{
                     emptyRow.style.display = hasVisible ? 'none' : '';
                     if (!hasVisible) {{
-                        emptyRow.querySelector('td').textContent = keyword ? '未找到匹配基金' : '当前分类暂无数据';
+                        if (currentMacro === 'favorites') {{
+                            emptyRow.querySelector('td').textContent = '您尚未收藏任何基金，请点击表格首列 ☆ 进行添加';
+                        }} else {{
+                            emptyRow.querySelector('td').textContent = keyword ? '未找到匹配基金' : '当前分类暂无数据';
+                        }}
                     }}
                 }}
             }}
@@ -1845,6 +2495,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
         var chartInstances = {{}};
         var holderChartInstances = {{}};
 
+        // 注册饼图百分比标签插件
         const pieLabelsPlugin = {{
             id: 'pieLabels',
             afterDraw(chart) {{
@@ -1870,6 +2521,37 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
             }}
         }};
         Chart.register(pieLabelsPlugin);
+
+        // 注册专业十字光标插件（Crosshair）
+        const fundCrosshairPlugin = {{
+            id: 'fundCrosshairPlugin',
+            afterDraw(chart) {{
+                if (!chart._crosshair) return;
+                const ctx = chart.ctx;
+                const {{ left, right, top, bottom }} = chart.chartArea;
+                const {{ x, y }} = chart._crosshair;
+
+                if (x < left || x > right || y < top || y > bottom) return;
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.setLineDash([4, 4]);
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--footer-text').trim() || '#70757a';
+
+                // 绘制垂直准星
+                ctx.moveTo(x, top);
+                ctx.lineTo(x, bottom);
+
+                // 绘制水平准星
+                ctx.moveTo(left, y);
+                ctx.lineTo(right, y);
+
+                ctx.stroke();
+                ctx.restore();
+            }}
+        }};
+        Chart.register(fundCrosshairPlugin);
 
         function filterNavData(data, period) {{
             if (!data || !data.dates || data.dates.length === 0) return {{ dates: [], navs: [] }};
@@ -1952,6 +2634,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
             }});
         }}
 
+        // 优化后的双轴折线图构建函数（左轴净值，右轴涨幅，含十字准星与浮窗）
         function initChart(code) {{
             const canvas = document.getElementById(`chart-${{code}}`);
             if (!canvas) return;
@@ -1972,6 +2655,10 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
             }}
 
             const filtered = filterNavData(data, currentPeriod);
+            const baseNav = filtered.navs.length > 0 ? filtered.navs[0] : 1.0;
+            const textColor = getComputedStyle(document.documentElement).getPropertyValue('--footer-text').trim() || '#70757a';
+            const borderColor = getComputedStyle(document.documentElement).getPropertyValue('--border').trim() || '#e0e0e0';
+
             const ctx = canvas.getContext('2d');
             const chart = new Chart(ctx, {{
                 type: 'line',
@@ -1983,18 +2670,120 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
                         borderColor: '#1a73e8',
                         backgroundColor: 'rgba(26,115,232,0.1)',
                         pointRadius: 1.5,
+                        pointHoverRadius: 5,
+                        pointHoverBackgroundColor: '#1a73e8',
                         fill: true,
-                        tension: 0.1
+                        tension: 0.1,
+                        yAxisID: 'y'
                     }}]
                 }},
                 options: {{
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {{ legend: {{ display: false }} }}
+                    interaction: {{
+                        mode: 'index',
+                        intersect: false
+                    }},
+                    onHover: function(event, activeElements, chart) {{
+                        const rect = chart.canvas.getBoundingClientRect();
+                        const x = event.native ? event.native.offsetX : (event.x - rect.left);
+                        const y = event.native ? event.native.offsetY : (event.y - rect.top);
+                        if (x >= chart.chartArea.left && x <= chart.chartArea.right &&
+                            y >= chart.chartArea.top && y <= chart.chartArea.bottom) {{
+                            chart._crosshair = {{ x, y }};
+                        }} else {{
+                            chart._crosshair = null;
+                        }}
+                        chart.draw();
+                    }},
+                    plugins: {{
+                        legend: {{ display: false }},
+                        tooltip: {{
+                            enabled: true,
+                            mode: 'index',
+                            intersect: false,
+                            displayColors: false,
+                            callbacks: {{
+                                title: function(items) {{
+                                    return items.length ? `时间: ${{items[0].label}}` : '';
+                                }},
+                                label: function(context) {{
+                                    const nav = Number(context.parsed.y);
+                                    let gainText = '--';
+                                    if (baseNav && baseNav > 0) {{
+                                        const gain = ((nav - baseNav) / baseNav) * 100.0;
+                                        const sign = gain >= 0 ? '+' : '';
+                                        gainText = `${{sign}}${{gain.toFixed(2)}}%`;
+                                    }}
+                                    return [`净值: ${{nav.toFixed(4)}}`, `涨幅: ${{gainText}}`];
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        x: {{
+                            ticks: {{
+                                maxTicksLimit: 8,
+                                font: {{ size: 9 }},
+                                color: textColor
+                            }},
+                            grid: {{ display: false }}
+                        }},
+                        // 左轴：净值显示
+                        y: {{
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            ticks: {{
+                                font: {{ size: 9 }},
+                                color: textColor,
+                                callback: function(val) {{ return val.toFixed(4); }}
+                            }},
+                            grid: {{ color: borderColor }}
+                        }},
+                        // 右轴：涨幅显示（以本周期起点净值为基准联动）
+                        y1: {{
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            ticks: {{
+                                font: {{ size: 9 }},
+                                color: textColor,
+                                callback: function(val) {{
+                                    if (!baseNav || baseNav <= 0) return '0.00%';
+                                    const pct = ((val - baseNav) / baseNav) * 100.0;
+                                    return `${{pct >= 0 ? '+' : ''}}${{pct.toFixed(2)}}%`;
+                                }}
+                            }},
+                            grid: {{ drawOnChartArea: false }}
+                        }}
+                    }}
                 }}
             }});
+
+            // 当鼠标移出图表时，清除十字准星
+            canvas.addEventListener('mouseleave', function() {{
+                if (chart) {{
+                    chart._crosshair = null;
+                    chart.draw();
+                }}
+            }});
+
             chartInstances[code] = chart;
 
+            // 联动双轴比例
+            function syncYAxes(chartObj) {{
+                if (!chartObj) return;
+                const yScale = chartObj.scales.y;
+                const y1Scale = chartObj.scales.y1;
+                if (yScale && y1Scale) {{
+                    y1Scale.options.min = yScale.min;
+                    y1Scale.options.max = yScale.max;
+                }}
+            }}
+            syncYAxes(chart);
+
+            // 周期筛选切换事件
             if (container && !container._eventsBound) {{
                 const btns = container.querySelectorAll('.period-btn');
                 btns.forEach(btn => {{
@@ -2005,9 +2794,27 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
                         const period = this.dataset.period;
                         const fData = filterNavData(data, period);
                         if (chartInstances[code]) {{
-                            chartInstances[code].data.labels = fData.dates;
-                            chartInstances[code].data.datasets[0].data = fData.navs;
-                            chartInstances[code].update();
+                            const curChart = chartInstances[code];
+                            curChart.data.labels = fData.dates;
+                            curChart.data.datasets[0].data = fData.navs;
+                            const newBaseNav = fData.navs.length > 0 ? fData.navs[0] : 1.0;
+                            curChart.options.plugins.tooltip.callbacks.label = function(context) {{
+                                const nav = Number(context.parsed.y);
+                                let gainText = '--';
+                                if (newBaseNav && newBaseNav > 0) {{
+                                    const gain = ((nav - newBaseNav) / newBaseNav) * 100.0;
+                                    const sign = gain >= 0 ? '+' : '';
+                                    gainText = `${{sign}}${{gain.toFixed(2)}}%`;
+                                }}
+                                return [`净值: ${{nav.toFixed(4)}}`, `涨幅: ${{gainText}}`];
+                            }};
+                            curChart.options.scales.y1.ticks.callback = function(val) {{
+                                if (!newBaseNav || newBaseNav <= 0) return '0.00%';
+                                const pct = ((val - newBaseNav) / newBaseNav) * 100.0;
+                                return `${{pct >= 0 ? '+' : ''}}${{pct.toFixed(2)}}%`;
+                            }};
+                            curChart.update();
+                            syncYAxes(curChart);
                         }}
                     }});
                 }});
@@ -2018,8 +2825,16 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
         document.addEventListener('DOMContentLoaded', function() {{
             const table = document.getElementById('fundTable');
             table.addEventListener('click', function(e) {{
+                const dcaBtn = e.target.closest('.dca-btn');
+                if (dcaBtn) {{
+                    e.stopPropagation();
+                    const code = dcaBtn.dataset.code;
+                    window.openDcaModal(code);
+                    return;
+                }}
+
                 const target = e.target.closest('tr.fund-row');
-                if (!target || e.target.tagName === 'A') return;
+                if (!target || e.target.tagName === 'A' || e.target.closest('.star-btn')) return;
                 const code = target.dataset.code;
                 const hRow = document.querySelector(`.holding-row[data-code="${{code}}"]`);
                 if (hRow) {{
@@ -2237,9 +3052,9 @@ def main():
     opener = get_direct_opener()
     print(f"统计区间: {args.start} 至 {args.end}")
     
-    # 采用多源机制抓取宏观指标 (CNN F&G, VIX, USD/CNY, VXN, SKEW)
+    # 抓取多维度宏观指标 (带来源通道与源链接)
     home_metrics = fetch_home_market_metrics(opener)
-    print(f"📊 核心宏观指标多源获取完成: 恐慌贪婪 {home_metrics['fng']['score']} | VIX {home_metrics['vix']['val']} | USD/CNY {home_metrics['usdcny']['val']} | VXN {home_metrics['vxn']['val']} | SKEW {home_metrics['skew']['val']}")
+    print(f"📊 核心宏观指标获取成功: 恐慌贪婪 {home_metrics['fng']['score']} | VIX {home_metrics['vix']['val']} | USD/CNY {home_metrics['usdcny']['val']} | VXN {home_metrics['vxn']['val']} | SKEW {home_metrics['skew']['val']}")
 
     results = []
     # 1. 抓取基金列表
