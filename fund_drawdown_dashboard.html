@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>场外基金量化与资产配置看板</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -352,6 +352,7 @@
             min-height: 0; 
             overflow-y: auto; 
             overflow-x: auto; 
+            -webkit-overflow-scrolling: touch;
             box-sizing: border-box; 
             background: var(--table-bg);
             border-radius: 10px; 
@@ -633,8 +634,123 @@
             box-sizing: border-box;
         }
 
-        @media (max-width: 1200px) {
-            .macro-metrics-grid { grid-template-columns: repeat(2, 1fr); }
+        /* ======================================================================
+           移动端与小屏专属深度响应式适配 (修正花括号转义)
+           ====================================================================== */
+        @media (max-width: 992px) {
+            body {
+                height: auto;
+                min-height: 100dvh;
+                overflow-y: auto;
+                overflow-x: hidden;
+                padding: 0;
+            }
+            .main-navbar {
+                padding: 10px 12px;
+                height: auto;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            .nav-brand {
+                font-size: 15px;
+            }
+            .views-container {
+                padding: 8px 10px;
+                height: auto;
+                overflow: visible;
+            }
+            .view-pane {
+                height: auto;
+                overflow: visible;
+            }
+            .macro-metrics-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+            }
+            .home-grid-section {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+            .sub-filter-bar {
+                flex-direction: column;
+                align-items: stretch;
+                padding: 10px;
+                gap: 8px;
+            }
+            .search-box-wrap {
+                width: 100%;
+            }
+            .search-box-wrap input {
+                height: 32px;
+                font-size: 13px;
+            }
+            .global-dca-filter-card {
+                flex-direction: column;
+                align-items: stretch;
+                padding: 10px;
+                gap: 8px;
+            }
+            .global-dca-filter-body {
+                flex-direction: column;
+                align-items: stretch;
+                width: 100%;
+            }
+            .global-dca-filter-card select,
+            .global-dca-filter-card button {
+                width: 100%;
+                height: 32px;
+                font-size: 12px;
+            }
+            .table-container {
+                height: auto;
+                flex: none;
+                max-height: 70vh;
+                padding: 4px;
+            }
+            .holdings-wrapper {
+                flex-direction: column;
+                gap: 10px;
+            }
+            .holdings-container {
+                width: 100%;
+                flex: none;
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+            .empty-holdings-placeholder {
+                grid-column: span 1;
+            }
+            .chart-container {
+                width: 100%;
+                flex: none;
+            }
+            .modal-card {
+                width: 95%;
+                max-height: 90vh;
+            }
+            .modal-body {
+                padding: 10px 12px;
+            }
+            .dca-controls {
+                grid-template-columns: 1fr;
+            }
+            .dca-results-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .dca-result-card:last-child {
+                grid-column: span 2;
+            }
+            .footer-note {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 6px;
+                margin-bottom: 12px;
+            }
+        }
+        @media (max-width: 480px) {
+            .macro-metrics-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -662,20 +778,20 @@
                     <div class="metric-card">
                         <div class="metric-header">
                             <span>CNN 恐慌贪婪指数</span>
-                            <span style="font-size:10px; color:var(--footer-text);">2026-09-12 14:28:06</span>
+                            <span style="font-size:10px; color:var(--footer-text);">2026-09-12 19:29:21</span>
                         </div>
                         <div class="metric-body">
-                            <span class="metric-value" style="color:#1a73e8;">63.0</span>
-                            <span class="metric-tag" style="background:rgba(26,115,232,0.12); color:#1a73e8;">Greed</span>
+                            <span class="metric-value" style="color:#1a73e8;">33.3</span>
+                            <span class="metric-tag" style="background:rgba(26,115,232,0.12); color:#1a73e8;">恐惧</span>
                         </div>
                         <div class="fng-bar-track">
-                            <div class="fng-bar-pointer" style="left: 63.0%;"></div>
+                            <div class="fng-bar-pointer" style="left: 33.3%;"></div>
                         </div>
                         <div class="metric-desc">
                             0~25 极恐 | 26~45 恐惧 | 46~54 中性 | 55~75 贪婪 | 76~100 极贪
                         </div>
-                        <a href="https://alternative.me/crypto/fear-and-greed-index/" target="_blank" class="metric-source-link" title="点击跳转至源数据官方网页">
-                            🔗 来源: Alternative 情绪源 ↗
+                        <a href="https://edition.cnn.com/markets/fear-and-greed" target="_blank" class="metric-source-link" title="点击跳转至源数据官方网页">
+                            🔗 来源: CNN 官方接口 ↗
                         </a>
                     </div>
 
@@ -683,7 +799,7 @@
                     <div class="metric-card">
                         <div class="metric-header">
                             <span>VIX 恐慌指数</span>
-                            <span style="font-size:10px; color:var(--footer-text);">2026-09-12 14:28:06</span>
+                            <span style="font-size:10px; color:var(--footer-text);">2026-09-12 19:29:21</span>
                         </div>
                         <div class="metric-body">
                             <span class="metric-value" style="color:#d93025;">15.84</span>
@@ -701,7 +817,7 @@
                     <div class="metric-card">
                         <div class="metric-header">
                             <span>USD/CNY 汇率</span>
-                            <span style="font-size:10px; color:var(--footer-text);">2026-09-12 14:28:06</span>
+                            <span style="font-size:10px; color:var(--footer-text);">2026-09-12 19:29:21</span>
                         </div>
                         <div class="metric-body">
                             <span class="metric-value" style="color:#188038;">6.6974</span>
@@ -719,7 +835,7 @@
                     <div class="metric-card">
                         <div class="metric-header">
                             <span>VXN 纳指波动率</span>
-                            <span style="font-size:10px; color:var(--footer-text);">2026-09-12 14:28:06</span>
+                            <span style="font-size:10px; color:var(--footer-text);">2026-09-12 19:29:21</span>
                         </div>
                         <div class="metric-body">
                             <span class="metric-value" style="color:#34a853;">21.02</span>
@@ -737,7 +853,7 @@
                     <div class="metric-card">
                         <div class="metric-header">
                             <span>SKEW 黑天鹅偏斜</span>
-                            <span style="font-size:10px; color:var(--footer-text);">2026-09-12 14:28:06</span>
+                            <span style="font-size:10px; color:var(--footer-text);">2026-09-12 19:29:21</span>
                         </div>
                         <div class="metric-body">
                             <span class="metric-value" style="color:#e67e22;">154.49</span>
@@ -42830,7 +42946,7 @@
                     <span>💡 <strong>使用提示：</strong> 点击首列 ☆ 添加自选；点击行内「📊 定投」呼出单只回测小工具；点击基金行展开双轴走势图（左轴净值，右轴涨幅，含十字光标）；表头支持拖拽调整列宽与点击排序。</span>
                 </div>
                 <div class="footer-right">
-                    <span>⏱️ 统计更新于: <strong>2026-09-12 14:34</strong></span>
+                    <span>⏱️ 统计更新于: <strong>2026-09-12 19:36</strong></span>
                 </div>
             </div>
         </section>
