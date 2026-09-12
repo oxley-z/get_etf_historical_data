@@ -26,7 +26,7 @@ DEFAULT_HEADERS = {
 # ==============================================================================
 # 配置中心：测试环境 / 发布环境 快速切换开关
 # ==============================================================================
-IS_DEBUG = True  # True: 调试测试模式(几秒完成); False: 正式发布模式(全量抓取)
+IS_DEBUG = False  # True: 调试测试模式(几秒完成); False: 正式发布模式(全量抓取)
 
 TEST_FUNDS = [
     "002891",  # 美股主动代表
@@ -1516,6 +1516,21 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
         th:nth-child(2), th:nth-child(3), th:nth-child(4), th:nth-child(5), th:nth-child(6), th:nth-child(7) {{ text-align: left; }}
         tr:hover {{ background-color: var(--hover-bg); }}
         
+        .resizer {{
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 7px;
+            cursor: col-resize;
+            user-select: none;
+            touch-action: none;
+            z-index: 20;
+        }}
+        .resizer:hover, th.resizing .resizer {{
+            background-color: var(--link-color);
+        }}
+
         .star-btn {{
             background: transparent;
             border: none;
@@ -1959,28 +1974,28 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
                 <table id="fundTable">
                     <thead>
                         <tr>
-                            <th data-col="0" onclick="sortTable(0)">收藏 <span class="sort-icon">⇅</span></th>
-                            <th data-col="1" onclick="sortTable(1)">代码 <span class="sort-icon">⇅</span></th>
-                            <th data-col="2" onclick="sortTable(2)">基金名称 / 赎回费率阶梯 <span class="sort-icon">⇅</span></th>
-                            <th data-col="3" onclick="sortTable(3)">最新规模 <span class="sort-icon">⇅</span></th>
-                            <th data-col="4" onclick="sortTable(4)">运作费(管/托/销) <span class="sort-icon">⇅</span></th>
-                            <th data-col="5" onclick="sortTable(5)">申购费率 <span class="sort-icon">⇅</span></th>
-                            <th data-col="6" onclick="sortTable(6)">申购状态/限额 <span class="sort-icon">⇅</span></th>
-                            <th data-col="7" onclick="sortTable(7)">最高净值 <span class="sort-icon">⇅</span></th>
-                            <th data-col="8" onclick="sortTable(8)">最低净值 <span class="sort-icon">⇅</span></th>
-                            <th data-col="9" onclick="sortTable(9)">最新净值 <span class="sort-icon">⇅</span></th>
-                            <th data-col="10" onclick="sortTable(10)">最大回撤 <span class="sort-icon">⇅</span></th>
-                            <th data-col="11" onclick="sortTable(11)">自低点反弹 <span class="sort-icon">⇅</span></th>
-                            <th data-col="12" onclick="sortTable(12)">修复程度 <span class="sort-icon">⇅</span></th>
-                            <th data-col="13" onclick="sortTable(13)">修复时间 <span class="sort-icon">⇅</span></th>
-                            <th data-col="14" onclick="sortTable(14)">{col_today_title} <span class="sort-icon">⇅</span></th>
-                            <th data-col="15" onclick="sortTable(15)">近一周 <span class="sort-icon">⇅</span></th>
-                            <th data-col="16" onclick="sortTable(16)">近一月 <span class="sort-icon">⇅</span></th>
-                            <th data-col="17" onclick="sortTable(17)">近三月 <span class="sort-icon">⇅</span></th>
-                            <th data-col="18" onclick="sortTable(18)">近半年 <span class="sort-icon">⇅</span></th>
-                            <th data-col="19" onclick="sortTable(19)">近一年 <span class="sort-icon">⇅</span></th>
-                            <th data-col="20" onclick="sortTable(20)">今年内 <span class="sort-icon">⇅</span></th>
-                            <th data-col="21" onclick="sortTable(21)"><span id="dcaHeaderTitle">月定投</span>收益 <span class="sort-icon">⇅</span></th>
+                            <th data-col="0" onclick="handleHeaderClick(0)">收藏 <span class="sort-icon">⇅</span></th>
+                            <th data-col="1" onclick="handleHeaderClick(1)">代码 <span class="sort-icon">⇅</span></th>
+                            <th data-col="2" onclick="handleHeaderClick(2)">基金名称 / 赎回费率阶梯 <span class="sort-icon">⇅</span></th>
+                            <th data-col="3" onclick="handleHeaderClick(3)">最新规模 <span class="sort-icon">⇅</span></th>
+                            <th data-col="4" onclick="handleHeaderClick(4)">运作费(管/托/销) <span class="sort-icon">⇅</span></th>
+                            <th data-col="5" onclick="handleHeaderClick(5)">申购费率 <span class="sort-icon">⇅</span></th>
+                            <th data-col="6" onclick="handleHeaderClick(6)">申购状态/限额 <span class="sort-icon">⇅</span></th>
+                            <th data-col="7" onclick="handleHeaderClick(7)">最高净值 <span class="sort-icon">⇅</span></th>
+                            <th data-col="8" onclick="handleHeaderClick(8)">最低净值 <span class="sort-icon">⇅</span></th>
+                            <th data-col="9" onclick="handleHeaderClick(9)">最新净值 <span class="sort-icon">⇅</span></th>
+                            <th data-col="10" onclick="handleHeaderClick(10)">最大回撤 <span class="sort-icon">⇅</span></th>
+                            <th data-col="11" onclick="handleHeaderClick(11)">自低点反弹 <span class="sort-icon">⇅</span></th>
+                            <th data-col="12" onclick="handleHeaderClick(12)">修复程度 <span class="sort-icon">⇅</span></th>
+                            <th data-col="13" onclick="handleHeaderClick(13)">修复时间 <span class="sort-icon">⇅</span></th>
+                            <th data-col="14" onclick="handleHeaderClick(14)">{col_today_title} <span class="sort-icon">⇅</span></th>
+                            <th data-col="15" onclick="handleHeaderClick(15)">近一周 <span class="sort-icon">⇅</span></th>
+                            <th data-col="16" onclick="handleHeaderClick(16)">近一月 <span class="sort-icon">⇅</span></th>
+                            <th data-col="17" onclick="handleHeaderClick(17)">近三月 <span class="sort-icon">⇅</span></th>
+                            <th data-col="18" onclick="handleHeaderClick(18)">近半年 <span class="sort-icon">⇅</span></th>
+                            <th data-col="19" onclick="handleHeaderClick(19)">近一年 <span class="sort-icon">⇅</span></th>
+                            <th data-col="20" onclick="handleHeaderClick(20)">今年内 <span class="sort-icon">⇅</span></th>
+                            <th data-col="21" onclick="handleHeaderClick(21)"><span id="dcaHeaderTitle">月定投</span>收益 <span class="sort-icon">⇅</span></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1992,7 +2007,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
 
             <div class="footer-note">
                 <div class="footer-left">
-                    <span>💡 <strong>使用提示：</strong> 点击首列 ☆ 添加自选；点击行内「📊 定投」呼出单只回测小工具；点击基金行展开双轴走势图（左轴净值，右轴涨幅，含十字光标）。</span>
+                    <span>💡 <strong>使用提示：</strong> 点击首列 ☆ 添加自选；点击行内「📊 定投」呼出单只回测小工具；点击基金行展开双轴走势图（左轴净值，右轴涨幅，含十字光标）；表头支持拖拽调整列宽与点击排序。</span>
                 </div>
                 <div class="footer-right">
                     <span>⏱️ 统计更新于: <strong>{update_time_str}</strong></span>
@@ -2854,6 +2869,13 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
 
         let currentSortCol = -1;
         let isAscending = true;
+
+        // 排序事件，若在拖拽则不执行排序
+        function handleHeaderClick(colIndex) {{
+            if (window._isResizingColumn) return;
+            sortTable(colIndex);
+        }}
+
         function sortTable(colIndex) {{
             document.querySelectorAll('.holding-row').forEach(row => {{
                 row.classList.remove('show');
@@ -2889,7 +2911,64 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
             if (empty) fragment.appendChild(empty);
             tbody.innerHTML = '';
             tbody.appendChild(fragment);
+            
+            const headers = table.querySelectorAll("th");
+            headers.forEach((th, idx) => {{
+                const icon = th.querySelector(".sort-icon");
+                if (icon) {{
+                    if (idx === colIndex) {{
+                        icon.textContent = isAscending ? "▲" : "▼";
+                        th.style.color = "#1a73e8";
+                    }} else {{
+                        icon.textContent = "⇅";
+                        th.style.color = "";
+                    }}
+                }}
+            }});
         }}
+
+        // 初始化表格表头可拖拽调节列宽功能
+        document.addEventListener("DOMContentLoaded", function () {{
+            const table = document.getElementById("fundTable");
+            const headers = table.querySelectorAll("thead th");
+            window._isResizingColumn = false;
+
+            headers.forEach((th) => {{
+                const resizer = document.createElement("div");
+                resizer.classList.add("resizer");
+                th.appendChild(resizer);
+
+                let startX = 0;
+                let startW = 0;
+
+                resizer.addEventListener("mousedown", function (e) {{
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window._isResizingColumn = true;
+                    startX = e.clientX;
+                    startW = th.getBoundingClientRect().width;
+                    th.classList.add("resizing");
+
+                    function onMouseMove(e) {{
+                        const diff = e.clientX - startX;
+                        const newWidth = Math.max(35, startW + diff);
+                        th.style.width = newWidth + "px";
+                    }}
+
+                    function onMouseUp() {{
+                        th.classList.remove("resizing");
+                        document.removeEventListener("mousemove", onMouseMove);
+                        document.removeEventListener("mouseup", onMouseUp);
+                        setTimeout(() => {{
+                            window._isResizingColumn = false;
+                        }}, 60);
+                    }}
+
+                    document.addEventListener("mousemove", onMouseMove);
+                    document.addEventListener("mouseup", onMouseUp);
+                }});
+            }});
+        }});
     </script>
 </body>
 </html>
