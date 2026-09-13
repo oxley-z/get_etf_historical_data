@@ -322,10 +322,6 @@ def fetch_home_market_metrics(opener):
     }
 
 def fetch_fund_country_distribution(opener, code, is_qdii=False):
-    """
-    多源获取基金的国家/地区资产配置分布及披露日期：
-    返回格式统一为: {"date": "YYYY-MM-DD", "countries": [...]}
-    """
     cache_file = os.path.join(COUNTRY_CACHE_DIR, f"{code}_country.json")
     
     if os.path.exists(cache_file):
@@ -339,7 +335,7 @@ def fetch_fund_country_distribution(opener, code, is_qdii=False):
 
     query_code = MAIN_CODE_MAP.get(code, code)
 
-    # 1. 公告正文穿透解析[cite: 1]
+    # 1. 公告正文穿透解析
     if is_qdii:
         try:
             rep_url = f"https://api.fund.eastmoney.com/f10/JJGG?fundcode={query_code}&pageIndex=1&pageSize=60&type=3"
@@ -447,7 +443,6 @@ def fetch_fund_country_distribution(opener, code, is_qdii=False):
         except Exception:
             pass
 
-    # 2. 国海富兰克林官网详情页
     url_fts = f"https://www.ftsfund.com/qxjj/jjxq/{query_code}"
     try:
         req = urllib.request.Request(url_fts, headers={
@@ -487,7 +482,6 @@ def fetch_fund_country_distribution(opener, code, is_qdii=False):
     except Exception:
         pass
 
-    # 3. 天天基金 PC 端海外资产配置接口 (gwzb)[cite: 1]
     url_em = f"https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=gwzb&code={query_code}&rt={int(time.time()*1000)}"
     try:
         req = urllib.request.Request(url_em, headers={
@@ -522,7 +516,6 @@ def fetch_fund_country_distribution(opener, code, is_qdii=False):
     except Exception:
         pass
 
-    # 宽基与 A 股兜底[cite: 1]
     if not is_qdii:
         return {"date": "长期基准", "countries": [{"country": "中国大陆", "ratio": 100.0}]}
     else:
@@ -537,6 +530,8 @@ def fetch_fund_country_distribution(opener, code, is_qdii=False):
 
     return {"date": "--", "countries": []}
 
+
+# ================== 核心修复：移动端高可用 API 获取持有人数据 ==================
 def fetch_fund_holder_structure(opener, code):
     cache_file = os.path.join(HOLDER_CACHE_DIR, f"{code}_holder.json")
     if os.path.exists(cache_file):
@@ -548,14 +543,39 @@ def fetch_fund_holder_structure(opener, code):
         except Exception: pass
 
     query_code = MAIN_CODE_MAP.get(code, code)
-    url = f"https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=cyrjg&code={query_code}"
-    headers = {
+    
+    # 优先使用天天基金移动端最新 API，解决部分网页端抓不到数据导致画布不渲染的问题
+    url = f"https://fundmobapi.eastmoney.com/FundMapi/FundHolderRatio.ashx?FCODE={query_code}&deviceid=3&plat=Iphone&product=EFund&version=6.6.6"
+    headers = {"User-Agent": "EMTianTianFund/6.6.6 (iPhone; iOS 16.0; Scale/3.00)"}
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with opener.open(req, timeout=5) as resp:
+            res_json = json.loads(resp.read().decode("utf-8"))
+            datas = res_json.get("Datas", [])
+            if datas and isinstance(datas, list):
+                latest = datas[0]
+                date_str = latest.get("FSRQ", "--")[:10]
+                inst_text = str(latest.get("JGHBL", "0")).replace('%', '')
+                indiv_text = str(latest.get("GRHBL", "0")).replace('%', '')
+                inst_val = float(inst_text) if inst_text.replace('.', '', 1).isdigit() else 0.0
+                indiv_val = float(indiv_text) if indiv_text.replace('.', '', 1).isdigit() else 0.0
+                
+                if inst_val > 0 or indiv_val > 0:
+                    result = {"date": date_str, "inst": round(inst_val, 2), "indiv": round(indiv_val, 2)}
+                    with open(cache_file, 'w', encoding='utf-8') as f:
+                        json.dump(result, f, ensure_ascii=False, indent=2)
+                    return result
+    except Exception: pass
+
+    # 备用网页端提取逻辑
+    fallback_url = f"https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=cyrjg&code={query_code}"
+    fallback_headers = {
         "User-Agent": DEFAULT_HEADERS["User-Agent"],
         "Referer": f"https://fundf10.eastmoney.com/cyrjg_{query_code}.html",
         "Accept": "*/*"
     }
     try:
-        req = urllib.request.Request(url, headers=headers)
+        req = urllib.request.Request(fallback_url, headers=fallback_headers)
         with opener.open(req, timeout=5) as resp:
             html = resp.read().decode("utf-8", errors="ignore")
 
@@ -576,6 +596,7 @@ def fetch_fund_holder_structure(opener, code):
                     json.dump(result, f, ensure_ascii=False, indent=2)
                 return result
     except Exception: pass
+    
     return None
 
 def fetch_holdings(opener, code):
@@ -1094,7 +1115,6 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
         </tr>
         """
 
-        # 左侧前十大持仓卡片构建
         if holdings_history:
             sorted_holdings = sorted(holdings_history, key=lambda x: x['date'], reverse=True)
             display_holdings = sorted_holdings[:3]
@@ -1152,7 +1172,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
                 """
         else:
             holdings_html = """
-            <div class="quarter-card empty-holdings-placeholder">
+            <div class="quarter-card empty-holdings-placeholder" style="grid-column: span 3;">
                 <div class="quarter-label"><span class="quarter-title">前十大持仓</span></div>
                 <div style="flex:1; display:flex; align-items:center; justify-content:center; color:var(--footer-text); font-size:12px;">
                     暂无持仓披露数据
@@ -1160,24 +1180,30 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
             </div>
             """
 
-        # 左侧持有人结构环状图卡片构建[cite: 3]
         holder_data = r.get("holder_struct")
         if holder_data and ("inst" in holder_data) and ("indiv" in holder_data):
             inst_r = holder_data["inst"]
             indiv_r = holder_data["indiv"]
             h_date = holder_data.get("date", "--")
+            
+            holders_arr = [
+                {"name": "机构持有", "ratio": inst_r},
+                {"name": "个人持有", "ratio": indiv_r}
+            ]
+            holders_json_str = json.dumps(holders_arr, ensure_ascii=False)
+            
             pie_card_html = f"""
-            <div class="quarter-card holder-card">
+            <div class="quarter-card holder-card" style="grid-column: span 1;">
                 <div class="quarter-label"><span class="quarter-title">持有人结构</span></div>
                 <div class="holder-pie-wrapper">
-                    <canvas id="holder-chart-{r['code']}" data-inst="{inst_r}" data-indiv="{indiv_r}"></canvas>
+                    <canvas id="holder-chart-{r['code']}" data-holders='{holders_json_str}'></canvas>
                 </div>
                 <div class="holder-date-sub">披露日期: {h_date}</div>
             </div>
             """
         else:
             pie_card_html = f"""
-            <div class="quarter-card holder-card">
+            <div class="quarter-card holder-card" style="grid-column: span 1;">
                 <div class="quarter-label"><span class="quarter-title">持有人结构</span></div>
                 <div style="flex:1; display:flex; align-items:center; justify-content:center; color:var(--footer-text); font-size:11px;">
                     暂无结构数据
@@ -1186,7 +1212,6 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
             </div>
             """
 
-        # 右侧 1/4: 国家占比环状图卡片[cite: 3]
         c_info = r.get("countries_info", {})
         countries_data = c_info.get("countries", [])
         c_date = c_info.get("date", "--")
@@ -1212,7 +1237,6 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
             </div>
             """
 
-        # 右侧 3/4: 走势折线图[cite: 3]
         chart_html = f"""
         <div class="chart-container" id="chart-container-{r['code']}">
             <div class="chart-controls">
@@ -1227,7 +1251,6 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
         </div>
         """
 
-        # 展开行组装[cite: 3]
         rows_html += f"""
         <tr class="holding-row" data-code="{r['code']}">
             <td colspan="{col_count}" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
@@ -2896,20 +2919,27 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
             return {{ dates: indices.map(i => dates[i]), navs: indices.map(i => navs[i]) }};
         }}
 
-        // 初始化持有人结构环状图（完全对齐国家占比的打开动画与配置结构）[cite: 3]
+        // 初始化持有人结构环状图
+        // 【重构】保持与国家/地区分布环状图完全一致的初始化逻辑与动画参数
         function initHolderChart(code) {{
             const canvas = document.getElementById(`holder-chart-${{code}}`);
             if (!canvas) return;
-
             if (holderChartInstances[code]) {{
                 if (typeof holderChartInstances[code].destroy === 'function') {{
                     holderChartInstances[code].destroy();
                     delete holderChartInstances[code];
-                }}
+                }} else return;
             }}
-            const inst = parseFloat(canvas.getAttribute('data-inst'));
-            const indiv = parseFloat(canvas.getAttribute('data-indiv'));
-            if (isNaN(inst) || isNaN(indiv)) return;
+            let holders = [];
+            try {{
+                holders = JSON.parse(canvas.getAttribute('data-holders')) || [];
+            }} catch(e) {{ holders = []; }}
+            if (!holders.length) return;
+
+            const labels = holders.map(h => h.name);
+            const dataValues = holders.map(h => h.ratio);
+            
+            const colorPalette = ['#1a73e8', '#ff9800'];
 
             const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
             const sliceBorderColor = isDark ? '#2a2a2a' : '#f0f2f5';
@@ -2919,10 +2949,10 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
             holderChartInstances[code] = new Chart(ctx, {{
                 type: 'doughnut',
                 data: {{
-                    labels: ['机构持有', '个人持有'],
+                    labels: labels,
                     datasets: [{{
-                        data: [inst, indiv],
-                        backgroundColor: ['#1a73e8', '#ff9800'],
+                        data: dataValues,
+                        backgroundColor: colorPalette.slice(0, labels.length),
                         borderColor: sliceBorderColor,
                         borderWidth: 1.5,
                         borderRadius: 4,
@@ -2936,7 +2966,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
                     animation: {{
                         animateRotate: true,
                         animateScale: true,
-                        duration: 900,
+                        duration: 800,
                         easing: 'easeOutQuart'
                     }},
                     plugins: {{
@@ -2944,11 +2974,11 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
                             display: true,
                             position: 'bottom',
                             labels: {{
-                                font: {{ size: 10, weight: '500' }},
-                                boxWidth: 8,
-                                boxHeight: 8,
+                                font: {{ size: 9, weight: '500' }},
+                                boxWidth: 7,
+                                boxHeight: 7,
                                 usePointStyle: true,
-                                padding: 6,
+                                padding: 5,
                                 color: textColor,
                                 generateLabels: function(chart) {{
                                     const data = chart.data;
@@ -2983,7 +3013,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
             }});
         }}
 
-        // 初始化国家资产占比环状图[cite: 3]
+        // 初始化国家资产占比环状图
         function initCountryChart(code) {{
             const canvas = document.getElementById(`country-chart-${{code}}`);
             if (!canvas) return;
@@ -3263,6 +3293,11 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
             }}
         }}
 
+        // ==========================================================
+        // 核心修复：引入 requestAnimationFrame 错峰渲染，保证不掉帧
+        // 持有人结构图与国家/地区图同步在同一帧启动（同 50ms 延迟），
+        // 使二者的环状图开场旋转动画节奏完全一致，避免持仓人图动画被跳过。
+        // ==========================================================
         document.addEventListener('DOMContentLoaded', function() {{
             const table = document.getElementById('fundTable');
             table.addEventListener('click', function(e) {{
@@ -3278,15 +3313,20 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
                 if (!target || e.target.tagName === 'A' || e.target.closest('.star-btn')) return;
                 const code = target.dataset.code;
                 const hRow = document.querySelector(`.holding-row[data-code="${{code}}"]`);
+                
                 if (hRow) {{
                     hRow.classList.toggle('show');
                     if (hRow.classList.contains('show')) {{
                         hRow.style.display = '';
-                        setTimeout(() => {{
-                            initChart(code);
-                            initHolderChart(code);
-                            initCountryChart(code);
-                        }}, 50);
+                        
+                        // 强制让出主线程给浏览器排版，确保 Canvas 画布真实物理尺寸已分配完毕，
+                        // 然后再渲染图表，彻底解决 Chart.js 因尺寸不确定而跳过开场动画的 Bug。
+                        window.requestAnimationFrame(() => {{
+                            setTimeout(() => {{ initCountryChart(code); }}, 50);
+                            setTimeout(() => {{ initHolderChart(code); }}, 50);
+                            setTimeout(() => {{ initChart(code); }}, 250);
+                        }});
+                        
                     }} else {{
                         hRow.style.display = 'none';
                     }}
@@ -3302,6 +3342,9 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
             sortTable(colIndex);
         }}
 
+        // ==========================================================
+        // 核心修复：补全被截断的 sortTable 完整功能代码
+        // ==========================================================
         function sortTable(colIndex) {{
             document.querySelectorAll('.holding-row').forEach(row => {{
                 row.classList.remove('show');
@@ -3335,6 +3378,8 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, is_d
             }});
             const empty = document.getElementById('empty-row');
             if (empty) fragment.appendChild(empty);
+            
+            // 清空并重新插入排序后的DOM
             tbody.innerHTML = '';
             tbody.appendChild(fragment);
             
