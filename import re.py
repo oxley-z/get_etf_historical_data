@@ -13,6 +13,8 @@ import pandas as pd
 from datetime import datetime, timedelta
 from calendar import monthrange
 from http.cookiejar import CookieJar
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # 强制清空代理环境变量
 for env_var in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]:
@@ -148,6 +150,15 @@ os.makedirs(HOLDINGS_CACHE_DIR, exist_ok=True)
 os.makedirs(NAV_CACHE_DIR, exist_ok=True)
 os.makedirs(HOLDER_CACHE_DIR, exist_ok=True)
 os.makedirs(COUNTRY_CACHE_DIR, exist_ok=True)
+META_CACHE_DIR = os.path.join(CACHE_DIR, "meta")
+os.makedirs(META_CACHE_DIR, exist_ok=True)
+
+_THREAD_LOCAL = threading.local()
+
+def get_thread_opener():
+    if not hasattr(_THREAD_LOCAL, "opener"):
+        _THREAD_LOCAL.opener = get_direct_opener()
+    return _THREAD_LOCAL.opener
 
 def get_direct_opener():
     cj = CookieJar()
@@ -839,6 +850,13 @@ def fetch_holdings(opener, code):
     return []
 
 def fetch_fund_detail_meta(opener, code):
+    meta_cache_file = os.path.join(META_CACHE_DIR, f"{code}_{datetime.now().strftime('%Y-%m-%d')}.json")
+    if os.path.exists(meta_cache_file):
+        try:
+            with open(meta_cache_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            pass
     meta = {
         "name": f"基金_{code}", "scale": "未知", "scale_val": -1.0, "fee_manage": None, "fee_custody": None,
         "fee_sales": None, "fee_source": "", "fee_purchase": "0.00%", "fee_redemption": "未知", "buy_status": "--",
@@ -977,6 +995,11 @@ def fetch_fund_detail_meta(opener, code):
     meta["holdings"] = fetch_holdings(opener, code)
     meta["holder_struct"] = fetch_fund_holder_structure(opener, code)
     meta["countries_info"] = fetch_fund_country_distribution(opener, code, is_qdii=is_qdii_fund)
+    try:
+        with open(meta_cache_file, 'w', encoding='utf-8') as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
     return meta
 
 def fetch_from_eastmoney(opener, code, start_date, end_date):
@@ -991,7 +1014,7 @@ def fetch_from_eastmoney(opener, code, start_date, end_date):
 
     all_data = []
     page_index = 1
-    page_size = 20
+    page_size = 49
 
     while True:
         base_url = "https://api.fund.eastmoney.com/f10/lsjz"
@@ -1012,7 +1035,10 @@ def fetch_from_eastmoney(opener, code, start_date, end_date):
                     if not lsjz: break
                     for item in lsjz:
                         if item.get("DWJZ"): all_data.append({"date": item["FSRQ"], "nav": float(item["DWJZ"])})
-                    if len(lsjz) < page_size: break
+                    total_count = int(res_json.get("Data", {}).get("TotalCount", 0) or 0)
+                    if total_count > 0:
+                        if page_index * page_size >= total_count: break
+                    elif len(lsjz) < page_size: break
                     page_index += 1
                 else: break
         except Exception: break
@@ -1498,6 +1524,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
 
     nav_data_json = {}
     fund_names_json = {}
+    holdings_rows_json = {}
     for r in results:
         fund_names_json[r['code']] = r['name']
         if 'nav_data' in r and r['nav_data']:
@@ -1505,7 +1532,6 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                 'dates': [item['date'] for item in r['nav_data']],
                 'navs': [item['nav'] for item in r['nav_data']]
             }
-
     rows_html = ""
     for r in results:
         INDEX_URL_MAP = {
@@ -1769,7 +1795,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
         </div>
         """
 
-        rows_html += f"""
+        holdings_rows_json[r['code']] = f"""
         <tr class="holding-row" data-code="{r['code']}">
             <td colspan="{col_count}" style="padding: 8px 20px; background-color: var(--hover-bg); font-size: 12px; color: var(--footer-text);">
                 <div class="holdings-wrapper">
@@ -1785,6 +1811,8 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             </td>
         </tr>
         """
+
+    holdings_rows_json_str = json.dumps(holdings_rows_json, ensure_ascii=False, separators=(',', ':'))
 
     empty_row = f"""
         <tr id="empty-row" style="display:none;">
@@ -3155,8 +3183,9 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
     </div>
 
     <script>
-        var fundNavData = {json.dumps(nav_data_json, ensure_ascii=False)};
+        var fundNavData = {json.dumps(nav_data_json, ensure_ascii=False, separators=(',', ':'))};
         var fundNames = {json.dumps(fund_names_json, ensure_ascii=False)};
+        var holdingsRowsHtml = {holdings_rows_json_str};
 
         // Tab 切换
         document.querySelectorAll('.nav-tab-btn').forEach(btn => {{
@@ -3470,7 +3499,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             let currentBuyStatus = 'all';
             let searchKeyword = '';
 
-            updateTableDca();
+            setTimeout(updateTableDca, 120);
 
             function syncFavDisplay() {{
                 document.querySelectorAll('.star-btn').forEach(btn => {{
@@ -4063,7 +4092,15 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                 const target = e.target.closest('tr.fund-row');
                 if (!target || e.target.tagName === 'A' || e.target.closest('.star-btn')) return;
                 const code = target.dataset.code;
-                const hRow = document.querySelector(`.holding-row[data-code="${{code}}"]`);
+                let hRow = document.querySelector(`.holding-row[data-code="${{code}}"]`);
+                if (!hRow) {{
+                    const tpl = holdingsRowsHtml[code];
+                    if (!tpl) return;
+                    const tplWrap = document.createElement('tbody');
+                    tplWrap.innerHTML = tpl;
+                    hRow = tplWrap.firstElementChild;
+                    target.parentNode.insertBefore(hRow, target.nextSibling);
+                }}
                 
                 if (hRow) {{
                     hRow.classList.toggle('show');
@@ -4359,12 +4396,13 @@ def main():
     print(f"🏛️ 美联储利率观测器 {fed_status}: 下一次会议 {fed_monitor.get('meeting_text', '--')} | 期货价格 {fed_monitor.get('futures_price', '--')} | 当前概率 {fed_prob_count} 档 | 更新时间 {fed_monitor.get('update_text', '--')}")
 
     results = []
-    for idx, code in enumerate(target_funds, start=1):
+
+    def process_single_fund(code):
+        opener = get_thread_opener()
         meta = fetch_fund_detail_meta(opener, code)
         raw_data = fetch_from_eastmoney(opener, code, args.start, args.end)
         if not raw_data:
-            print(f"[{idx}/{len(target_funds)}] {code} - {meta['name']} ... ❌ 历史净值抓取失败")
-            continue
+            return code, meta["name"], None
         raw_data_sorted = sorted(raw_data, key=lambda x: x['date'])
         is_qdii = code in US_ACTIVE_CODES or code in NDX_PASSIVE_CODES or code in SPX_PASSIVE_CODES
         res = analyze_fund_metrics(raw_data_sorted, args.end, cutoff_date, is_qdii=is_qdii)
@@ -4392,9 +4430,25 @@ def main():
                 "nav_data": raw_data_sorted
             })
             results.append(res)
-            c_date = meta["countries_info"].get("date", "--")
-            print(f"[{idx}/{len(target_funds)}] {code} - {meta['name']} ... ✅ 完成 (国家披露期: {c_date})")
-        time.sleep(random.uniform(0.05, 0.1))
+            return code, meta["name"], res
+        return code, meta["name"], None
+
+    max_workers = 3 if is_debug else 10
+    print(f"⚙️ 启用多线程并发抓取 (并发数: {max_workers}) ...")
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(process_single_fund, code) for code in target_funds]
+        for done_count, fut in enumerate(as_completed(futures), start=1):
+            try:
+                code, name, res = fut.result()
+            except Exception as exc:
+                print(f"[{done_count}/{len(target_funds)}] 处理异常: {exc}")
+                continue
+            if res:
+                c_date = res["countries_info"].get("date", "--")
+                print(f"[{done_count}/{len(target_funds)}] {code} - {name} ... ✅ 完成 (国家披露期: {c_date})")
+            else:
+                print(f"[{done_count}/{len(target_funds)}] {code} - {name} ... ❌ 历史净值抓取失败")
+
 
     for symbol in target_metals:
         try:
