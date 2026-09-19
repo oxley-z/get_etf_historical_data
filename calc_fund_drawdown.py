@@ -399,7 +399,6 @@ def get_cnn_fear_greed(opener) -> tuple[float, str, str, str]:
         with opener.open(req_web, timeout=8) as resp:
             html_text = resp.read().decode("utf-8", errors="ignore")
 
-        # 匹配 Next.js / Hydration 数据中的 score 和 rating
         score_match = re.search(r'"score"\s*:\s*([0-9]+(?:\.[0-9]+)?)', html_text)
         rating_match = re.search(r'"rating"\s*:\s*"([^"]+)"', html_text)
 
@@ -416,7 +415,6 @@ def get_cnn_fear_greed(opener) -> tuple[float, str, str, str]:
     except Exception:
         pass
 
-    # 若 CNN 官方渠道均未成功，严格兜底返回 0.0
     return (
         0.0,
         "暂无数据",
@@ -483,6 +481,27 @@ def get_skew(opener) -> tuple[float, str, str]:
     except Exception: pass
     return 0.0, "获取失败", "https://sc.macromicro.me/series/4407/cboe-skew"
 
+def get_brent_oil(opener) -> tuple[float, str, str]:
+    """获取布伦特原油连续价格"""
+    try:
+        val = fetch_from_yahoo_finance(opener, "BZ=F")
+        if val > 0:
+            return val, "Yahoo Finance (BZ=F)", "https://finance.yahoo.com/quote/BZ%3DF/"
+    except Exception: pass
+
+    try:
+        url = "https://hq.sinajs.cn/list=hf_OIL"
+        req = urllib.request.Request(url, headers={**DEFAULT_HEADERS, "Referer": "https://finance.sina.com.cn/"})
+        with opener.open(req, timeout=4) as resp:
+            content = resp.read().decode("gbk", errors="ignore")
+            match = re.search(r'"([^"]+)"', content)
+            if match:
+                parts = match.group(1).split(",")
+                if len(parts) > 0 and float(parts[0]) > 0:
+                    return round(float(parts[0]), 2), "新浪期货 (hf_OIL)", "https://finance.sina.com.cn/futures/quotes/OIL.shtml"
+    except Exception: pass
+    return 0.0, "获取失败", "https://cn.investing.com/commodities/brent-oil"
+
 def fetch_home_market_metrics(opener):
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     fng_score, fng_rating, fng_src, fng_url = get_cnn_fear_greed(opener)
@@ -498,12 +517,16 @@ def fetch_home_market_metrics(opener):
     skew_val, skew_src, skew_url = get_skew(opener)
     skew_status = "数据暂缺" if skew_val <= 0 else ("尾部黑天鹅预警" if skew_val >= 140 else ("风险积聚" if skew_val >= 132 else "常态平稳"))
 
+    brent_val, brent_src, brent_url = get_brent_oil(opener)
+    brent_status = "数据暂缺" if brent_val <= 0 else ("极度高企" if brent_val >= 95 else ("通胀溢价" if brent_val >= 80 else ("温和中性" if brent_val >= 65 else "需求疲软")))
+
     return {
         "fng": {"score": fng_score, "rating": fng_rating, "time": now_str, "source": fng_src, "url": fng_url},
         "vix": {"val": vix_val, "status": vix_status, "time": now_str, "source": vix_src, "url": vix_url, "desc": "<15 平稳低波 | 15~20 正常震荡 | 20~30 警惕波动 | >30 极度恐慌"},
         "usdcny": {"val": usdcny_val, "status": usdcny_status, "time": now_str, "source": usdcny_src, "url": usdcny_url, "desc": "美元兑人民币汇率，QDII换汇成本及折溢价关键锚"},
         "vxn": {"val": vxn_val, "status": vxn_status, "time": now_str, "source": vxn_src, "url": vxn_url, "desc": "纳斯达克100期权隐波，监测科技成长股杀估值抛压"},
-        "skew": {"val": skew_val, "status": skew_status, "time": now_str, "source": skew_src, "url": skew_url, "desc": "基准100。>135提示期权市场尾部极度对冲成本升高"}
+        "skew": {"val": skew_val, "status": skew_status, "time": now_str, "source": skew_src, "url": skew_url, "desc": "基准100。>135提示期权市场尾部极度对冲成本升高"},
+        "brent": {"val": brent_val, "status": brent_status, "time": now_str, "source": brent_src, "url": brent_url, "desc": "国际基准原油，大宗通胀与全球工业周期核心温度计"}
     }
 
 def fetch_fund_country_distribution(opener, code, is_qdii=False):
@@ -1274,12 +1297,10 @@ def fetch_cme_fedwatch(opener) -> dict:
 
 def fetch_fed_rate_monitor(opener) -> dict:
     """美联储利率观测器：多源抓取 + 优雅降级，确保首页 100% 正常完整展示"""
-    # 1. 尝试 CME 官方数据源
     result = fetch_cme_fedwatch(opener)
     if result.get('probabilities') and result.get('meeting_iso'):
         return result
 
-    # 2. 尝试从 Investing.com 抓取真实最新数据
     source_url = "https://cn.investing.com/central-banks/fed-rate-monitor"
     result = {
         "source_url": source_url,
@@ -1302,7 +1323,6 @@ def fetch_fed_rate_monitor(opener) -> dict:
         with opener.open(req, timeout=6) as resp:
             html_content = resp.read().decode('utf-8', errors='ignore')
 
-        # 尝试提取决议时间
         m = re.search(r'(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日\s*(\d{1,2}:\d{2})', html_content)
         if m:
             y, mo, d = map(int, m.group(1, 2, 3))
@@ -1310,17 +1330,14 @@ def fetch_fed_rate_monitor(opener) -> dict:
             result['meeting_text'] = f'{y}年{mo:02d}月{d:02d}日 {hh:02d}:{mm:02d}'
             result['meeting_iso'] = f"{y:04d}-{mo:02d}-{d:02d}T{hh:02d}:{mm:02d}:00+08:00"
 
-        # 提取期货价格
         fm = re.search(r'期货价格\s*[:：]?\s*([0-9]+(?:\.\d+)?)', html_content)
         if fm:
             result['futures_price'] = fm.group(1)
 
-        # 提取更新时间
         up_m = re.search(r'更新[:：]\s*([^\r\n<]+)', html_content)
         if up_m:
             result['update_text'] = f"更新: {up_m.group(1).strip()}"
 
-        # 提取表格
         tables = _cme_html_tables(html_content)
         for tbl in tables:
             rows = []
@@ -1350,7 +1367,6 @@ def fetch_fed_rate_monitor(opener) -> dict:
     except Exception:
         pass
 
-    # 3. 兜底保护：若因反爬导致未提取到行，载入基准利率矩阵，确保看板组件正常渲染
     if not result['table_rows']:
         result['meeting_text'] = "2026年10月29日 02:00"
         result['meeting_iso'] = "2026-10-29T02:00:00+08:00"
@@ -1365,7 +1381,6 @@ def fetch_fed_rate_monitor(opener) -> dict:
             {"rate": "4.00 - 4.25", "pct": 57.4}
         ]
 
-    # 4. 计算剩余倒计时
     try:
         from datetime import timezone
         dt_target = datetime.fromisoformat(result['meeting_iso'])
@@ -1895,7 +1910,6 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
     else:
         fed_table_body = '<tr><td colspan="4" style="text-align:center;">暂无历史概率数据</td></tr>'
 
-    # 浏览器端每秒刷新倒计时；数据以本次生成网页时从 CME FedWatch 抓取的会议时间为准。
     fed_countdown_js = ""
     if fed_meeting_iso:
         fed_countdown_js = f"""
@@ -1977,6 +1991,9 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
     usdcny = metrics["usdcny"]
     vxn = metrics["vxn"]
     skew = metrics["skew"]
+    brent = metrics["brent"]
+
+    brent_tag_color = "#70757a" if brent['val'] <= 0 else ("#d93025" if brent['val'] >= 95 else ("#e67e22" if brent['val'] >= 80 else ("#188038" if brent['val'] >= 65 else "#1a73e8")))
 
     html_content = f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -2115,7 +2132,13 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             box-sizing: border-box;
         }}
         
-        .macro-metrics-grid, .index-metrics-grid, .friend-links-grid {{
+        .macro-metrics-grid {{
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+        }}
+
+        .index-metrics-grid, .friend-links-grid {{
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 12px;
@@ -2520,7 +2543,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             border-color: #3c4043;
         }}
 
-        /* --- 修正进度条样式 --- */
+        /* --- 进度条样式 --- */
         .progress-container {{ 
             background-color: var(--progress-track); 
             border-radius: 6px; 
@@ -2790,7 +2813,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
         }}
 
         @media (max-width: 1200px) {{
-            .macro-metrics-grid, .index-metrics-grid, .friend-links-grid {{ grid-template-columns: repeat(3, 1fr); }}
+            .index-metrics-grid, .friend-links-grid {{ grid-template-columns: repeat(3, 1fr); }}
         }}
         @media (max-width: 992px) {{
             body {{
@@ -2811,7 +2834,8 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             .view-pane {{ height: auto; overflow: visible; }}
             
             .home-container {{ padding: 10px 16px; gap: 10px; }}
-            .macro-metrics-grid, .index-metrics-grid, .friend-links-grid {{ grid-template-columns: repeat(2, 1fr); gap: 8px; }}
+            .macro-metrics-grid {{ grid-template-columns: repeat(2, 1fr); gap: 8px; }}
+            .index-metrics-grid, .friend-links-grid {{ grid-template-columns: repeat(2, 1fr); gap: 8px; }}
             
             .home-grid-section {{ grid-template-columns: 1fr; gap: 10px; }}
             .sub-filter-bar {{ flex-direction: column; align-items: stretch; padding: 10px; gap: 8px; }}
@@ -2835,7 +2859,8 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             .footer-note {{ flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 12px; }}
         }}
         @media (max-width: 480px) {{
-            .macro-metrics-grid, .index-metrics-grid, .friend-links-grid {{ grid-template-columns: 1fr; }}
+            .macro-metrics-grid {{ grid-template-columns: 1fr; }}
+            .index-metrics-grid, .friend-links-grid {{ grid-template-columns: 1fr; }}
         }}
     </style>
 </head>
@@ -2946,6 +2971,22 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                             🔗 来源: CBOE 官方 (_SKEW) ↗
                         </a>
                     </div>
+
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span>布伦特原油 (BZ=F)</span>
+                        </div>
+                        <div class="metric-body">
+                            <span class="metric-value" style="color:#2c3e50;">{brent['val']}</span>
+                            <span class="metric-tag" style="background:rgba(44,62,80,0.12); color:{brent_tag_color};">{brent['status']}</span>
+                        </div>
+                        <div class="metric-desc">
+                            {brent['desc']}
+                        </div>
+                        <a href="{brent['url']}" target="_blank" class="metric-source-link" title="点击跳转至源数据官方网页">
+                            🔗 来源: {brent['source']} ↗
+                        </a>
+                    </div>
                 </div>
 
                 <div style="display: flex; justify-content: space-between; align-items: flex-end;">
@@ -2971,6 +3012,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                         </div>
                         <div class="home-card-body">
                             <p>• <strong>恐慌指标协同判断：</strong> 当 <strong>VIX 恐慌指数</strong> 显著飙升（&gt;20）且 <strong>CNN 情绪指数</strong> 步入极度恐惧（0~25）时，通常对应全市场非理性杀跌的左侧加仓与定投翻倍窗口。</p>
+                            <p>• <strong>大宗周期与通胀压力：</strong> 跟踪 <strong>布伦特原油连续</strong> 价格，当油价迅速推高（&gt;85美元）时，通胀再抬头预期增强，美联储降息周期受阻；当油价跌破65美元时，需警惕全球制造业需求衰退风险。</p>
                             <p>• <strong>汇率对冲与折溢价：</strong> 跟踪 <strong>USD/CNY 汇率</strong> 走势，当汇率波动较大时，QDII 基金的实际净值波动将叠加汇率损益，需警惕场内溢价过高风险。</p>
                             <div style="padding: 24px; text-align: center; background: var(--hover-bg); border-radius: 8px; margin-top: 10px; border: 1px dashed var(--border);">
                                 💡 每个宏观卡片底部均配有直达源头的官方链接（CNN、CBOE、新浪等），可随时点击校验一手数据。
@@ -3538,7 +3580,6 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                         matchCategory = (sub === currentSub);
                     }}
 
-                    // 申购状态交叉筛选逻辑
                     let matchBuy = false;
                     if (currentBuyStatus === 'all') {{
                         matchBuy = true;
@@ -3608,7 +3649,6 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
         var holderChartInstances = {{}};
         var countryChartInstances = {{}};
 
-        // 环形图中心百分比标签插件
         const pieLabelsPlugin = {{
             id: 'pieLabels',
             afterDraw(chart) {{
@@ -3635,7 +3675,6 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
         }};
         Chart.register(pieLabelsPlugin);
 
-        // 专业十字光标插件（Crosshair）
         const fundCrosshairPlugin = {{
             id: 'fundCrosshairPlugin',
             afterDraw(chart) {{
@@ -3680,7 +3719,6 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             return {{ dates: indices.map(i => dates[i]), navs: indices.map(i => navs[i]) }};
         }}
 
-        // 初始化持有人结构环状图
         function initHolderChart(code) {{
             const canvas = document.getElementById(`holder-chart-${{code}}`);
             if (!canvas) return;
@@ -3775,7 +3813,6 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             }});
         }}
 
-        // 初始化国家资产占比环状图
         function initCountryChart(code) {{
             const canvas = document.getElementById(`country-chart-${{code}}`);
             if (!canvas) return;
@@ -3872,7 +3909,6 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             }});
         }}
 
-        // 双轴折线图构建函数
         function initChart(code) {{
             const canvas = document.getElementById(`chart-${{code}}`);
             if (!canvas) return;
@@ -4055,9 +4091,6 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             }}
         }}
 
-        // ==========================================================
-        // 核心修复：引入 requestAnimationFrame 错峰渲染，保证不掉帧
-        // ==========================================================
         document.addEventListener('DOMContentLoaded', function() {{
             const table = document.getElementById('fundTable');
             table.addEventListener('click', function(e) {{
@@ -4078,15 +4111,11 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                     hRow.classList.toggle('show');
                     if (hRow.classList.contains('show')) {{
                         hRow.style.display = '';
-                        
-                        // 强制让出主线程给浏览器排版，确保 Canvas 画布真实物理尺寸已分配完毕，
-                        // 然后再渲染图表，彻底解决 Chart.js 因尺寸不确定而跳过开场动画的 Bug。
                         window.requestAnimationFrame(() => {{
                             setTimeout(() => {{ initCountryChart(code); }}, 50);
                             setTimeout(() => {{ initHolderChart(code); }}, 150);
                             setTimeout(() => {{ initChart(code); }}, 250);
                         }});
-                        
                     }} else {{
                         hRow.style.display = 'none';
                     }}
@@ -4102,9 +4131,6 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             sortTable(colIndex);
         }}
 
-        // ==========================================================
-        // 核心修复：补全被截断的 sortTable 完整功能代码
-        // ==========================================================
         function sortTable(colIndex) {{
             document.querySelectorAll('.holding-row').forEach(row => {{
                 row.classList.remove('show');
@@ -4139,7 +4165,6 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             const empty = document.getElementById('empty-row');
             if (empty) fragment.appendChild(empty);
             
-            // 清空并重新插入排序后的DOM
             tbody.innerHTML = '';
             tbody.appendChild(fragment);
             
@@ -4206,6 +4231,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
     with open(filename, "w", encoding="utf-8") as f:
         f.write(html_content)
     return os.path.abspath(filename)
+
 def fetch_crypto_data(symbol, start_date, end_date):
     cache_file = os.path.join(NAV_CACHE_DIR, f"{symbol}.json")
     if os.path.exists(cache_file):
@@ -4362,7 +4388,7 @@ def main():
     home_metrics = fetch_home_market_metrics(opener)
     index_valuations = fetch_index_valuations(opener)
     fed_monitor = fetch_fed_rate_monitor(opener)
-    print(f"📊 核心宏观指标获取成功: 恐慌贪婪 {home_metrics['fng']['score']} | VIX {home_metrics['vix']['val']} | USD/CNY {home_metrics['usdcny']['val']} | VXN {home_metrics['vxn']['val']} | SKEW {home_metrics['skew']['val']}")
+    print(f"📊 核心宏观指标获取成功: 恐慌贪婪 {home_metrics['fng']['score']} | VIX {home_metrics['vix']['val']} | USD/CNY {home_metrics['usdcny']['val']} | VXN {home_metrics['vxn']['val']} | SKEW {home_metrics['skew']['val']} | 布伦特原油 {home_metrics['brent']['val']}")
     fed_prob_count = len(fed_monitor.get('probabilities', []))
     fed_status = "✅" if fed_monitor.get('meeting_text') != "--" and fed_prob_count > 0 else "⚠️"
     print(f"🏛️ 美联储利率观测器 {fed_status}: 下一次会议 {fed_monitor.get('meeting_text', '--')} | 期货价格 {fed_monitor.get('futures_price', '--')} | 当前概率 {fed_prob_count} 档 | 更新时间 {fed_monitor.get('update_text', '--')}")
