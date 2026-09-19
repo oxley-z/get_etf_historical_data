@@ -1782,12 +1782,12 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
         chart_html = f"""
         <div class="chart-container" id="chart-container-{r['code']}">
             <div class="chart-controls">
-                <button class="period-btn active" data-period="month" data-code="{r['code']}">近一月</button>
+                <button class="period-btn active" data-period="week" data-code="{r['code']}">近一周</button>
+                <button class="period-btn" data-period="month" data-code="{r['code']}">近一月</button>
                 <button class="period-btn" data-period="quarter" data-code="{r['code']}">近三月</button>
                 <button class="period-btn" data-period="half" data-code="{r['code']}">近半年</button>
                 <button class="period-btn" data-period="year" data-code="{r['code']}">近一年</button>
                 <button class="period-btn" data-period="ytd" data-code="{r['code']}">今年内</button>
-                <button class="period-btn" data-period="week" data-code="{r['code']}">近一周</button>
             </div>
             <canvas id="chart-{r['code']}" width="400" height="200"></canvas>
         </div>
