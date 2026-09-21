@@ -1,3 +1,4 @@
+
 import os
 import re
 import json
@@ -297,6 +298,295 @@ def fetch_index_valuations(opener):
     return results
 
 # ==============================================================================
+# 【保留】2000年后主要指数年度收益率及收盘点位获取模块（仅数据抓取，不再用于页面展示）
+# ==============================================================================
+def fetch_index_annual_data():
+    """获取 2000 年以来主要指数年度收益率和年末收盘点位。
+
+    数据源方案（与 zhishuniandushouyi.py 保持一致）：
+    - 纳指100 / 标普500：historyofmarket.com JSON API -> 新浪美股兜底
+    - 沪深300 / 科创50：搜狐财经历史行情 API
+    - 恒生科技：腾讯财经港股 K 线 -> 东方财富 -> 天天基金 513180 净值
+
+    缓存策略：
+    - 缓存文件：cache/index_annual.json
+    - 存在即直接读取返回，不再发起任何网络请求
+    - 需刷新时手动删除该文件后重新运行
+    """
+    # ===== 1. 优先读取本地缓存 =====
+    cache_file = os.path.join(CACHE_DIR, "index_annual.json")
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, "r", encoding="utf-8") as f:
+                cached = json.load(f)
+            if isinstance(cached, dict) and cached:
+                print(f"📅 检测到本地缓存 {cache_file}，直接使用（共 {len(cached)} 个指数）")
+                print(f"📊 指数年度数据最终获取成功: {len(cached)}/5 （来源：本地缓存）")
+                return cached
+            else:
+                print(f"📅 缓存文件 {cache_file} 内容为空或格式不正确，将重新抓取...")
+        except Exception as e:
+            print(f"📅 读取缓存 {cache_file} 失败: {e}，将重新抓取...")
+
+    print("📅 正在获取指数年度数据 (2000年至今)...")
+    result = {}
+
+    # 创建一个无代理的 opener
+    _opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+    # ---------- 数据获取函数（从 zhishuniandushouyi.py 移植） ----------
+    def _fetch_historyofmarket_robust(url):
+        records = []
+        req = urllib.request.Request(url, headers=DEFAULT_HEADERS)
+        try:
+            with _opener.open(req, timeout=15) as resp:
+                content = resp.read().decode("utf-8")
+                raw = json.loads(content)
+
+            raw_list = []
+            if isinstance(raw, list):
+                raw_list = raw
+            elif isinstance(raw, dict):
+                for k in ["points", "data", "history", "prices", "values", "series"]:
+                    if k in raw and isinstance(raw[k], list):
+                        raw_list = raw[k]
+                        break
+
+            for item in raw_list:
+                if isinstance(item, dict):
+                    d = item.get("date") or item.get("d") or item.get("time") or item.get("x")
+                    c = item.get("close") or item.get("c") or item.get("val") or item.get("y") or item.get("value")
+                    if d and c is not None:
+                        records.append({"date": str(d)[:10], "close": float(c)})
+                elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                    d_val, c_val = item[0], item[1]
+                    if isinstance(d_val, (int, float)) and d_val > 100000000:
+                        d_str = datetime.fromtimestamp(d_val / 1000 if d_val > 1e11 else d_val).strftime("%Y-%m-%d")
+                    else:
+                        d_str = str(d_val)[:10]
+                    records.append({"date": d_str, "close": float(c_val)})
+        except Exception:
+            pass
+        records.sort(key=lambda x: x["date"])
+        return records
+
+    def _fetch_sina_us(symbol):
+        url = f"https://stock.finance.sina.com.cn/usstock/api/jsonp.php/IO.XSRF.K/US_MinKService.getDailyK?symbol={symbol}&_={int(time.time()*1000)}"
+        req = urllib.request.Request(url, headers={**DEFAULT_HEADERS, "Referer": "https://finance.sina.com.cn/"})
+        records = []
+        try:
+            with _opener.open(req, timeout=10) as resp:
+                text = resp.read().decode("gbk", errors="ignore")
+                l_idx, r_idx = text.find("("), text.rfind(")")
+                if l_idx != -1 and r_idx != -1:
+                    data = json.loads(text[l_idx + 1:r_idx])
+                    for item in data:
+                        records.append({
+                            "date": item["d"],
+                            "open": float(item["o"]),
+                            "close": float(item["c"])
+                        })
+        except Exception:
+            pass
+        records.sort(key=lambda x: x["date"])
+        return records
+
+    def _fetch_sohu_index(zs_code, start_date="19991201"):
+        end_date = datetime.now().strftime("%Y%m%d")
+        url = f"https://q.stock.sohu.com/hisHq?code={zs_code}&start={start_date}&end={end_date}&stat=1&order=D&period=d"
+        req = urllib.request.Request(url, headers={**DEFAULT_HEADERS, "Referer": "https://q.stock.sohu.com/"})
+        records = []
+        try:
+            with _opener.open(req, timeout=12) as resp:
+                content = resp.read().decode("gbk", errors="ignore")
+                data = json.loads(content)
+                if isinstance(data, list) and len(data) > 0:
+                    hq = data[0].get("hq", [])
+                    for bar in hq:
+                        if len(bar) >= 3:
+                            records.append({
+                                "date": bar[0],
+                                "open": float(bar[1]),
+                                "close": float(bar[2])
+                            })
+        except Exception:
+            pass
+        records.sort(key=lambda x: x["date"])
+        return records
+
+    def _fetch_hstech_final():
+        records = []
+        # 方案 A: 腾讯财经港股日 K 线
+        try:
+            url_tx = "https://web.ifzq.gtimg.cn/appstock/app/hkfqkline/get?param=hkHSTECH,day,,,2000,qfq"
+            req_tx = urllib.request.Request(url_tx, headers={**DEFAULT_HEADERS, "Referer": "https://gu.qq.com/"})
+            with _opener.open(req_tx, timeout=8) as resp:
+                res = json.loads(resp.read().decode("utf-8"))
+                data_node = res.get("data", {}).get("hkHSTECH", {})
+                kline_list = data_node.get("day") or data_node.get("qfqday", [])
+                for k in kline_list:
+                    if len(k) >= 3:
+                        records.append({"date": k[0], "open": float(k[1]), "close": float(k[2])})
+            if records:
+                records.sort(key=lambda x: x["date"])
+                return records
+        except Exception:
+            pass
+
+        # 方案 B: 东方财富移动端行情接口
+        try:
+            url_em = "https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=100.HSTECH&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53&klt=101&fqt=1&end=20500101&lmt=2000"
+            req_em = urllib.request.Request(url_em, headers={
+                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)",
+                "Referer": "https://quote.eastmoney.com/"
+            })
+            with _opener.open(req_em, timeout=8) as resp:
+                raw = json.loads(resp.read().decode("utf-8"))
+                lines = raw.get("data", {}).get("klines", [])
+                for line in lines:
+                    parts = line.split(",")
+                    records.append({"date": parts[0], "open": float(parts[1]), "close": float(parts[2])})
+            if records:
+                records.sort(key=lambda x: x["date"])
+                return records
+        except Exception:
+            pass
+
+        # 方案 C: 天天基金 513180 历史净值
+        try:
+            url_fund = "https://api.fund.eastmoney.com/f10/lsjz?fundCode=513180&pageIndex=1&pageSize=2000&startDate=2020-01-01&endDate=2030-01-01"
+            headers_fund = {
+                "User-Agent": DEFAULT_HEADERS["User-Agent"],
+                "Referer": "https://fundf10.eastmoney.com/jjjz_513180.html"
+            }
+            req_fund = urllib.request.Request(url_fund, headers=headers_fund)
+            with _opener.open(req_fund, timeout=8) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                lsjz = data.get("Data", {}).get("LSJZList", [])
+                for item in lsjz:
+                    nav = item.get("LJJZ") or item.get("DWJZ")
+                    if nav:
+                        records.append({"date": item["FSRQ"], "open": float(nav), "close": float(nav)})
+            if records:
+                records.sort(key=lambda x: x["date"])
+                return records
+        except Exception:
+            pass
+
+        return records
+
+    def _calculate_annual_metrics(records, start_year=2000):
+        """计算年度收益率与年末收盘点位"""
+        if not records:
+            return []
+
+        from collections import defaultdict
+        year_map = defaultdict(list)
+        for r in records:
+            yr = r["date"].split("-")[0]
+            try:
+                if int(yr) >= (start_year - 1):
+                    year_map[yr].append(r)
+            except ValueError:
+                continue
+
+        all_years = sorted(year_map.keys())
+        results = []
+        prev_year_close = None
+
+        for yr in all_years:
+            yr_bars = year_map[yr]
+            first_bar = yr_bars[0]
+            last_bar = yr_bars[-1]
+            end_point = last_bar["close"]
+
+            if int(yr) >= start_year:
+                base_point = prev_year_close if prev_year_close is not None else first_bar.get("open", first_bar["close"])
+                annual_return = ((end_point - base_point) / base_point) * 100.0 if base_point > 0 else 0.0
+
+                results.append({
+                    "year": yr,
+                    "end_date": last_bar["date"],
+                    "end_point": end_point,
+                    "annual_return": annual_return,
+                    "is_launch_year": (prev_year_close is None)
+                })
+
+            prev_year_close = end_point
+
+        return results
+
+    # ---------- 配置目标指数 ----------
+    targets = [
+        {
+            "name": "纳指100", "ticker": "NDX",
+            "fetcher": lambda: _fetch_historyofmarket_robust("https://historyofmarket.com/api/nasdaq/composite.json") or _fetch_sina_us(".NDX")
+        },
+        {
+            "name": "标普500", "ticker": "SPX",
+            "fetcher": lambda: _fetch_historyofmarket_robust("https://historyofmarket.com/api/sp500/century.json") or _fetch_sina_us(".INX")
+        },
+        {
+            "name": "沪深300", "ticker": "000300",
+            "fetcher": lambda: _fetch_sohu_index("zs_000300")
+        },
+        {
+            "name": "科创50", "ticker": "000688",
+            "fetcher": lambda: _fetch_sohu_index("zs_000688")
+        },
+        {
+            "name": "恒生科技", "ticker": "HSTECH",
+            "fetcher": lambda: _fetch_hstech_final()
+        }
+    ]
+
+    # ---------- 逐个获取并计算年度数据 ----------
+    for item in targets:
+        name = item["name"]
+        try:
+            print(f"    → 拉取 {name} ...", end=" ")
+            records = item["fetcher"]()
+            if not records:
+                print("❌ 无数据")
+                continue
+
+            stats = _calculate_annual_metrics(records, start_year=2000)
+            if not stats:
+                print("❌ 年度数据为空")
+                continue
+
+            yearly_data = []
+            for row in stats:
+                yearly_data.append({
+                    "year": int(row["year"]),
+                    "close": round(row["end_point"], 2),
+                    "pct": round(row["annual_return"], 2)
+                })
+
+            result[name] = {
+                "ticker": item["ticker"],
+                "data": yearly_data
+            }
+            print(f"✅ 完成 ({len(yearly_data)} 个年度)")
+
+        except Exception as e:
+            print(f"❌ 异常: {e}")
+            continue
+
+    print(f"📊 指数年度数据最终获取成功: {len(result)}/{len(targets)}")
+
+    # ===== 2. 抓取成功后写入本地缓存 =====
+    if result:
+        try:
+            with open(cache_file, "w", encoding="utf-8") as f:
+                json.dump(result, f, ensure_ascii=False, indent=2)
+            print(f"💾 已写入本地缓存: {cache_file}")
+        except Exception as e:
+            print(f"⚠️ 写入缓存失败: {e}")
+
+    return result
+
+# ==============================================================================
 # 多源宏观指标获取模块
 # ==============================================================================
 def fetch_from_yahoo_finance(opener, symbol: str, timeout: int = 5) -> float:
@@ -353,7 +643,7 @@ def get_vix(opener) -> tuple[float, str, str]:
     return 0.0, "获取失败", "https://cn.investing.com/indices/volatility-s-p-500"
 
 def get_cnn_fear_greed(opener) -> tuple[float, str, str, str]:
-    """获取 CNN 恐慌贪婪指数：仅从 CNN 官方获取 (https://edition.cnn.com/markets/fear-and-greed)"""
+    """获取 CNN 恐慌贪婪指数：仅从 CNN 官方获取"""
     cnn_page_url = "https://edition.cnn.com/markets/fear-and-greed"
     cls_map = {
         "extreme fear": "极度恐惧", "fear": "恐惧",
@@ -1426,7 +1716,7 @@ def fetch_cme_fedwatch(opener) -> dict:
 
 
 def fetch_fed_rate_monitor(opener) -> dict:
-    """美联储利率观测器：多源抓取 + 优雅降级，确保首页 100% 正常完整展示"""
+    """美联储利率观测器：多源抓取 + 优雅降级"""
     result = fetch_cme_fedwatch(opener)
     if result.get('probabilities') and result.get('meeting_iso'):
         return result
@@ -1621,7 +1911,7 @@ def analyze_fund_metrics(valid_data, end_date, cutoff_date, is_qdii=False):
         "ytd_gain": calc_gain(ytd=True)
     }
 
-def generate_html_report(results, start_date, end_date, today_str, metrics, index_valuations, fed_monitor=None, is_debug_mode=False, filename="fund_drawdown_dashboard.html"):
+def generate_html_report(results, start_date, end_date, today_str, metrics, index_valuations, fed_monitor=None, is_debug_mode=False, filename="fund_drawdown_dashboard.html", index_annual_data=None):
     CPO_CODES = {"022365", "540010", "002112", "011892", "021528", "009645", "011370", "011452", "016371", "001956", "016234", "016173", "006616", "018291", "020661", "017462", "001438", "008984", "180031", "004320", "027063"}
     STORAGE_CODES = {"025500", "025209", "018816", "014320"}
     SEMICONDUCTOR_CODES = {"024418", "024975", "020640", "019633", "024424", "017811", "013841", "007491", "020629", "017747", "026633", "162214", "007343", "018777"}
@@ -1629,10 +1919,142 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
     GRID_CODES = {"025857", "023639", "023675", "019411", "167002", "020425", "002164", "017133", "017042", "026681", "016387", "025833", "011172", "001665", "018919"}
     ROBOT_CODES = {"016531", "018345", "020482", "018125", "007519", "014243", "018957", "003835", "014939", "008998", "004233", "008182", "017968", "024648"}
     INDEX_SET_LOCAL = {"NDX", "SPX", "SOXX", "SOXL"}
-    # 【修改】贵金属集合扩展为大宗商品集合（含布伦特原油、LME铜）
     COMMODITIES_LOCAL = {"XAU", "AUM", "XAG", "BRENT", "CAD"}
     CRYPTO_LOCAL = {"BTC", "ETH", "SOL", "BNB"}
     col_count = 22
+
+    # ================= 【新增】止盈三信号逻辑计算 =================
+    vix_val = metrics['vix']['val']
+    fng_val = metrics['fng']['score']
+    
+    qqq_pe_val = 0.0
+    for item in index_valuations:
+        if item['name'] == '纳指100':
+            try:
+                qqq_pe_val = float(item['pe'])
+            except (ValueError, TypeError):
+                qqq_pe_val = 0.0
+            break
+
+    vix_trigger = (0 < vix_val < 14)
+    pe_trigger = (qqq_pe_val > 35)
+    fng_trigger = (fng_val > 80)
+    trigger_count = sum([vix_trigger, pe_trigger, fng_trigger])
+
+    if trigger_count == 3:
+        risk_level = "💣 极度疯狂"
+        risk_color = "#d93025"
+        strategy = "执行大额止盈。至少将仓位降至 50% 以下，或通过定投式分批卖出，保留大量现金等待暴跌后的抄底机会。"
+    elif trigger_count == 2:
+        risk_level = "🚨 中度危险"
+        risk_color = "#e67e22"
+        strategy = "执行一档止盈。比如减掉 20% 仓位，锁定部分利润。"
+    elif trigger_count == 1:
+        risk_level = "⚠️ 轻度过热"
+        risk_color = "#fbbc04"
+        strategy = "持股不动，或者仅对涨幅过夸张的个股进行微调。"
+    else:
+        risk_level = "🟢 相对安全"
+        risk_color = "#188038"
+        strategy = "尚未触发止盈信号，正常持有或逢低买入。"
+
+    # 生成止盈信号面板的 HTML（默认折叠）
+    stop_profit_html = f"""
+    <div class="metric-card" style="grid-column: 1 / -1; margin-top: 10px; border-left: 4px solid {risk_color};">
+        <div class="metric-header" id="stopProfitHeader" style="border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 0; cursor: pointer; user-select: none;">
+            <span style="font-size: 16px; font-weight: bold; color: var(--header-text); display: flex; align-items: center; gap: 8px;">
+                <span id="stopProfitToggleIcon" style="font-size: 11px; color: var(--footer-text); transition: transform 0.2s;">▶</span>
+                🚦 美股止盈三信号共振监控
+            </span>
+            <span class="metric-tag" style="background: {risk_color}20; color: {risk_color}; border: 1px solid {risk_color}80;">
+                {risk_level} (触发 {trigger_count}/3 指标)
+            </span>
+        </div>
+
+        <div id="stopProfitBody" style="display: none; margin-top: 12px;">
+            <div class="stop-profit-grid">
+                <div class="stop-profit-item">
+                    <div class="stop-profit-title">VIX 标普恐慌指数</div>
+                    <div class="stop-profit-value" style="color: {risk_color if vix_trigger else 'var(--link-color)'};">
+                        {vix_val if vix_val > 0 else '--'}
+                    </div>
+                    <div class="stop-profit-rules">
+                        <div style="color: {risk_color if vix_trigger else 'inherit'}; font-weight: { 'bold' if vix_trigger else 'normal' };">VIX &lt; 14: 开始关注止盈</div>
+                        <div>VIX 15-20: 正常持有</div>
+                        <div>VIX &gt; 30: 重点考虑买入</div>
+                    </div>
+                </div>
+
+                <div class="stop-profit-item">
+                    <div class="stop-profit-title">QQQ 纳指100市盈率</div>
+                    <div class="stop-profit-value" style="color: {risk_color if pe_trigger else 'var(--link-color)'};">
+                        {qqq_pe_val if qqq_pe_val > 0 else '--'}
+                    </div>
+                    <div class="stop-profit-rules">
+                        <div style="color: {risk_color if pe_trigger else 'inherit'}; font-weight: { 'bold' if pe_trigger else 'normal' };">PE &gt; 35: 进入止盈区</div>
+                        <div>PE 30-35: 偏贵</div>
+                        <div>PE &lt; 30: 估值合理</div>
+                    </div>
+                </div>
+
+                <div class="stop-profit-item">
+                    <div class="stop-profit-title">Fear &amp; Greed 恐惧贪婪</div>
+                    <div class="stop-profit-value" style="color: {risk_color if fng_trigger else 'var(--link-color)'};">
+                        {fng_val if fng_val > 0 else '--'}
+                    </div>
+                    <div class="stop-profit-rules">
+                        <div style="color: {risk_color if fng_trigger else 'inherit'}; font-weight: { 'bold' if fng_trigger else 'normal' };">&gt; 80: 考虑分批止盈</div>
+                        <div>50-75: 正常持有</div>
+                        <div>&lt; 25: 重点寻找机会</div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="font-size: 12px; color: var(--footer-text); margin: 16px 0 8px 0;">
+                💡 单一指标有时会出现“钝化”（比如 CNN 指数在贪婪区卡了一个月，股市还在涨）。为了提高准确率，建议使用三共振法则：
+            </div>
+
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; min-width: 600px;">
+                    <thead>
+                        <tr style="background: var(--header-bg); color: var(--header-text);">
+                            <th style="padding: 10px; border-bottom: 1px solid var(--border); width: 20%;">触发条件数量</th>
+                            <th style="padding: 10px; border-bottom: 1px solid var(--border); width: 20%;">风险等级</th>
+                            <th style="padding: 10px; border-bottom: 1px solid var(--border);">对应操作策略</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="background: { 'rgba(251, 188, 4, 0.1)' if trigger_count == 1 else 'transparent' }; border-left: 3px solid {'#fbbc04' if trigger_count == 1 else 'transparent'}; transition: all 0.3s ease;">
+                            <td style="padding: 10px; border-bottom: 1px solid var(--border); color: var(--text);">仅 1 个指标触发止盈区</td>
+                            <td style="padding: 10px; border-bottom: 1px solid var(--border); color: #fbbc04; font-weight: bold;">⚠️ 轻度过热</td>
+                            <td style="padding: 10px; border-bottom: 1px solid var(--border); color: var(--text);">持股不动，或者仅对涨幅过夸张的个股进行微调。</td>
+                        </tr>
+                        <tr style="background: { 'rgba(230, 126, 34, 0.1)' if trigger_count == 2 else 'transparent' }; border-left: 3px solid {'#e67e22' if trigger_count == 2 else 'transparent'}; transition: all 0.3s ease;">
+                            <td style="padding: 10px; border-bottom: 1px solid var(--border); color: var(--text);">有 2 个指标同时触发</td>
+                            <td style="padding: 10px; border-bottom: 1px solid var(--border); color: #e67e22; font-weight: bold;">🚨 中度危险</td>
+                            <td style="padding: 10px; border-bottom: 1px solid var(--border); color: var(--text);">执行一档止盈。比如减掉 20% 仓位，锁定部分利润。</td>
+                        </tr>
+                        <tr style="background: { 'rgba(217, 48, 37, 0.1)' if trigger_count == 3 else 'transparent' }; border-left: 3px solid {'#d93025' if trigger_count == 3 else 'transparent'}; transition: all 0.3s ease;">
+                            <td style="padding: 10px; border-bottom: 1px solid var(--border); color: var(--text);">3 个指标全满 (VIX &lt; 14 + QQQ PE &gt; 35 + CNN &gt; 80)</td>
+                            <td style="padding: 10px; border-bottom: 1px solid var(--border); color: #d93025; font-weight: bold;">💣 极度疯狂</td>
+                            <td style="padding: 10px; border-bottom: 1px solid var(--border); color: var(--text);">执行大额止盈。至少将仓位降至 50% 以下，或通过定投式分批卖出，保留大量现金等待暴跌后的抄底机会。</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="background: {risk_color}15; border: 1px dashed {risk_color}; border-radius: 8px; padding: 12px; text-align: center; margin-top: 16px;">
+                <div style="font-weight: bold; color: {risk_color}; font-size: 14px;">
+                    📢 当前市场诊断：触发 <span style="font-size: 18px;">{trigger_count}</span> 个止盈信号 ➔ <span style="font-size: 18px;">{risk_level}</span>
+                </div>
+                <div style="font-weight: normal; font-size: 12px; color: var(--text); margin-top: 6px;">
+                    操作建议：{strategy}
+                </div>
+            </div>
+        </div>
+    </div>
+    """
+    # ================= 止盈三信号逻辑结束 =================
 
     def date_to_label(date_str):
         if 'Q' in date_str: return date_str
@@ -1710,7 +2132,6 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
         elif r['code'] in SPX_PASSIVE_CODES: group = "spx_passive"; macro_category = "us_share"
         else: group = "us_active"; macro_category = "us_share"
 
-        # 【修改】新增 commodities / currency 组的高亮显示
         nav_display_html = f'<span class="highlight-special-nav">{r["latest_nav"]:.4f}</span>' if group in ["commodities", "currency", "crypto", "index"] else f'{r["latest_nav"]:.4f}'
         holdings_history = r.get('holdings', [])
         today_gain_val = r.get('today_gain', None)
@@ -1957,7 +2378,10 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
         {"name": "定投估值计算机", "url": "https://btcdca.me/", "desc": "多资产定投策略与估值评分"},
         {"name": "FiNews 美股日报", "url": "https://finews.elsetech.app/", "desc": "每日美股盘后总结与新闻聚合"},
         {"name": "股查查", "url": "https://guchacha.com/", "desc": "专业的企业/股票基本面查询工具"},
-        {"name": "蛋卷估值中心", "url": "https://danjuanfunds.com/djmodule/value-center?channel=1300100141", "desc": "全市场指数估值与定投参考"}
+        {"name": "蛋卷估值中心", "url": "https://danjuanfunds.com/djmodule/value-center?channel=1300100141", "desc": "全市场指数估值与定投参考"},
+        {"name": "QDII申购限额监控", "url": "https://pmtools.com.cn/qdii", "desc": "QDII基金数据分析与投资参考"},
+        {"name": "History of Market", "url": "https://historyofmarket.com/", "desc": "美股百年历史数据与市场统计"},
+        {"name": "Yahoo 财经香港", "url": "https://hk.finance.yahoo.com/", "desc": "港股/美股实时行情与财经资讯"},
     ]
     
     friend_cards_html = "".join([f"""
@@ -2004,6 +2428,87 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             </div>
         </div>
         """
+
+    # ===== 生成指数历年回报 HTML =====
+    index_annual_html = ""
+    if index_annual_data and isinstance(index_annual_data, dict):
+        index_order = ["纳指100", "标普500", "沪深300", "科创50", "恒生科技"]
+        index_annual_html = '<div style="margin: 20px 0;">'
+        index_annual_html += '<div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px;">'
+        index_annual_html += '<h3 style="margin: 0; font-size: 16px; color: var(--header-text); border-left: 4px solid var(--link-color); padding-left: 8px;">📈 指数历年回报 (2000年至今)</h3>'
+        index_annual_html += '<span style="font-size: 12px; color: var(--footer-text);">数据来源: historyofmarket.com / 搜狐财经 / 腾讯财经</span>'
+        index_annual_html += '</div>'
+        
+        for idx_name in index_order:
+            idx_data = index_annual_data.get(idx_name)
+            if not idx_data or not idx_data.get("data"):
+                continue
+            ticker = idx_data.get("ticker", "")
+            yearly_data = idx_data["data"]
+            if not yearly_data:
+                continue
+            
+            table_rows = ""
+            for row in yearly_data:
+                year = row.get("year", "")
+                close_val = row.get("close", 0)
+                pct_val = row.get("pct", 0)
+                if pct_val > 0:
+                    pct_color = "#188038"
+                    pct_sign = "+"
+                elif pct_val < 0:
+                    pct_color = "#d93025"
+                    pct_sign = ""
+                else:
+                    pct_color = "var(--text)"
+                    pct_sign = "+"
+                table_rows += '<tr>'
+                table_rows += '<td style="padding:6px 10px;border-bottom:1px solid var(--border);font-weight:600;text-align:center;">' + str(year) + '</td>'
+                table_rows += '<td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:right;">' + format(close_val, ',.2f') + '</td>'
+                table_rows += '<td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:right;color:' + pct_color + ';font-weight:600;">' + pct_sign + format(pct_val, '.2f') + '%</td>'
+                table_rows += '</tr>'
+            
+            returns = [r.get("pct", 0) for r in yearly_data if r.get("pct") is not None]
+            stats_html = ""
+            if returns:
+                best_year = max(yearly_data, key=lambda x: x.get("pct", 0))
+                worst_year = min(yearly_data, key=lambda x: x.get("pct", 0))
+                avg_return = sum(returns) / len(returns)
+                positive_count = sum(1 for r in returns if r > 0)
+                negative_count = sum(1 for r in returns if r < 0)
+                stats_html = '<div style="display:flex;gap:16px;flex-wrap:wrap;margin:8px 0;font-size:12px;color:var(--footer-text);">'
+                stats_html += '<span>最佳年份: <strong style="color:#188038;">' + str(best_year["year"]) + '</strong> +' + format(best_year["pct"], '.2f') + '%</span>'
+                stats_html += '<span>最差年份: <strong style="color:#d93025;">' + str(worst_year["year"]) + '</strong> ' + format(worst_year["pct"], '.2f') + '%</span>'
+                stats_html += '<span>年均回报: <strong>' + format(avg_return, '+.2f') + '%</strong></span>'
+                stats_html += '<span>上涨年: <strong style="color:#188038;">' + str(positive_count) + '</strong> / 下跌年: <strong style="color:#d93025;">' + str(negative_count) + '</strong></span>'
+                stats_html += '</div>'
+            
+            index_annual_html += '<div class="metric-card" style="margin-bottom:16px;">'
+            index_annual_html += '<div class="metric-header">'
+            index_annual_html += '<span style="font-size:15px;font-weight:700;color:var(--text);">' + idx_name + ' <span style="font-size:12px;color:var(--footer-text);font-weight:normal;">(' + ticker + ')</span></span>'
+            index_annual_html += '<span style="font-size:11px;color:var(--footer-text);">共' + str(len(yearly_data)) + '个年度</span>'
+            index_annual_html += '</div>'
+            index_annual_html += '<div style="overflow-x:auto;">'
+            index_annual_html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+            index_annual_html += '<thead>'
+            index_annual_html += '<tr style="background:var(--header-bg);color:var(--header-text);">'
+            index_annual_html += '<th style="padding:8px 10px;border-bottom:2px solid var(--border);text-align:center;width:15%;">年份</th>'
+            index_annual_html += '<th style="padding:8px 10px;border-bottom:2px solid var(--border);text-align:right;width:35%;">年末收盘点位</th>'
+            index_annual_html += '<th style="padding:8px 10px;border-bottom:2px solid var(--border);text-align:right;width:25%;">年度收益率</th>'
+            index_annual_html += '</tr>'
+            index_annual_html += '</thead>'
+            index_annual_html += '<tbody>'
+            index_annual_html += table_rows
+            index_annual_html += '</tbody>'
+            index_annual_html += '</table>'
+            index_annual_html += '</div>'
+            index_annual_html += stats_html
+            index_annual_html += '</div>'
+        
+        index_annual_html += '</div>'
+    else:
+        index_annual_html = '<div style="margin:20px 0;"><div class="metric-card"><div class="metric-body"><span style="color:var(--footer-text);">暂无指数年度数据</span></div></div></div>'
+
 
     fed_monitor = fed_monitor or {}
     fed_source_url = fed_monitor.get("source_url", "https://www.cmegroup.com/cn-s/markets/interest-rates/cme-fedwatch-tool.html")
@@ -2125,7 +2630,6 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
     skew = metrics["skew"]
     brent = metrics["brent"]
 
-    # 大宗商品指标提取
     gold_london = metrics.get("gold_london", {"val": 0.0, "status": "数据暂缺", "source": "获取失败", "url": "#", "desc": ""})
     gold_shfe = metrics.get("gold_shfe", {"val": 0.0, "status": "数据暂缺", "source": "获取失败", "url": "#", "desc": ""})
     silver_london = metrics.get("silver_london", {"val": 0.0, "status": "数据暂缺", "source": "获取失败", "url": "#", "desc": ""})
@@ -2278,6 +2782,47 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 12px;
+        }}
+
+        /* 止盈信号面板专用样式 */
+        .stop-profit-grid {{
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }}
+        .stop-profit-item {{
+            background: var(--hover-bg);
+            border-radius: 8px;
+            padding: 14px;
+            border: 1px solid var(--border);
+            transition: transform 0.2s;
+        }}
+        .stop-profit-item:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }}
+        .stop-profit-title {{
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: var(--text);
+            border-bottom: 1px dashed var(--border);
+            padding-bottom: 6px;
+        }}
+        .stop-profit-value {{
+            font-size: 24px;
+            font-weight: 800;
+            font-family: "SFMono-Regular", Consolas, monospace;
+            margin-bottom: 12px;
+            line-height: 1;
+        }}
+        .stop-profit-rules {{
+            font-size: 12px;
+            color: var(--footer-text);
+            line-height: 1.8;
+        }}
+        @media (max-width: 768px) {{
+            .stop-profit-grid {{ grid-template-columns: 1fr; }}
         }}
 
         .index-metrics-grid, .friend-links-grid {{
@@ -3113,6 +3658,9 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                             🔗 来源: CBOE 官方 (_SKEW) ↗
                         </a>
                     </div>
+
+                    <!-- 【新增】止盈三信号面板（默认折叠） -->
+                    {stop_profit_html}
                 </div>
 
                 <div style="display: flex; justify-content: space-between; align-items: flex-end;">
@@ -3122,7 +3670,9 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                 <div class="index-metrics-grid">
                     {index_cards_html}
                 </div>
-                
+
+                {index_annual_html}
+
                 <h3 style="margin: 0; font-size: 16px; color: var(--header-text); border-left: 4px solid var(--link-color); padding-left: 8px;">🏛️ 美联储利率观测器</h3>
                 {fed_monitor_html}
 
@@ -3261,7 +3811,6 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                     <button class="cat-btn macro-filter" data-macro="a_share" data-sub="robot">机器人</button>
                     
                     <span class="category-title" style="margin-left: 8px;">其他:</span>
-                    <!-- 【修改】贵金属 -> 大宗商品 -->
                     <button class="cat-btn macro-filter" data-macro="other" data-sub="commodities">大宗商品</button>
                     <button class="cat-btn macro-filter" data-macro="other" data-sub="crypto">加密货币</button>
                     <button class="cat-btn macro-filter" data-macro="other" data-sub="index">主流指数</button>
@@ -3272,9 +3821,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                 </div>
             </div>
 
-            <!-- 动态定投与申购状态筛选并列容器 -->
             <div style="display: flex; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; align-items: stretch;">
-                <!-- 全局动态定投筛选栏 -->
                 <div class="global-dca-filter-card" id="gDcaCard" style="margin-bottom: 0; flex: 1; min-width: 320px; align-self: stretch;">
                     <div class="global-dca-filter-header" style="cursor: default;">
                         <span class="global-dca-filter-title">📊 动态定投参数配置</span>
@@ -3297,7 +3844,6 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                     </div>
                 </div>
 
-                <!-- 申购状态独立卡片 -->
                 <div class="buy-status-filter-card" style="background: var(--table-bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; display: flex; align-items: center; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.03); flex-wrap: wrap; min-height: 42px; box-sizing: border-box; align-self: stretch;">
                     <span class="category-title" style="margin-right: 4px;">申购状态:</span>
                     <button class="cat-btn buy-filter active" data-buy="all">全部</button>
@@ -3423,6 +3969,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
     <script>
         var fundNavData = {json.dumps(nav_data_json, ensure_ascii=False)};
         var fundNames = {json.dumps(fund_names_json, ensure_ascii=False)};
+        var fundParsedDates = {{}};
 
         // Tab 切换
         document.querySelectorAll('.nav-tab-btn').forEach(btn => {{
@@ -3447,7 +3994,22 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                 document.documentElement.setAttribute('data-theme', next);
                 localStorage.setItem('theme', next);
                 toggle.textContent = next === 'dark' ? '☀️ 亮色' : '🌓 暗色';
+                window._crosshairLineColor = null;
             }});
+        }})();
+
+        // 【新增】美股止盈三信号面板折叠切换
+        (function() {{
+            const header = document.getElementById('stopProfitHeader');
+            const body = document.getElementById('stopProfitBody');
+            const icon = document.getElementById('stopProfitToggleIcon');
+            if (header && body && icon) {{
+                header.addEventListener('click', function() {{
+                    const isCollapsed = body.style.display === 'none';
+                    body.style.display = isCollapsed ? 'block' : 'none';
+                    icon.textContent = isCollapsed ? '▼' : '▶';
+                }});
+            }}
         }})();
 
         // 自选管理模块 (Local Storage)
@@ -3482,7 +4044,14 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
 
             const allDates = raw.dates;
             const allNavs = raw.navs;
-            const latestDate = new Date(allDates[allDates.length - 1]);
+            
+            let parsedDates = fundParsedDates[code];
+            if (!parsedDates || parsedDates.length !== allDates.length) {{
+                parsedDates = allDates.map(d => new Date(d));
+                fundParsedDates[code] = parsedDates;
+            }}
+            
+            const latestDate = parsedDates[parsedDates.length - 1];
             let startDate = new Date(latestDate);
 
             if (range === 'half') {{
@@ -3492,12 +4061,12 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             }} else if (range === 'ytd') {{
                 startDate = new Date(latestDate.getFullYear(), 0, 1);
             }} else {{
-                startDate = new Date(allDates[0]);
+                startDate = parsedDates[0];
             }}
 
             const filtered = [];
             for (let i = 0; i < allDates.length; i++) {{
-                const d = new Date(allDates[i]);
+                const d = parsedDates[i];
                 if (d >= startDate) {{
                     filtered.push({{ date: allDates[i], dt: d, nav: allNavs[i] }});
                 }}
@@ -3736,7 +4305,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             let currentBuyStatus = 'all';
             let searchKeyword = '';
 
-            updateTableDca();
+            setTimeout(updateTableDca, 100);
 
             function syncFavDisplay() {{
                 document.querySelectorAll('.star-btn').forEach(btn => {{
@@ -3902,7 +4471,10 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                 ctx.beginPath();
                 ctx.setLineDash([4, 4]);
                 ctx.lineWidth = 1;
-                ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--footer-text').trim() || '#70757a';
+                if (!window._crosshairLineColor) {{
+                    window._crosshairLineColor = getComputedStyle(document.documentElement).getPropertyValue('--footer-text').trim() || '#70757a';
+                }}
+                ctx.strokeStyle = window._crosshairLineColor;
                 ctx.moveTo(x, top);
                 ctx.lineTo(x, bottom);
                 ctx.moveTo(left, y);
@@ -4183,7 +4755,13 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                         }} else {{
                             chart._crosshair = null;
                         }}
-                        chart.draw();
+                        if (!chart._rafPending) {{
+                            chart._rafPending = true;
+                            requestAnimationFrame(() => {{
+                                chart._rafPending = false;
+                                chart.draw();
+                            }});
+                        }}
                     }},
                     plugins: {{
                         legend: {{ display: false }},
@@ -4530,37 +5108,104 @@ def fetch_precious_metals_data(symbol, start_date, end_date):
 # 【新增】大宗商品（布伦特原油 / LME铜）与货币汇率（USD/CNY、USD/JPY、DXY）抓取
 # ==============================================================================
 def fetch_yahoo_history(symbol, start_date, end_date):
-    """从 Yahoo Finance 抓取日线历史收盘价（通用函数，供大宗商品与货币兜底使用）"""
+    """从 Yahoo Finance 抓取日线历史收盘价（通用函数，供指数/大宗商品/货币使用）。
+
+    修复点：
+    1. 先访问 finance.yahoo.com 获取 consent cookie，避免长历史请求被返回空数组。
+    2. query1 / query2 双端点回退。
+    3. 正确处理 result=None 或 error 字段，不再静默吞掉异常。
+    4. 打印诊断日志，便于排查符号错误。
+    """
     data = []
     try:
         start_ts = int(datetime.strptime(start_date, '%Y-%m-%d').timestamp())
         end_ts = int(datetime.strptime(end_date, '%Y-%m-%d').timestamp()) + 86400
-        url = (
-            f"https://query1.finance.yahoo.com/v8/finance/chart/"
-            f"{urllib.parse.quote(symbol)}?period1={start_ts}&period2={end_ts}&interval=1d"
+    except Exception as e:
+        print(f"    [Yahoo] {symbol} 日期解析失败: {e}")
+        return None
+
+    encoded_symbol = urllib.parse.quote(symbol, safe='')
+
+    # 带 cookie 的 opener
+    cj = CookieJar()
+    proxy_handler = urllib.request.ProxyHandler({})
+    opener = urllib.request.build_opener(
+        proxy_handler, urllib.request.HTTPCookieProcessor(cj)
+    )
+
+    # 预热：获取 consent / session cookie（关键修复）
+    try:
+        warm_req = urllib.request.Request(
+            "https://finance.yahoo.com/",
+            headers={"User-Agent": DEFAULT_HEADERS["User-Agent"]}
         )
-        req = urllib.request.Request(url, headers=DEFAULT_HEADERS)
-        no_proxy = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        with no_proxy.open(req, timeout=10) as resp:
-            res = json.loads(resp.read().decode('utf-8'))
-            result = res.get("chart", {}).get("result", [{}])[0]
-            timestamps = result.get("timestamp", []) or []
-            closes = result.get("indicators", {}).get("quote", [{}])[0].get("close", []) or []
-            from datetime import timezone
+        opener.open(warm_req, timeout=8)
+    except Exception:
+        pass
+
+    hosts = [
+        "query1.finance.yahoo.com",
+        "query2.finance.yahoo.com",
+    ]
+
+    from datetime import timezone as _tz
+
+    for host in hosts:
+        try:
+            url = (
+                f"https://{host}/v8/finance/chart/{encoded_symbol}"
+                f"?period1={start_ts}&period2={end_ts}&interval=1d&events=div%2Csplit"
+            )
+            req = urllib.request.Request(url, headers={
+                **DEFAULT_HEADERS,
+                "Accept": "application/json,text/plain,*/*",
+                "Referer": "https://finance.yahoo.com/",
+            })
+            with opener.open(req, timeout=15) as resp:
+                raw_text = resp.read().decode('utf-8', errors='ignore')
+            res = json.loads(raw_text)
+
+            chart = res.get("chart") or {}
+            err = chart.get("error")
+            if err:
+                desc = err.get("description") if isinstance(err, dict) else str(err)
+                print(f"    [Yahoo] {symbol}@{host} 接口错误: {desc}")
+                continue
+
+            results = chart.get("result")
+            if not results:
+                continue
+
+            result = results[0] or {}
+            timestamps = result.get("timestamp") or []
+            indicators = result.get("indicators") or {}
+            quote_list = indicators.get("quote") or []
+            if not quote_list:
+                continue
+            closes = quote_list[0].get("close") or []
+
             for ts, c in zip(timestamps, closes):
-                if c is None: continue
+                if c is None:
+                    continue
                 try:
                     v = float(c)
                 except (TypeError, ValueError):
                     continue
-                if v <= 0: continue
-                d = datetime.fromtimestamp(ts, tz=timezone.utc).strftime('%Y-%m-%d')
+                if v <= 0:
+                    continue
+                d = datetime.fromtimestamp(ts, tz=_tz.utc).strftime('%Y-%m-%d')
                 data.append({"date": d, "nav": round(v, 4)})
-    except Exception:
-        pass
+
+            if data:
+                break
+        except Exception as e:
+            print(f"    [Yahoo] {symbol}@{host} 请求异常: {e}")
+            continue
+
     if data:
-        data = sorted(data, key=lambda x: x['date'])
-        return data
+        return sorted(data, key=lambda x: x['date'])
+
+    print(f"    [Yahoo] {symbol} 未获取到任何数据")
     return None
 
 
@@ -4622,8 +5267,7 @@ def fetch_commodity_data(symbol, start_date, end_date):
 
 
 def fetch_currency_data(symbol, start_date, end_date):
-    """抓取货币汇率历史数据（USDCNY / USDJPY / DXY），带本地缓存。
-    优先尝试从用户指定的 Investing.com 中文页面抓取，失败则兜底 Yahoo Finance。"""
+    """抓取货币汇率历史数据（USDCNY / USDJPY / DXY），带本地缓存。"""
     cache_file = os.path.join(NAV_CACHE_DIR, f"{symbol}.json")
     if os.path.exists(cache_file):
         try:
@@ -4633,7 +5277,6 @@ def fetch_currency_data(symbol, start_date, end_date):
                 return cache.get('data', [])
         except Exception: pass
 
-    # 1) 尝试 Investing.com 中文页面（用户指定源）
     investing_urls = {
         "USDCNY": "https://cn.investing.com/currencies/usd-cny",
         "USDJPY": "https://cn.investing.com/currencies/usd-jpy",
@@ -4651,8 +5294,6 @@ def fetch_currency_data(symbol, start_date, end_date):
             })
             with urllib.request.urlopen(req, timeout=10) as resp:
                 html_text = resp.read().decode('utf-8', errors='ignore')
-            # Investing.com 页面通常内嵌一段 JSON 的 historicalData 或 chart 数据
-            # 这里做通用弱解析：提取所有形如 {"date": "...", "close": ...} 的片段
             candidates = []
             for m in re.finditer(r'"(?:date|Date)"\s*:\s*"([^"]+)"[^}]*?"(?:close|Close|last|last_close|price)"\s*:\s*([\d.]+)', html_text):
                 d_str = m.group(1).strip()
@@ -4663,7 +5304,6 @@ def fetch_currency_data(symbol, start_date, end_date):
                     continue
                 if v <= 0:
                     continue
-                # 规范化日期
                 d_norm = None
                 for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"):
                     try:
@@ -4674,7 +5314,6 @@ def fetch_currency_data(symbol, start_date, end_date):
                 if d_norm:
                     candidates.append({"date": d_norm, "nav": round(v, 4)})
             if candidates:
-                # 去重并排序
                 uniq = {}
                 for it in candidates:
                     uniq[it["date"]] = it
@@ -4682,7 +5321,6 @@ def fetch_currency_data(symbol, start_date, end_date):
         except Exception:
             data = None
 
-    # 2) 兜底：Yahoo Finance
     if not data:
         symbol_map = {
             "USDCNY": "USDCNY=X",
@@ -4756,7 +5394,6 @@ def main():
 
     if is_debug:
         target_funds = TEST_FUNDS
-        # 【修改】大宗商品：XAU/AUM/XAG 走原贵金属抓取，BRENT/CAD 走新抓取
         target_commodities = ["XAU", "BRENT"]
         target_cryptos = ["BTC"]
         target_indices = ["NDX"]
@@ -4779,6 +5416,7 @@ def main():
     
     home_metrics = fetch_home_market_metrics(opener)
     index_valuations = fetch_index_valuations(opener)
+    index_annual_data = fetch_index_annual_data()
     fed_monitor = fetch_fed_rate_monitor(opener)
     print(f"📊 核心宏观指标获取成功: 恐慌贪婪 {home_metrics['fng']['score']} | VIX {home_metrics['vix']['val']} | USD/CNY {home_metrics['usdcny']['val']} | VXN {home_metrics['vxn']['val']} | SKEW {home_metrics['skew']['val']}")
     print(f"🛢️ 大宗商品指标获取成功: 布伦特原油 {home_metrics['brent']['val']} | 伦敦金 {home_metrics['gold_london']['val']} | 沪金主连 {home_metrics['gold_shfe']['val']} | 伦敦银 {home_metrics['silver_london']['val']} | LME铜 {home_metrics['copper_lme']['val']}")
@@ -4840,7 +5478,6 @@ def main():
             else:
                 print(f"[{done_count}/{len(target_funds)}] {code} - {name} ... ❌ 历史净值抓取失败")
 
-    # 【修改】大宗商品：包含伦敦金/沪金主连/伦敦银/布伦特原油/LME铜
     for symbol in target_commodities:
         try:
             if symbol in ["XAU", "AUM", "XAG"]:
@@ -4867,17 +5504,24 @@ def main():
         try:
             data = fetch_crypto_data(symbol, args.start, args.end)
             if data:
+                meta_name = CRYPTO_NAMES.get(symbol, symbol)
                 res = analyze_fund_metrics(data, args.end, cutoff_date, is_qdii=False)
                 if res:
                     res.update({
-                        "code": symbol, "name": CRYPTO_NAMES.get(symbol, symbol), "scale": "--", "scale_val": -1.0,
+                        "code": symbol, "name": meta_name, "scale": "--", "scale_val": -1.0,
                         "fee_manage": "--", "fee_custody": "--", "fee_sales": "--", "fee_source": "--",
                         "fee_purchase": "--", "fee_redemption": "--", "buy_status": "--", "buy_limit": "--",
                         "buy_limit_val": -1, "fee_total": "--", "fee_val": -1.0, "holdings": [],
                         "holder_struct": None, "countries_info": {"date": "--", "countries": []}, "source": "现货行情", "nav_data": data
                     })
                     results.append(res)
-        except Exception: pass
+                    print(f"  ✓ 加密货币 {symbol} ({meta_name}) 抓取成功, 数据量 {len(data)}")
+                else:
+                    print(f"  ✗ 加密货币 {symbol} ({meta_name}) 指标计算失败")
+            else:
+                print(f"  ✗ 加密货币 {symbol} 抓取失败, 无数据")
+        except Exception as e:
+            print(f"  ✗ 加密货币 {symbol} 抓取异常: {e}")
 
     for symbol in target_indices:
         try:
@@ -4896,7 +5540,14 @@ def main():
         except Exception: pass
 
     if results:
-        abs_path = generate_html_report(results, args.start, args.end, today_str, home_metrics, index_valuations, fed_monitor=fed_monitor, is_debug_mode=is_debug, filename=args.out)
+        abs_path = generate_html_report(
+            results, args.start, args.end, today_str,
+            home_metrics, index_valuations,
+            fed_monitor=fed_monitor,
+            is_debug_mode=is_debug,
+            filename=args.out,
+            index_annual_data=index_annual_data
+        )
         print(f"\n🎉 升级版网页构建成功！文件路径: {abs_path}")
         try:
             webbrowser.open(f"file://{abs_path}")

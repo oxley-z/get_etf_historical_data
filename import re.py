@@ -1,3 +1,4 @@
+
 import os
 import re
 import json
@@ -2428,6 +2429,87 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
         </div>
         """
 
+    # ===== 生成指数历年回报 HTML =====
+    index_annual_html = ""
+    if index_annual_data and isinstance(index_annual_data, dict):
+        index_order = ["纳指100", "标普500", "沪深300", "科创50", "恒生科技"]
+        index_annual_html = '<div style="margin: 20px 0;">'
+        index_annual_html += '<div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px;">'
+        index_annual_html += '<h3 style="margin: 0; font-size: 16px; color: var(--header-text); border-left: 4px solid var(--link-color); padding-left: 8px;">📈 指数历年回报 (2000年至今)</h3>'
+        index_annual_html += '<span style="font-size: 12px; color: var(--footer-text);">数据来源: historyofmarket.com / 搜狐财经 / 腾讯财经</span>'
+        index_annual_html += '</div>'
+        
+        for idx_name in index_order:
+            idx_data = index_annual_data.get(idx_name)
+            if not idx_data or not idx_data.get("data"):
+                continue
+            ticker = idx_data.get("ticker", "")
+            yearly_data = idx_data["data"]
+            if not yearly_data:
+                continue
+            
+            table_rows = ""
+            for row in yearly_data:
+                year = row.get("year", "")
+                close_val = row.get("close", 0)
+                pct_val = row.get("pct", 0)
+                if pct_val > 0:
+                    pct_color = "#188038"
+                    pct_sign = "+"
+                elif pct_val < 0:
+                    pct_color = "#d93025"
+                    pct_sign = ""
+                else:
+                    pct_color = "var(--text)"
+                    pct_sign = "+"
+                table_rows += '<tr>'
+                table_rows += '<td style="padding:6px 10px;border-bottom:1px solid var(--border);font-weight:600;text-align:center;">' + str(year) + '</td>'
+                table_rows += '<td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:right;">' + format(close_val, ',.2f') + '</td>'
+                table_rows += '<td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:right;color:' + pct_color + ';font-weight:600;">' + pct_sign + format(pct_val, '.2f') + '%</td>'
+                table_rows += '</tr>'
+            
+            returns = [r.get("pct", 0) for r in yearly_data if r.get("pct") is not None]
+            stats_html = ""
+            if returns:
+                best_year = max(yearly_data, key=lambda x: x.get("pct", 0))
+                worst_year = min(yearly_data, key=lambda x: x.get("pct", 0))
+                avg_return = sum(returns) / len(returns)
+                positive_count = sum(1 for r in returns if r > 0)
+                negative_count = sum(1 for r in returns if r < 0)
+                stats_html = '<div style="display:flex;gap:16px;flex-wrap:wrap;margin:8px 0;font-size:12px;color:var(--footer-text);">'
+                stats_html += '<span>最佳年份: <strong style="color:#188038;">' + str(best_year["year"]) + '</strong> +' + format(best_year["pct"], '.2f') + '%</span>'
+                stats_html += '<span>最差年份: <strong style="color:#d93025;">' + str(worst_year["year"]) + '</strong> ' + format(worst_year["pct"], '.2f') + '%</span>'
+                stats_html += '<span>年均回报: <strong>' + format(avg_return, '+.2f') + '%</strong></span>'
+                stats_html += '<span>上涨年: <strong style="color:#188038;">' + str(positive_count) + '</strong> / 下跌年: <strong style="color:#d93025;">' + str(negative_count) + '</strong></span>'
+                stats_html += '</div>'
+            
+            index_annual_html += '<div class="metric-card" style="margin-bottom:16px;">'
+            index_annual_html += '<div class="metric-header">'
+            index_annual_html += '<span style="font-size:15px;font-weight:700;color:var(--text);">' + idx_name + ' <span style="font-size:12px;color:var(--footer-text);font-weight:normal;">(' + ticker + ')</span></span>'
+            index_annual_html += '<span style="font-size:11px;color:var(--footer-text);">共' + str(len(yearly_data)) + '个年度</span>'
+            index_annual_html += '</div>'
+            index_annual_html += '<div style="overflow-x:auto;">'
+            index_annual_html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+            index_annual_html += '<thead>'
+            index_annual_html += '<tr style="background:var(--header-bg);color:var(--header-text);">'
+            index_annual_html += '<th style="padding:8px 10px;border-bottom:2px solid var(--border);text-align:center;width:15%;">年份</th>'
+            index_annual_html += '<th style="padding:8px 10px;border-bottom:2px solid var(--border);text-align:right;width:35%;">年末收盘点位</th>'
+            index_annual_html += '<th style="padding:8px 10px;border-bottom:2px solid var(--border);text-align:right;width:25%;">年度收益率</th>'
+            index_annual_html += '</tr>'
+            index_annual_html += '</thead>'
+            index_annual_html += '<tbody>'
+            index_annual_html += table_rows
+            index_annual_html += '</tbody>'
+            index_annual_html += '</table>'
+            index_annual_html += '</div>'
+            index_annual_html += stats_html
+            index_annual_html += '</div>'
+        
+        index_annual_html += '</div>'
+    else:
+        index_annual_html = '<div style="margin:20px 0;"><div class="metric-card"><div class="metric-body"><span style="color:var(--footer-text);">暂无指数年度数据</span></div></div></div>'
+
+
     fed_monitor = fed_monitor or {}
     fed_source_url = fed_monitor.get("source_url", "https://www.cmegroup.com/cn-s/markets/interest-rates/cme-fedwatch-tool.html")
     fed_meeting_text = fed_monitor.get("meeting_text", "--")
@@ -3588,6 +3670,8 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                 <div class="index-metrics-grid">
                     {index_cards_html}
                 </div>
+
+                {index_annual_html}
 
                 <h3 style="margin: 0; font-size: 16px; color: var(--header-text); border-left: 4px solid var(--link-color); padding-left: 8px;">🏛️ 美联储利率观测器</h3>
                 {fed_monitor_html}
