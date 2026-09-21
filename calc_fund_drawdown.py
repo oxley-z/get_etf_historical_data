@@ -1,4 +1,3 @@
-
 import os
 import re
 import json
@@ -2371,30 +2370,64 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
         </tr>
     """
 
-    friend_links = [
-        {"name": "WISE HOLD", "url": "https://www.wise-hold.com/", "desc": "追踪机构持仓与政商名人投资动向"},
-        {"name": "WiseETF", "url": "https://www.wise-etf.com/", "desc": "美股ETF/QDII基金估值与溢价监控"},
-        {"name": "纳指估值助手", "url": "https://nsdk.top/", "desc": "纳指基金估值与持仓参考"},
-        {"name": "定投估值计算机", "url": "https://btcdca.me/", "desc": "多资产定投策略与估值评分"},
-        {"name": "FiNews 美股日报", "url": "https://finews.elsetech.app/", "desc": "每日美股盘后总结与新闻聚合"},
-        {"name": "股查查", "url": "https://guchacha.com/", "desc": "专业的企业/股票基本面查询工具"},
-        {"name": "蛋卷估值中心", "url": "https://danjuanfunds.com/djmodule/value-center?channel=1300100141", "desc": "全市场指数估值与定投参考"},
-        {"name": "QDII申购限额监控", "url": "https://pmtools.com.cn/qdii", "desc": "QDII基金数据分析与投资参考"},
-        {"name": "History of Market", "url": "https://historyofmarket.com/", "desc": "美股百年历史数据与市场统计"},
-        {"name": "Yahoo 财经香港", "url": "https://hk.finance.yahoo.com/", "desc": "港股/美股实时行情与财经资讯"},
+    friend_link_categories = [
+        {
+            "category": "📊 估值与数据",
+            "links": [
+                {"name": "蛋卷估值中心", "url": "https://danjuanfunds.com/djmodule/value-center?channel=1300100141", "desc": "全市场指数估值与定投参考"},
+                {"name": "History of Market", "url": "https://historyofmarket.com/", "desc": "美股百年历史数据与市场统计"},
+                {"name": "Morningstar 晨星中国", "url": "https://www.morningstar.cn/", "desc": "全球权威基金评级与研究报告"},
+                {"name": "WiseETF", "url": "https://www.wise-etf.com/", "desc": "美股ETF/QDII基金估值与溢价监控"},
+                {"name": "纳指估值助手", "url": "https://nsdk.top/", "desc": "纳指基金估值与持仓参考"},
+            ]
+        },
+        {
+            "category": "🔬 基金分析与工具",
+            "links": [
+                {"name": "基金决策宝", "url": "https://jjpro.cn/", "desc": "基金组合分析与投研决策辅助工具"},
+                {"name": "QDII申购限额监控", "url": "https://pmtools.com.cn/qdii", "desc": "QDII基金数据分析与投资参考"},
+                {"name": "定投估值计算机", "url": "https://btcdca.me/", "desc": "多资产定投策略与估值评分"},
+                {"name": "股查查", "url": "https://guchacha.com/", "desc": "专业的企业/股票基本面查询工具"},
+                {"name": "WISE HOLD", "url": "https://www.wise-hold.com/", "desc": "追踪机构持仓与政商名人投资动向"},
+            ]
+        },
+        {
+            "category": "📰 资讯与行情",
+            "links": [
+                {"name": "FiNews 美股日报", "url": "https://finews.elsetech.app/", "desc": "每日美股盘后总结与新闻聚合"},
+                {"name": "Yahoo 财经香港", "url": "https://hk.finance.yahoo.com/", "desc": "港股/美股实时行情与财经资讯"},
+            ]
+        },
     ]
     
-    friend_cards_html = "".join([f"""
+    friend_cards_html = ""
+    for cat in friend_link_categories:
+        cards_list = []
+        for link in cat['links']:
+            try:
+                _domain = urllib.parse.urlparse(link['url']).netloc
+            except Exception:
+                _domain = ""
+            _icon_url = f"https://www.google.com/s2/favicons?domain={_domain}&sz=64" if _domain else ""
+            cards_list.append(f"""
         <a href="{link['url']}" target="_blank" class="metric-card friend-card" style="text-decoration: none; display: flex; flex-direction: column; justify-content: center; cursor: pointer;">
-            <div class="metric-header" style="color: var(--link-color); font-size: 14px; border-bottom: 1px dashed var(--border); padding-bottom: 6px; margin-bottom: 6px;">
-                <span>{link['name']}</span>
-                <span>↗</span>
+            <div class="friend-card-head">
+                <img src="{_icon_url}" alt="{link['name']}" class="friend-logo" loading="lazy" onerror="this.style.display='none';">
+                <span class="friend-name">{link['name']}</span>
+                <span class="friend-arrow">↗</span>
             </div>
-            <div class="metric-desc" style="border-top: none; padding-top: 0; margin-top: 0; font-size: 11px; color: var(--footer-text);">
+            <div class="metric-desc" style="border-top: none; padding-top: 0; margin-top: 4px; font-size: 11px; color: var(--footer-text);">
                 {link['desc']}
             </div>
         </a>
-    """ for link in friend_links])
+        """)
+        links_html = "".join(cards_list)
+        friend_cards_html += f"""
+        <div class="friend-category-block">
+            <h4 class="friend-category-title">{cat['category']}</h4>
+            <div class="friend-links-grid">{links_html}</div>
+        </div>
+        """
 
     index_source_url = "https://danjuanfunds.com/screw/valuation-table"
     index_source_link_html = (
@@ -2429,16 +2462,27 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
         </div>
         """
 
-    # ===== 生成指数历年回报 HTML =====
+    # ===== 计算指数历年回报数据的更新时间（优先取缓存文件 mtime）=====
+    _index_annual_cache_file = os.path.join(CACHE_DIR, "index_annual.json")
+    if os.path.exists(_index_annual_cache_file):
+        try:
+            _mtime = os.path.getmtime(_index_annual_cache_file)
+            index_annual_update_time = datetime.fromtimestamp(_mtime).strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            index_annual_update_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+    else:
+        index_annual_update_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    # ===== 生成指数历年回报 HTML (优化版 v3) =====
     index_annual_html = ""
     if index_annual_data and isinstance(index_annual_data, dict):
         index_order = ["纳指100", "标普500", "沪深300", "科创50", "恒生科技"]
-        index_annual_html = '<div style="margin: 20px 0;">'
-        index_annual_html += '<div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px;">'
+        index_annual_html = '<div class="index-annual-grid" style="margin: 20px 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">'
+        index_annual_html += '<div style="grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 0;">'
         index_annual_html += '<h3 style="margin: 0; font-size: 16px; color: var(--header-text); border-left: 4px solid var(--link-color); padding-left: 8px;">📈 指数历年回报 (2000年至今)</h3>'
         index_annual_html += '<span style="font-size: 12px; color: var(--footer-text);">数据来源: historyofmarket.com / 搜狐财经 / 腾讯财经</span>'
         index_annual_html += '</div>'
-        
+
         for idx_name in index_order:
             idx_data = index_annual_data.get(idx_name)
             if not idx_data or not idx_data.get("data"):
@@ -2447,64 +2491,121 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             yearly_data = idx_data["data"]
             if not yearly_data:
                 continue
-            
-            table_rows = ""
+
+            max_abs_pct = max([abs(r.get("pct", 0)) for r in yearly_data] + [1.0])
+
+            # ===== 计算统计信息 =====
+            returns = [r.get("pct", 0) for r in yearly_data]
+            max_gain = max(returns) if returns else 0.0
+            max_loss = min(returns) if returns else 0.0
+            pos_years = sum(1 for r in returns if r > 0)
+            neg_years = sum(1 for r in returns if r < 0)
+            cum = 1.0
+            for r in returns:
+                cum *= (1 + r / 100.0)
+            n_years = len(returns)
+            if n_years > 0 and cum > 0:
+                ann_return = ((cum ** (1.0 / n_years)) - 1) * 100.0
+            else:
+                ann_return = 0.0
+            ann_color = "#d93025" if ann_return >= 0 else "#188038"
+
+            stats_html = f'''
+            <div class="annual-stats-footer">
+                <div class="annual-stat-item"><span class="annual-stat-label">最大涨幅</span><span class="annual-stat-value" style="color:#d93025;">+{max_gain:.2f}%</span></div>
+                <div class="annual-stat-item"><span class="annual-stat-label">最大跌幅</span><span class="annual-stat-value" style="color:#188038;">{max_loss:.2f}%</span></div>
+                <div class="annual-stat-item"><span class="annual-stat-label">正收益年份</span><span class="annual-stat-value">{pos_years} 年</span></div>
+                <div class="annual-stat-item"><span class="annual-stat-label">负收益年份</span><span class="annual-stat-value">{neg_years} 年</span></div>
+                <div class="annual-stat-item"><span class="annual-stat-label">年化收益率</span><span class="annual-stat-value" style="color:{ann_color};">{ann_return:+.2f}%</span></div>
+            </div>
+            '''
+
+            bar_data_json = json.dumps(
+                [{"year": r.get("year"), "pct": r.get("pct"), "close": r.get("close")} for r in yearly_data],
+                ensure_ascii=False
+            )
+
+            index_annual_html += f'''
+            <div class="metric-card" style="margin-bottom:0; padding: 16px; display: flex; flex-direction: column;">
+                <div class="metric-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:10px; margin-bottom:15px; flex-shrink: 0; flex-wrap: wrap; gap: 8px;">
+                    <span style="font-size:15px; font-weight:700; color:var(--text);">
+                        {idx_name} <span style="font-size:12px; color:var(--footer-text); font-weight:normal;">({ticker})</span>
+                    </span>
+                    <div style="display:flex; gap:6px;">
+                        <button class="mode-toggle-btn" data-idx="{idx_name}" data-mode="card" onclick="toggleAnnualView('{idx_name}', 'card')">📋 卡片</button>
+                        <button class="mode-toggle-btn active" data-idx="{idx_name}" data-mode="heatmap" onclick="toggleAnnualView('{idx_name}', 'heatmap')">🔥 热力图</button>
+                        <button class="mode-toggle-btn" data-idx="{idx_name}" data-mode="bar" onclick="toggleAnnualView('{idx_name}', 'bar')">📊 柱状图</button>
+                    </div>
+                </div>
+                <div id="annual-view-{idx_name}" class="annual-view-container" style="flex: 1; min-height: 0;">
+            '''
+
+            # --- 视图 1：卡片布局 (默认隐藏) ---
+            index_annual_html += f'<div id="annual-card-{idx_name}" class="annual-mode-content" style="display:none;">'
+            index_annual_html += '<div class="annual-card-grid">'
             for row in yearly_data:
                 year = row.get("year", "")
                 close_val = row.get("close", 0)
                 pct_val = row.get("pct", 0)
                 if pct_val > 0:
-                    pct_color = "#188038"
-                    pct_sign = "+"
+                    pct_color = "#d93025"; pct_sign = "+"; bar_color = "#d93025"
                 elif pct_val < 0:
-                    pct_color = "#d93025"
-                    pct_sign = ""
+                    pct_color = "#188038"; pct_sign = ""; bar_color = "#188038"
                 else:
-                    pct_color = "var(--text)"
-                    pct_sign = "+"
-                table_rows += '<tr>'
-                table_rows += '<td style="padding:6px 10px;border-bottom:1px solid var(--border);font-weight:600;text-align:center;">' + str(year) + '</td>'
-                table_rows += '<td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:right;">' + format(close_val, ',.2f') + '</td>'
-                table_rows += '<td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:right;color:' + pct_color + ';font-weight:600;">' + pct_sign + format(pct_val, '.2f') + '%</td>'
-                table_rows += '</tr>'
-            
-            returns = [r.get("pct", 0) for r in yearly_data if r.get("pct") is not None]
-            stats_html = ""
-            if returns:
-                best_year = max(yearly_data, key=lambda x: x.get("pct", 0))
-                worst_year = min(yearly_data, key=lambda x: x.get("pct", 0))
-                avg_return = sum(returns) / len(returns)
-                positive_count = sum(1 for r in returns if r > 0)
-                negative_count = sum(1 for r in returns if r < 0)
-                stats_html = '<div style="display:flex;gap:16px;flex-wrap:wrap;margin:8px 0;font-size:12px;color:var(--footer-text);">'
-                stats_html += '<span>最佳年份: <strong style="color:#188038;">' + str(best_year["year"]) + '</strong> +' + format(best_year["pct"], '.2f') + '%</span>'
-                stats_html += '<span>最差年份: <strong style="color:#d93025;">' + str(worst_year["year"]) + '</strong> ' + format(worst_year["pct"], '.2f') + '%</span>'
-                stats_html += '<span>年均回报: <strong>' + format(avg_return, '+.2f') + '%</strong></span>'
-                stats_html += '<span>上涨年: <strong style="color:#188038;">' + str(positive_count) + '</strong> / 下跌年: <strong style="color:#d93025;">' + str(negative_count) + '</strong></span>'
-                stats_html += '</div>'
-            
-            index_annual_html += '<div class="metric-card" style="margin-bottom:16px;">'
-            index_annual_html += '<div class="metric-header">'
-            index_annual_html += '<span style="font-size:15px;font-weight:700;color:var(--text);">' + idx_name + ' <span style="font-size:12px;color:var(--footer-text);font-weight:normal;">(' + ticker + ')</span></span>'
-            index_annual_html += '<span style="font-size:11px;color:var(--footer-text);">共' + str(len(yearly_data)) + '个年度</span>'
-            index_annual_html += '</div>'
-            index_annual_html += '<div style="overflow-x:auto;">'
-            index_annual_html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
-            index_annual_html += '<thead>'
-            index_annual_html += '<tr style="background:var(--header-bg);color:var(--header-text);">'
-            index_annual_html += '<th style="padding:8px 10px;border-bottom:2px solid var(--border);text-align:center;width:15%;">年份</th>'
-            index_annual_html += '<th style="padding:8px 10px;border-bottom:2px solid var(--border);text-align:right;width:35%;">年末收盘点位</th>'
-            index_annual_html += '<th style="padding:8px 10px;border-bottom:2px solid var(--border);text-align:right;width:25%;">年度收益率</th>'
-            index_annual_html += '</tr>'
-            index_annual_html += '</thead>'
-            index_annual_html += '<tbody>'
-            index_annual_html += table_rows
-            index_annual_html += '</tbody>'
-            index_annual_html += '</table>'
+                    pct_color = "var(--text)"; pct_sign = "+"; bar_color = "#aaa"
+                bar_width_half = min(abs(pct_val) / max_abs_pct * 50, 50)
+                index_annual_html += f'''
+                <div class="annual-year-row">
+                    <span class="annual-year-col">{year}</span>
+                    <span class="annual-points-col">{close_val:,.2f}</span>
+                    <span class="annual-pct-col" style="color: {pct_color};">{pct_sign}{pct_val:.2f}%</span>
+                    <div class="annual-bar-col">
+                        <div class="annual-zero-line"></div>
+                        <div class="annual-bar-fill" style="background: {bar_color}; { 'left: 50%;' if pct_val >= 0 else 'right: 50%;' } width: {bar_width_half}%;"></div>
+                    </div>
+                </div>
+                '''
             index_annual_html += '</div>'
             index_annual_html += stats_html
             index_annual_html += '</div>'
-        
+
+            # --- 视图 2：热力图布局 (默认显示) ---
+            index_annual_html += f'<div id="annual-heatmap-{idx_name}" class="annual-mode-content" style="display:block;">'
+            index_annual_html += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 6px;">'
+            for row in yearly_data:
+                year = row.get("year", "")
+                close_val = row.get("close", 0)
+                pct_val = row.get("pct", 0)
+                # 提高最小 alpha，让文字始终有足够对比度
+                if pct_val > 0:
+                    alpha = min(0.72 + abs(pct_val) / 100.0 * 0.8, 0.98)
+                    bg_color = f"rgba(190, 30, 30, {alpha:.2f})"
+                elif pct_val < 0:
+                    alpha = min(0.72 + abs(pct_val) / 100.0 * 0.8, 0.98)
+                    bg_color = f"rgba(15, 110, 45, {alpha:.2f})"
+                else:
+                    bg_color = "rgba(110, 110, 110, 0.9)"
+                # 去掉 text-shadow，改用更清晰的字重与颜色
+                index_annual_html += f'''
+                <div class="annual-heatmap-cell" style="background:{bg_color}; border-radius:4px; padding:6px 2px; text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); cursor: default;">
+                    <div style="font-size:10px; font-weight:600; color:#ffffff;">{year}</div>
+                    <div style="font-size:13px; font-weight:800; color:#ffffff; letter-spacing: 0.2px;">{pct_val:+.2f}%</div>
+                    <div style="font-size:9px; font-weight:500; color:rgba(255,255,255,0.92);">{close_val:,.2f}</div>
+                </div>
+                '''
+            index_annual_html += '</div>'
+            index_annual_html += stats_html
+            index_annual_html += '</div>'
+
+            # --- 视图 3：柱状图布局 (默认隐藏) ---
+            index_annual_html += f'<div id="annual-bar-{idx_name}" class="annual-mode-content" style="display:none;">'
+            index_annual_html += f'<div style="height: 280px; width: 100%; position: relative;"><canvas id="annual-bar-chart-{idx_name}" data-bar=\'{bar_data_json}\'></canvas></div>'
+            index_annual_html += stats_html
+            index_annual_html += '</div>'
+
+            index_annual_html += '</div>'  # 关闭 annual-view-container
+            index_annual_html += f'<div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border); text-align: right; font-size: 11px; color: var(--footer-text);">📅 数据更新于: {index_annual_update_time}</div>'
+            index_annual_html += '</div>'  # 关闭 metric-card
         index_annual_html += '</div>'
     else:
         index_annual_html = '<div style="margin:20px 0;"><div class="metric-card"><div class="metric-body"><span style="color:var(--footer-text);">暂无指数年度数据</span></div></div></div>'
@@ -2830,7 +2931,50 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 12px;
         }}
-        
+
+        .friend-category-block {{
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }}
+        .friend-category-title {{
+            margin: 8px 0 4px 0;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--header-text);
+            padding-left: 4px;
+            border-left: 3px solid var(--link-color);
+        }}
+        .friend-card-head {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 1px dashed var(--border);
+            padding-bottom: 6px;
+            margin-bottom: 6px;
+        }}
+        .friend-logo {{
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            flex-shrink: 0;
+            object-fit: contain;
+            background: var(--bg);
+        }}
+        .friend-name {{
+            color: var(--link-color);
+            font-size: 14px;
+            font-weight: 700;
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }}
+        .friend-arrow {{
+            color: var(--link-color);
+            flex-shrink: 0;
+        }}
         .metric-card {{
             background: var(--table-bg);
             border: 1px solid var(--border);
@@ -3544,10 +3688,137 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             .dca-results-grid {{ grid-template-columns: repeat(2, 1fr); }}
             .dca-result-card:last-child {{ grid-column: span 2; }}
             .footer-note {{ flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 12px; }}
+            .annual-card-grid {{ grid-template-columns: 1fr !important; }}
         }}
         @media (max-width: 480px) {{
             .macro-metrics-grid {{ grid-template-columns: 1fr; }}
             .index-metrics-grid, .friend-links-grid {{ grid-template-columns: 1fr; }}
+        }}
+
+        /* ===== 指数历年回报表格/卡片样式 ===== */
+        .annual-card-grid {{
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }}
+        .annual-year-row {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 4px;
+            border-bottom: 1px dashed var(--border);
+            font-size: 12px;
+            transition: background 0.2s;
+            cursor: default;
+        }}
+        .annual-year-row:hover {{
+            background: var(--hover-bg);
+            box-shadow: inset 3px 0 0 var(--link-color);
+        }}
+        .annual-year-col {{
+            width: 12%;
+            font-weight: 600;
+            color: var(--header-text);
+            text-align: left;
+        }}
+        .annual-points-col {{
+            width: 28%;
+            text-align: right;
+            font-family: "SFMono-Regular", Consolas, monospace;
+            color: var(--text);
+        }}
+        .annual-pct-col {{
+            width: 20%;
+            text-align: right;
+            font-weight: 600;
+        }}
+        .annual-bar-col {{
+            width: 40%;
+            position: relative;
+            height: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+        .annual-zero-line {{
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 1px;
+            background: var(--border);
+            z-index: 2;
+        }}
+        .annual-bar-fill {{
+            position: absolute;
+            height: 10px;
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }}
+        @media (max-width: 992px) {{
+            .index-annual-grid {{
+                grid-template-columns: 1fr !important;
+            }}
+        }}
+
+        /* 指数历年回报模式切换按钮 */
+        .mode-toggle-btn {{
+            background: var(--btn-bg);
+            color: var(--btn-text);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 4px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }}
+        .mode-toggle-btn.active {{
+            background: var(--btn-active-bg);
+            color: var(--btn-active-text);
+            border-color: var(--btn-active-bg);
+        }}
+        /* ===== 指数历年回报统计信息条 ===== */
+        .annual-stats-footer {{
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding: 10px 4px 2px 4px;
+            margin-top: 10px;
+            border-top: 1px solid var(--border);
+        }}
+        .annual-stat-item {{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            min-width: 60px;
+        }}
+        .annual-stat-label {{
+            color: var(--footer-text);
+            font-size: 10px;
+        }}
+        .annual-stat-value {{
+            font-weight: 700;
+            font-family: "SFMono-Regular", Consolas, monospace;
+            font-size: 13px;
+            color: var(--text);
+        }}
+        .annual-mode-content {{
+            padding-top: 4px;
+        }}
+        /* ===== 指数历年回报 - 热力图单格悬停高亮 ===== */
+        .annual-heatmap-cell {{
+            transition: transform 0.15s ease, outline 0.15s ease;
+            position: relative;
+            z-index: 1;
+        }}
+        .annual-heatmap-cell:hover {{
+            transform: scale(1.10);
+            outline: 2px solid var(--link-color);
+            outline-offset: 1px;
+            z-index: 5;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         }}
     </style>
 </head>
@@ -3762,28 +4033,8 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                         </a>
                     </div>
                 </div>
-
                 <h3 style="margin: 0; font-size: 16px; color: var(--header-text); border-left: 4px solid var(--link-color); padding-left: 8px;">🔗 研投工具导航</h3>
-                <div class="friend-links-grid">
-                    {friend_cards_html}
-                </div>
-
-                <div class="home-grid-section" style="grid-template-columns: 1fr;">
-                    <div class="home-card-box">
-                        <div class="home-card-title">
-                            <span>📌 宏观资产配置速览与逻辑备忘</span>
-                        </div>
-                        <div class="home-card-body">
-                            <p>• <strong>恐慌指标协同判断：</strong> 当 <strong>VIX 恐慌指数</strong> 显著飙升（&gt;20）且 <strong>CNN 情绪指数</strong> 步入极度恐惧（0~25）时，通常对应全市场非理性杀跌的左侧加仓与定投翻倍窗口。</p>
-                            <p>• <strong>大宗周期与通胀压力：</strong> 跟踪 <strong>布伦特原油连续</strong> 价格，当油价迅速推高（&gt;85美元）时，通胀再抬头预期增强，美联储降息周期受阻；当油价跌破65美元时，需警惕全球制造业需求衰退风险。</p>
-                            <p>• <strong>贵金属与工业金属：</strong> <strong>伦敦金/沪金</strong> 与 <strong>伦敦银/LME铜</strong> 协同观察。黄金走强多对应避险与宽松预期，铜价走强则反映全球工业需求回暖，二者同步上行时通常对应“再通胀交易”主线。</p>
-                            <p>• <strong>汇率对冲与折溢价：</strong> 跟踪 <strong>USD/CNY 汇率</strong> 走势，当汇率波动较大时，QDII 基金的实际净值波动将叠加汇率损益，需警惕场内溢价过高风险。</p>
-                            <div style="padding: 24px; text-align: center; background: var(--hover-bg); border-radius: 8px; margin-top: 10px; border: 1px dashed var(--border);">
-                                💡 每个宏观卡片底部均配有直达源头的官方链接（CNN、CBOE、新浪、Yahoo 等），可随时点击校验一手数据。
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                {friend_cards_html}
             </div>
         </section>
 
@@ -4011,6 +4262,139 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                 }});
             }}
         }})();
+
+        // 【改造】指数历年回报视图模式切换 + 柱状图支持
+        function toggleAnnualView(idxName, mode) {{
+            const container = document.getElementById('annual-view-' + idxName);
+            if (!container) return;
+            const cardView = document.getElementById('annual-card-' + idxName);
+            const heatmapView = document.getElementById('annual-heatmap-' + idxName);
+            const barView = document.getElementById('annual-bar-' + idxName);
+            const buttons = container.parentElement.querySelectorAll('.mode-toggle-btn');
+
+            buttons.forEach(btn => {{
+                if (btn.getAttribute('data-mode') === mode) {{
+                    btn.classList.add('active');
+                }} else {{
+                    btn.classList.remove('active');
+                }}
+            }});
+
+            if (cardView) cardView.style.display = (mode === 'card') ? 'block' : 'none';
+            if (heatmapView) heatmapView.style.display = (mode === 'heatmap') ? 'block' : 'none';
+            if (barView) barView.style.display = (mode === 'bar') ? 'block' : 'none';
+
+            if (mode === 'bar') {{
+                setTimeout(() => initAnnualBarChart(idxName), 60);
+            }}
+        }}
+
+        // 【新增】柱状图初始化（参考 Yahoo Finance 风格）
+        function initAnnualBarChart(idxName) {{
+            const canvas = document.getElementById('annual-bar-chart-' + idxName);
+            if (!canvas) return;
+            if (canvas._chartInstance) {{
+                try {{ canvas._chartInstance.destroy(); }} catch(e) {{}}
+                canvas._chartInstance = null;
+            }}
+
+            let data = [];
+            try {{
+                data = JSON.parse(canvas.getAttribute('data-bar')) || [];
+            }} catch(e) {{ return; }}
+            if (!data.length) return;
+
+            const labels = data.map(d => String(d.year));
+            const values = data.map(d => d.pct);
+            const closes = data.map(d => d.close);
+            const avg = values.reduce((a, b) => a + b, 0) / values.length;
+
+            const avgLinePlugin = {{
+                id: 'avgLinePlugin_' + idxName,
+                afterDatasetsDraw(chart) {{
+                    const ctx = chart.ctx;
+                    const chartArea = chart.chartArea;
+                    const yScale = chart.scales.y;
+                    if (!yScale || !chartArea) return;
+                    const yPos = yScale.getPixelForValue(avg);
+                    if (yPos < chartArea.top || yPos > chartArea.bottom) return;
+
+                    ctx.save();
+                    ctx.strokeStyle = '#f39c12';
+                    ctx.setLineDash([5, 4]);
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(chartArea.left, yPos);
+                    ctx.lineTo(chartArea.right, yPos);
+                    ctx.stroke();
+                    ctx.restore();
+
+                    ctx.save();
+                    ctx.fillStyle = '#f39c12';
+                    ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto';
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'bottom';
+                    ctx.fillText(`均值 ${{avg >= 0 ? '+' : ''}}${{avg.toFixed(2)}}%`, chartArea.left + 6, yPos - 3);
+                    ctx.restore();
+                }}
+            }};
+
+            const ctx = canvas.getContext('2d');
+            canvas._chartInstance = new Chart(ctx, {{
+                type: 'bar',
+                data: {{
+                    labels: labels,
+                    datasets: [{{
+                        label: '年度收益',
+                        data: values,
+                        backgroundColor: values.map(v => v >= 0 ? 'rgba(38, 166, 154, 0.85)' : 'rgba(239, 83, 80, 0.85)'),
+                        borderColor: values.map(v => v >= 0 ? '#26a69a' : '#ef5350'),
+                        borderWidth: 1,
+                        borderRadius: 2,
+                        barPercentage: 0.75,
+                        categoryPercentage: 0.9
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {{ mode: 'index', intersect: false }},
+                    plugins: {{
+                        legend: {{ display: false }},
+                        tooltip: {{
+                            backgroundColor: 'rgba(30, 30, 30, 0.92)',
+                            padding: 10,
+                            cornerRadius: 6,
+                            callbacks: {{
+                                title: (items) => `年份: ${{items[0].label}}`,
+                                label: (c) => {{
+                                    const val = c.parsed.y;
+                                    const sign = val >= 0 ? '+' : '';
+                                    return [
+                                        `涨跌幅: ${{sign}}${{val.toFixed(2)}}%`,
+                                        `年末收盘: ${{Number(closes[c.dataIndex]).toLocaleString()}}`
+                                    ];
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        x: {{
+                            ticks: {{ font: {{ size: 9 }}, maxRotation: 0, autoSkip: true, maxTicksLimit: 20 }},
+                            grid: {{ display: false }}
+                        }},
+                        y: {{
+                            ticks: {{
+                                font: {{ size: 9 }},
+                                callback: (v) => v + '%'
+                            }},
+                            grid: {{ color: 'rgba(0,0,0,0.05)' }}
+                        }}
+                    }}
+                }},
+                plugins: [avgLinePlugin]
+            }});
+        }}
 
         // 自选管理模块 (Local Storage)
         const FavManager = {{
@@ -5414,9 +5798,16 @@ def main():
     opener = get_direct_opener()
     print(f"统计区间: {args.start} 至 {args.end}")
     
+    print("⏳ 正在抓取核心宏观指标 (CNN/VIX/汇率/大宗商品)...")
     home_metrics = fetch_home_market_metrics(opener)
+
+    print("⏳ 正在抓取指数估值...")
     index_valuations = fetch_index_valuations(opener)
+
+    print("⏳ 正在加载指数年度数据...")
     index_annual_data = fetch_index_annual_data()
+
+    print("⏳ 正在抓取美联储利率观测器...")
     fed_monitor = fetch_fed_rate_monitor(opener)
     print(f"📊 核心宏观指标获取成功: 恐慌贪婪 {home_metrics['fng']['score']} | VIX {home_metrics['vix']['val']} | USD/CNY {home_metrics['usdcny']['val']} | VXN {home_metrics['vxn']['val']} | SKEW {home_metrics['skew']['val']}")
     print(f"🛢️ 大宗商品指标获取成功: 布伦特原油 {home_metrics['brent']['val']} | 伦敦金 {home_metrics['gold_london']['val']} | 沪金主连 {home_metrics['gold_shfe']['val']} | 伦敦银 {home_metrics['silver_london']['val']} | LME铜 {home_metrics['copper_lme']['val']}")
