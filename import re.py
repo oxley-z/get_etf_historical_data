@@ -3438,7 +3438,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
         .quarter-end {{ font-size: 10px; color: var(--footer-text); }}
         .quarter-stocks {{ display: flex; flex-direction: column; gap: 4px; flex: 1; }}
         .stock-item {{ display: grid; grid-template-columns: minmax(0, 1fr) 50px 56px; gap: 3px; font-size: 11px; align-items: center; }}
-        .stock-name {{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+        .stock-name {{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }}
         .stock-ratio {{ text-align: right; font-weight: 500; }}
         .stock-change {{ text-align: right; font-size: 10px; white-space: nowrap; }}
         .change-add {{ color: #d93025; }}
@@ -3677,11 +3677,35 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             .global-dca-filter-body {{ flex-direction: column; align-items: stretch; width: 100%; }}
             .global-dca-filter-card select, .global-dca-filter-card button {{ width: 100%; height: 32px; font-size: 12px; }}
             .table-container {{ height: auto; flex: none; max-height: 70vh; padding: 4px; }}
-            .holdings-wrapper {{ flex-direction: column; gap: 10px; }}
-            .holdings-container {{ width: 100%; flex: none; grid-template-columns: 1fr; gap: 8px; }}
-            .empty-holdings-placeholder {{ grid-column: span 1; }}
-            .right-chart-wrapper {{ width: 100%; flex: none; flex-direction: column; gap: 10px; }}
-            .country-card, .chart-container {{ width: 100%; flex: none; }}
+
+            /* ===== 移动端保持与桌面端一致：展开行仍为左右各 50% 的单行布局 ===== */
+            .holdings-wrapper {{
+                flex-direction: row;
+                flex-wrap: nowrap;
+                gap: 14px;
+                align-items: stretch;
+                width: 100%;
+            }}
+            .holdings-container {{
+                flex: 0 0 calc(50% - 7px);
+                width: calc(50% - 7px);
+                display: grid;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 8px;
+                align-items: stretch;
+                min-width: 0;
+            }}
+            .empty-holdings-placeholder {{ grid-column: span 3; }}
+            .right-chart-wrapper {{
+                flex: 0 0 calc(50% - 7px);
+                width: calc(50% - 7px);
+                flex-direction: row;
+                gap: 10px;
+                align-items: stretch;
+                min-width: 0;
+            }}
+            .country-card {{ flex: 1 1 0; width: auto; min-width: 0; }}
+            .chart-container {{ flex: 3 1 0; width: auto; min-width: 0; }}
             .modal-card {{ width: 95%; max-height: 90vh; }}
             .modal-body {{ padding: 10px 12px; }}
             .dca-controls {{ grid-template-columns: 1fr; }}
@@ -5424,7 +5448,7 @@ def fetch_crypto_data(symbol, start_date, end_date):
     try:
         start_ts = int(datetime.strptime(start_date, '%Y-%m-%d').timestamp() * 1000)
         end_ts = int(datetime.strptime(end_date, '%Y-%m-%d').timestamp() * 1000)
-        url = f"https://api.binance.com/api/v3/klines?symbol={pair}&interval=1d&startTime={start_ts}&endTime={end_ts}&limit=1000"
+        url = f"https://data-api.binance.vision/api/v3/klines?symbol={pair}&interval=1d&startTime={start_ts}&endTime={end_ts}&limit=1000"
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=6) as resp:
             klines = json.loads(resp.read().decode('utf-8'))
