@@ -4043,20 +4043,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                     {stop_profit_html}
                 </div>
 
-                <div style="display: flex; justify-content: space-between; align-items: flex-end;">
-                    <h3 style="margin: 0; font-size: 16px; color: var(--header-text); border-left: 4px solid var(--link-color); padding-left: 8px;">📊 宽基指数估值 {index_source_link_html}</h3>
-                    <span style="font-size: 12px; color: var(--footer-text);">更新时间: {update_time_str}</span>
-                </div>
-                <div class="index-metrics-grid">
-                    {index_cards_html}
-                </div>
-
-                {index_annual_html}
-
-                <h3 style="margin: 0; font-size: 16px; color: var(--header-text); border-left: 4px solid var(--link-color); padding-left: 8px;">🏛️ 美联储利率观测器</h3>
-                {fed_monitor_html}
-
-                <!-- 大宗商品栏 -->
+                <!-- ===== 大宗商品风向标 ===== -->
                 <div style="display: flex; justify-content: space-between; align-items: flex-end;">
                     <h3 style="margin: 0; font-size: 16px; color: var(--header-text); border-left: 4px solid var(--link-color); padding-left: 8px;">🛢️ 大宗商品风向标</h3>
                     <span style="font-size: 12px; color: var(--footer-text);">更新时间: {update_time_str}</span>
@@ -4125,7 +4112,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                             🔗 来源: {copper_lme['source']} ↗
                         </a>
                     </div>
-                    
+
                     <div class="metric-card">
                         <div class="metric-header">
                             <span>布伦特原油 (BZ=F)</span>
@@ -4142,7 +4129,6 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                         </a>
                     </div>
 
-                    <!-- 【新增】比特币现货卡片 -->
                     <div class="metric-card">
                         <div class="metric-header">
                             <span>比特币 (BTC/USDT)</span>
@@ -4159,6 +4145,21 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                         </a>
                     </div>
                 </div>
+
+                <!-- ===== 宽基指数估值 ===== -->
+                <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                    <h3 style="margin: 0; font-size: 16px; color: var(--header-text); border-left: 4px solid var(--link-color); padding-left: 8px;">📊 宽基指数估值 {index_source_link_html}</h3>
+                    <span style="font-size: 12px; color: var(--footer-text);">更新时间: {update_time_str}</span>
+                </div>
+                <div class="index-metrics-grid">
+                    {index_cards_html}
+                </div>
+
+                {index_annual_html}
+
+                <h3 style="margin: 0; font-size: 16px; color: var(--header-text); border-left: 4px solid var(--link-color); padding-left: 8px;">🏛️ 美联储利率观测器</h3>
+                {fed_monitor_html}
+
                 <h3 style="margin: 0; font-size: 16px; color: var(--header-text); border-left: 4px solid var(--link-color); padding-left: 8px;">🔗 研投工具导航</h3>
                 {friend_cards_html}
             </div>
