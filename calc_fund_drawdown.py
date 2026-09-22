@@ -10,7 +10,7 @@ import urllib.request
 import urllib.parse
 import akshare as ak
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from calendar import monthrange
 from http.cookiejar import CookieJar
 import threading
@@ -19,6 +19,19 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # 强制清空代理环境变量
 for env_var in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]:
     os.environ.pop(env_var, None)
+
+# ==============================================================================
+# 北京时间工具（所有网页展示时间统一使用北京时间 UTC+8）
+# ==============================================================================
+BEIJING_TZ = timezone(timedelta(hours=8))
+
+def now_beijing() -> datetime:
+    """返回当前北京时间（带时区）"""
+    return datetime.now(BEIJING_TZ)
+
+def ts_to_beijing(ts: float) -> datetime:
+    """将 Unix 时间戳转换为北京时间"""
+    return datetime.fromtimestamp(ts, BEIJING_TZ)
 
 # 通用请求头
 DEFAULT_HEADERS = {
@@ -905,8 +918,73 @@ def get_copper_lme(opener) -> tuple[float, str, str]:
     except Exception: pass
     return 0.0, "获取失败", "https://cn.investing.com/commodities/copper"
 
+def get_btc_price(opener) -> tuple[float, str, str]:
+    """获取比特币最新现货价格。
+    优先 CoinGecko（GitHub Actions 友好），其次 Coinbase，最后国内镜像（仅本地可用）。
+    """
+
+    # ===== 数据源 1：CoinGecko（GitHub Actions / 本地 均可用）=====
+    try:
+        url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
+        req = urllib.request.Request(url, headers={
+            **DEFAULT_HEADERS,
+            "Accept": "application/json",
+        })
+        with opener.open(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            v = float(data.get("bitcoin", {}).get("usd", 0))
+            if v > 0:
+                return round(v, 2), "CoinGecko (BTC/USD)", "https://www.coingecko.com/zh/coins/bitcoin"
+    except Exception:
+        pass
+
+    # ===== 数据源 2：Coinbase 现货（GitHub Actions 可用）=====
+    try:
+        url = "https://api.coinbase.com/v2/prices/BTC-USD/spot"
+        req = urllib.request.Request(url, headers=DEFAULT_HEADERS)
+        with opener.open(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            v = float(data.get("data", {}).get("amount", 0))
+            if v > 0:
+                return round(v, 2), "Coinbase (BTC/USD)", "https://www.coinbase.com/price/bitcoin"
+    except Exception:
+        pass
+
+    # ===== 数据源 3：币安镜像（仅国内本地环境有效，GitHub Actions 大概率失败）=====
+    try:
+        url = "https://bian.4url.cn/api/v3/ticker/price?symbol=BTCUSDT"
+        req = urllib.request.Request(url, headers={
+            **DEFAULT_HEADERS,
+            "Accept": "application/json",
+        })
+        with opener.open(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            price = data.get("price")
+            if price:
+                v = float(price)
+                if v > 0:
+                    return round(v, 2), "Binance镜像 (BTC/USDT)", "https://www.binance.com/zh-CN/trade/BTC_USDT"
+    except Exception:
+        pass
+
+    # ===== 数据源 4：OKX 镜像（同上，仅国内本地）=====
+    try:
+        url = "https://okx.4url.cn/api/v5/market/ticker?instId=BTC-USDT"
+        req = urllib.request.Request(url, headers=DEFAULT_HEADERS)
+        with opener.open(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            rows = data.get("data", [])
+            if rows:
+                v = float(rows[0].get("last", 0))
+                if v > 0:
+                    return round(v, 2), "OKX镜像 (BTC/USDT)", "https://www.okx.com/zh-hans/trade-spot/btc-usdt"
+    except Exception:
+        pass
+
+    return 0.0, "获取失败", "https://www.tradingview.com/symbols/BTCUSD/"
+
 def fetch_home_market_metrics(opener):
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now_str = now_beijing().strftime("%Y-%m-%d %H:%M:%S")
     fng_score, fng_rating, fng_src, fng_url = get_cnn_fear_greed(opener)
     vix_val, vix_src, vix_url = get_vix(opener)
     vix_status = "数据暂缺" if vix_val <= 0 else ("极度恐慌" if vix_val >= 30 else ("警惕波动" if vix_val >= 20 else ("温和震荡" if vix_val >= 15 else "平稳低波")))
@@ -935,6 +1013,10 @@ def fetch_home_market_metrics(opener):
     copper_val, copper_src, copper_url = get_copper_lme(opener)
     copper_status = "数据暂缺" if copper_val <= 0 else ("极度高企" if copper_val >= 10000 else ("高位震荡" if copper_val >= 8500 else ("温和中性" if copper_val >= 7000 else "需求疲软")))
 
+    # 【新增】比特币现货价格
+    btc_val, btc_src, btc_url = get_btc_price(opener)
+    btc_status = "数据暂缺" if btc_val <= 0 else ("极度高企" if btc_val >= 100000 else ("高位震荡" if btc_val >= 70000 else ("温和中性" if btc_val >= 40000 else "低位盘整")))
+
     return {
         "fng": {"score": fng_score, "rating": fng_rating, "time": now_str, "source": fng_src, "url": fng_url},
         "vix": {"val": vix_val, "status": vix_status, "time": now_str, "source": vix_src, "url": vix_url, "desc": "<15 平稳低波 | 15~20 正常震荡 | 20~30 警惕波动 | >30 极度恐慌"},
@@ -945,7 +1027,8 @@ def fetch_home_market_metrics(opener):
         "gold_london": {"val": gold_val, "status": gold_status, "time": now_str, "source": gold_src, "url": gold_url, "desc": "伦敦现货金价（美元/盎司），全球避险与美元信用对冲核心锚点"},
         "gold_shfe": {"val": shfe_gold_val, "status": shfe_gold_status, "time": now_str, "source": shfe_gold_src, "url": shfe_gold_url, "desc": "上海期货交易所黄金主连（元/克），国内实物金与人民币金价风向标"},
         "silver_london": {"val": silver_val, "status": silver_status, "time": now_str, "source": silver_src, "url": silver_url, "desc": "伦敦现货白银（美元/盎司），兼具贵金属避险与光伏新能源工业需求属性"},
-        "copper_lme": {"val": copper_val, "status": copper_status, "time": now_str, "source": copper_src, "url": copper_url, "desc": "LME 三个月期铜（美元/吨），'铜博士' 全球工业周期与经济景气核心温度计"}
+        "copper_lme": {"val": copper_val, "status": copper_status, "time": now_str, "source": copper_src, "url": copper_url, "desc": "LME 三个月期铜（美元/吨），'铜博士' 全球工业周期与经济景气核心温度计"},
+        "btc": {"val": btc_val, "status": btc_status, "time": now_str, "source": btc_src, "url": btc_url, "desc": "比特币现货价格（USDT），加密市场风险偏好与全球流动性的核心风向标"}
     }
 
 def fetch_fund_country_distribution(opener, code, is_qdii=False):
@@ -1730,7 +1813,7 @@ def fetch_fed_rate_monitor(opener) -> dict:
         "futures_price": "96.105",
         "probabilities": [],
         "table_rows": [],
-        "update_text": f"更新: {datetime.now().strftime('%Y年%m月%d日 %H:%M')} CST",
+        "update_text": f"{datetime.now().strftime('%Y年%m月%d日 %H:%M')} CST",
         "source_name": "Investing.com",
     }
 
@@ -2467,11 +2550,11 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
     if os.path.exists(_index_annual_cache_file):
         try:
             _mtime = os.path.getmtime(_index_annual_cache_file)
-            index_annual_update_time = datetime.fromtimestamp(_mtime).strftime("%Y-%m-%d %H:%M")
+            index_annual_update_time = ts_to_beijing(_mtime).strftime("%Y-%m-%d %H:%M")
         except Exception:
-            index_annual_update_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+            index_annual_update_time = now_beijing().strftime("%Y-%m-%d %H:%M")
     else:
-        index_annual_update_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+        index_annual_update_time = now_beijing().strftime("%Y-%m-%d %H:%M")
 
     # ===== 生成指数历年回报 HTML (优化版 v3) =====
     index_annual_html = ""
@@ -2710,8 +2793,8 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
     """
 
 
-    now_dt = datetime.now()
-    update_time_str = now_dt.strftime("%Y-%m-%d %H:%M")
+    now_dt = now_beijing()
+    update_time_str = now_dt.strftime("%Y-%m-%d %H:%M") + " (北京时间)"
 
     if now_dt.weekday() == 5:
         fri_dt = (now_dt - timedelta(days=1)).strftime("%Y-%m-%d")
@@ -2735,12 +2818,14 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
     gold_shfe = metrics.get("gold_shfe", {"val": 0.0, "status": "数据暂缺", "source": "获取失败", "url": "#", "desc": ""})
     silver_london = metrics.get("silver_london", {"val": 0.0, "status": "数据暂缺", "source": "获取失败", "url": "#", "desc": ""})
     copper_lme = metrics.get("copper_lme", {"val": 0.0, "status": "数据暂缺", "source": "获取失败", "url": "#", "desc": ""})
+    btc = metrics.get("btc", {"val": 0.0, "status": "数据暂缺", "source": "获取失败", "url": "#", "desc": ""})
 
     brent_tag_color = "#70757a" if brent['val'] <= 0 else ("#d93025" if brent['val'] >= 95 else ("#e67e22" if brent['val'] >= 80 else ("#188038" if brent['val'] >= 65 else "#1a73e8")))
     gold_tag_color = "#70757a" if gold_london['val'] <= 0 else ("#d93025" if gold_london['val'] >= 2500 else ("#e67e22" if gold_london['val'] >= 2000 else ("#188038" if gold_london['val'] >= 1500 else "#1a73e8")))
     gold_shfe_tag_color = "#70757a" if gold_shfe['val'] <= 0 else ("#d93025" if gold_shfe['val'] >= 700 else ("#e67e22" if gold_shfe['val'] >= 600 else ("#188038" if gold_shfe['val'] >= 500 else "#1a73e8")))
     silver_tag_color = "#70757a" if silver_london['val'] <= 0 else ("#d93025" if silver_london['val'] >= 35 else ("#e67e22" if silver_london['val'] >= 28 else ("#188038" if silver_london['val'] >= 20 else "#1a73e8")))
     copper_tag_color = "#70757a" if copper_lme['val'] <= 0 else ("#d93025" if copper_lme['val'] >= 10000 else ("#e67e22" if copper_lme['val'] >= 8500 else ("#188038" if copper_lme['val'] >= 7000 else "#1a73e8")))
+    btc_tag_color = "#70757a" if btc['val'] <= 0 else ("#d93025" if btc['val'] >= 100000 else ("#e67e22" if btc['val'] >= 70000 else ("#188038" if btc['val'] >= 40000 else "#1a73e8")))
 
     html_content = f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -4054,6 +4139,23 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                         </div>
                         <a href="{brent['url']}" target="_blank" class="metric-source-link" title="点击跳转至源数据官方网页">
                             🔗 来源: {brent['source']} ↗
+                        </a>
+                    </div>
+
+                    <!-- 【新增】比特币现货卡片 -->
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span>比特币 (BTC/USDT)</span>
+                        </div>
+                        <div class="metric-body">
+                            <span class="metric-value" style="color:#f7931a;">{btc['val']}</span>
+                            <span class="metric-tag" style="background:rgba(247,147,26,0.12); color:{btc_tag_color};">{btc['status']}</span>
+                        </div>
+                        <div class="metric-desc">
+                            {btc['desc']}
+                        </div>
+                        <a href="{btc['url']}" target="_blank" class="metric-source-link" title="点击跳转至源数据官方网页">
+                            🔗 来源: {btc['source']} ↗
                         </a>
                     </div>
                 </div>
@@ -5784,7 +5886,7 @@ def fetch_index_data(symbol, start_date, end_date):
         return None
 
 def main():
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_str = now_beijing().strftime("%Y-%m-%d")
     default_start = "2025-01-01"
     cutoff_date = "2026-04-01"
 
@@ -5834,7 +5936,7 @@ def main():
     print("⏳ 正在抓取美联储利率观测器...")
     fed_monitor = fetch_fed_rate_monitor(opener)
     print(f"📊 核心宏观指标获取成功: 恐慌贪婪 {home_metrics['fng']['score']} | VIX {home_metrics['vix']['val']} | USD/CNY {home_metrics['usdcny']['val']} | VXN {home_metrics['vxn']['val']} | SKEW {home_metrics['skew']['val']}")
-    print(f"🛢️ 大宗商品指标获取成功: 布伦特原油 {home_metrics['brent']['val']} | 伦敦金 {home_metrics['gold_london']['val']} | 沪金主连 {home_metrics['gold_shfe']['val']} | 伦敦银 {home_metrics['silver_london']['val']} | LME铜 {home_metrics['copper_lme']['val']}")
+    print(f"🛢️ 大宗商品指标获取成功: 布伦特原油 {home_metrics['brent']['val']} | 伦敦金 {home_metrics['gold_london']['val']} | 沪金主连 {home_metrics['gold_shfe']['val']} | 伦敦银 {home_metrics['silver_london']['val']} | LME铜 {home_metrics['copper_lme']['val']} | BTC {home_metrics.get('btc', {}).get('val', 0.0)}")
     fed_prob_count = len(fed_monitor.get('probabilities', []))
     fed_status = "✅" if fed_monitor.get('meeting_text') != "--" and fed_prob_count > 0 else "⚠️"
     print(f"🏛️ 美联储利率观测器 {fed_status}: 下一次会议 {fed_monitor.get('meeting_text', '--')} | 期货价格 {fed_monitor.get('futures_price', '--')} | 当前概率 {fed_prob_count} 档 | 更新时间 {fed_monitor.get('update_text', '--')}")
