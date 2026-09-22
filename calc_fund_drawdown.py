@@ -3260,6 +3260,28 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             box-shadow: 0 1px 3px rgba(0,0,0,0.03);
             flex-shrink: 0;
         }}
+
+        /* 移动端折叠开关（桌面端默认隐藏） */
+        .mobile-filter-toggle,
+        .dca-toggle-btn,
+        .mobile-panel-switches {{
+            display: none;
+        }}
+
+        /* 桌面端：申购状态主行样式 */
+        .buy-status-main-row {{
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }}
+
+        /* 桌面端：sub-filter-bar 进入 dca-mobile-row 后占满整行 */
+        .dca-mobile-row .sub-filter-bar {{
+            flex: 0 0 100%;
+            order: -1;
+        }}
+        
         .category-nav {{ display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }}
         .category-title {{ font-size: 11px; font-weight: 700; color: var(--footer-text); margin-right: 4px; }}
         .cat-btn {{
@@ -3754,7 +3776,153 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             .index-metrics-grid, .friend-links-grid {{ grid-template-columns: repeat(2, 1fr); gap: 8px; }}
             
             .home-grid-section {{ grid-template-columns: 1fr; gap: 10px; }}
-            .sub-filter-bar {{ flex-direction: column; align-items: stretch; padding: 10px; gap: 8px; }}
+            /* ===== 移动端：申购状态栏作为统一工具栏（一行布局） ===== */
+            .dca-mobile-row {{
+                flex-direction: column;
+                gap: 8px;
+            }}
+
+            /* 申购状态栏：内部改为横向单行 —— 左申购 / 右切换 */
+            .dca-mobile-row .buy-status-filter-card {{
+                order: 1;
+                width: 100%;
+                flex-basis: 100%;
+                flex-direction: row !important;
+                align-items: center !important;
+                justify-content: space-between !important;
+                flex-wrap: nowrap !important;
+                gap: 6px !important;
+                padding: 5px 8px !important;
+                min-height: 36px !important;
+                overflow: hidden;
+            }}
+
+            /* 左侧：申购状态组 */
+            .dca-mobile-row .buy-status-main-row {{
+                display: flex;
+                align-items: center;
+                gap: 3px;
+                flex-wrap: nowrap;
+                flex-shrink: 1;
+                min-width: 0;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                padding-bottom: 0;
+                border-bottom: none;
+                scrollbar-width: none;
+            }}
+            .dca-mobile-row .buy-status-main-row::-webkit-scrollbar {{
+                display: none;
+            }}
+
+            /* 移动端隐藏"申购状态:"文字标签，节省横向空间 */
+            .dca-mobile-row .buy-status-main-row .category-title {{
+                display: none;
+            }}
+
+            /* 申购状态按钮压缩到最小 */
+            .dca-mobile-row .buy-status-main-row .cat-btn {{
+                padding: 2px 7px;
+                font-size: 10px;
+                flex-shrink: 0;
+                line-height: 1.4;
+                border-radius: 10px;
+            }}
+
+            /* 右侧：面板切换按钮组 */
+            .mobile-panel-switches {{
+                display: flex;
+                gap: 4px;
+                flex-shrink: 0;
+                width: auto;
+            }}
+
+            .mobile-panel-switches .mobile-filter-toggle,
+            .mobile-panel-switches .dca-toggle-btn {{
+                flex: none;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 3px;
+                padding: 4px 7px;
+                font-size: 10px;
+                font-weight: 600;
+                line-height: 1.4;
+                color: var(--btn-text);
+                background: var(--btn-bg);
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                cursor: pointer;
+                box-sizing: border-box;
+                -webkit-tap-highlight-color: transparent;
+                user-select: none;
+                white-space: nowrap;
+                transition: background 0.15s, color 0.15s, border-color 0.15s;
+            }}
+
+            .mobile-panel-switches .mobile-filter-toggle:active,
+            .mobile-panel-switches .dca-toggle-btn:active {{
+                background: rgba(26,115,232,0.12);
+            }}
+
+            .mobile-panel-switches .mobile-filter-toggle.expanded,
+            .mobile-panel-switches .dca-toggle-btn.active {{
+                background: var(--btn-active-bg);
+                color: #fff;
+                border-color: var(--btn-active-bg);
+            }}
+
+            .mobile-panel-switches .mobile-filter-current {{
+                color: var(--link-color);
+                font-weight: 700;
+                max-width: 44px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                font-size: 10px;
+            }}
+
+            .mobile-panel-switches .mobile-filter-toggle.expanded .mobile-filter-current {{
+                color: #fff;
+            }}
+
+            .mobile-panel-switches .mobile-filter-arrow,
+            .mobile-panel-switches #dcaToggleArrow {{
+                font-size: 8px;
+                transition: transform 0.2s;
+            }}
+
+            /* 市场大类面板 */
+            .dca-mobile-row .sub-filter-bar {{
+                order: 2;
+                display: none;
+                margin-bottom: 0;
+                max-height: 55vh;
+                overflow-y: auto;
+            }}
+            .dca-mobile-row .sub-filter-bar.mobile-expanded {{
+                display: flex;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
+                animation: mobileFilterSlide 0.18s ease;
+            }}
+
+            /* 定投参数面板 */
+            .dca-mobile-row .global-dca-filter-card {{
+                order: 3;
+                display: none;
+            }}
+            .dca-mobile-row .global-dca-filter-card.mobile-expanded {{
+                display: flex;
+                animation: mobileFilterSlide 0.18s ease;
+            }}
+
+            @keyframes mobileFilterSlide {{
+                from {{ opacity: 0; transform: translateY(-6px); }}
+                to   {{ opacity: 1; transform: translateY(0); }}
+            }}
+
             .search-box-wrap {{ width: 100%; }}
             .search-box-wrap input {{ height: 32px; font-size: 13px; }}
             .global-dca-filter-card {{ flex-direction: column; align-items: stretch; padding: 10px; gap: 8px; }}
@@ -4167,39 +4335,65 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
 
         <!-- 视图 2：基金量化看板 -->
         <section id="fundView" class="view-pane">
-            <div class="sub-filter-bar">
-                <div class="category-nav">
-                    <button class="cat-btn macro-filter fav-filter" data-macro="favorites" data-sub="favorites">⭐ 我的自选</button>
-                    <span class="category-title" style="margin-left: 6px;">市场大类:</span>
-                    <button class="cat-btn macro-filter active" data-macro="all" data-sub="all">全部展示</button>
-                    
-                    <span class="category-title" style="margin-left: 8px;">美股:</span>
-                    <button class="cat-btn macro-filter" data-macro="us_share" data-sub="all">美股全量</button>
-                    <button class="cat-btn macro-filter" data-macro="us_share" data-sub="us_active">美股主动</button>
-                    <button class="cat-btn macro-filter" data-macro="us_share" data-sub="ndx_passive">纳指被动</button>
-                    <button class="cat-btn macro-filter" data-macro="us_share" data-sub="spx_passive">标普被动</button>
-                    
-                    <span class="category-title" style="margin-left: 8px;">A股板块:</span>
-                    <button class="cat-btn macro-filter" data-macro="a_share" data-sub="all">A股全量</button>
-                    <button class="cat-btn macro-filter" data-macro="a_share" data-sub="cpo">CPO</button>
-                    <button class="cat-btn macro-filter" data-macro="a_share" data-sub="storage">存储芯片</button>
-                    <button class="cat-btn macro-filter" data-macro="a_share" data-sub="semiconductor">半导体材料</button>
-                    <button class="cat-btn macro-filter" data-macro="a_share" data-sub="ai">人工智能</button>
-                    <button class="cat-btn macro-filter" data-macro="a_share" data-sub="grid">电网设备</button>
-                    <button class="cat-btn macro-filter" data-macro="a_share" data-sub="robot">机器人</button>
-                    
-                    <span class="category-title" style="margin-left: 8px;">其他:</span>
-                    <button class="cat-btn macro-filter" data-macro="other" data-sub="commodities">大宗商品</button>
-                    <button class="cat-btn macro-filter" data-macro="other" data-sub="crypto">加密货币</button>
-                    <button class="cat-btn macro-filter" data-macro="other" data-sub="index">主流指数</button>
+            <div class="dca-mobile-row" style="display: flex; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; align-items: stretch;">
+
+                <!-- 申购状态栏（移动端同时作为统一工具栏） -->
+                <div class="buy-status-filter-card" style="background: var(--table-bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; display: flex; align-items: center; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.03); flex-wrap: wrap; min-height: 42px; box-sizing: border-box; align-self: stretch;">
+                    <div class="buy-status-main-row">
+                        <span class="category-title" style="margin-right: 4px;">申购状态:</span>
+                        <button class="cat-btn buy-filter active" data-buy="all">全部</button>
+                        <button class="cat-btn buy-filter" data-buy="open">仅开放申购</button>
+                        <button class="cat-btn buy-filter" data-buy="closed">暂停申购</button>
+                    </div>
+
+                    <!-- 移动端专用：面板切换按钮（桌面端隐藏） -->
+                    <div class="mobile-panel-switches">
+                        <button type="button" class="mobile-filter-toggle" id="mobileFilterToggle" title="展开/收起市场大类">
+                            <span>📂 大类</span>
+                            <span class="mobile-filter-current" id="mobileFilterCurrent">全部</span>
+                            <span class="mobile-filter-arrow">▼</span>
+                        </button>
+                        <button type="button" class="dca-toggle-btn" id="dcaToggleBtn" title="展开/收起定投参数">
+                            <span>📊 定投</span>
+                            <span id="dcaToggleArrow">▼</span>
+                        </button>
+                    </div>
                 </div>
 
-                <div class="search-box-wrap">
-                    <input type="text" id="searchInput" placeholder="🔍 搜索代码或名称...">
-                </div>
-            </div>
+                <!-- 市场大类面板（移动端默认隐藏，桌面端占满整行显示） -->
+                <div class="sub-filter-bar" id="subFilterBar" style="margin-bottom: 0;">
+                    <div class="category-nav">
+                        <button class="cat-btn macro-filter fav-filter" data-macro="favorites" data-sub="favorites">⭐ 我的自选</button>
+                        <span class="category-title" style="margin-left: 6px;">市场大类:</span>
+                        <button class="cat-btn macro-filter active" data-macro="all" data-sub="all">全部展示</button>
 
-            <div style="display: flex; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; align-items: stretch;">
+                        <span class="category-title" style="margin-left: 8px;">美股:</span>
+                        <button class="cat-btn macro-filter" data-macro="us_share" data-sub="all">美股全量</button>
+                        <button class="cat-btn macro-filter" data-macro="us_share" data-sub="us_active">美股主动</button>
+                        <button class="cat-btn macro-filter" data-macro="us_share" data-sub="ndx_passive">纳指被动</button>
+                        <button class="cat-btn macro-filter" data-macro="us_share" data-sub="spx_passive">标普被动</button>
+
+                        <span class="category-title" style="margin-left: 8px;">A股板块:</span>
+                        <button class="cat-btn macro-filter" data-macro="a_share" data-sub="all">A股全量</button>
+                        <button class="cat-btn macro-filter" data-macro="a_share" data-sub="cpo">CPO</button>
+                        <button class="cat-btn macro-filter" data-macro="a_share" data-sub="storage">存储芯片</button>
+                        <button class="cat-btn macro-filter" data-macro="a_share" data-sub="semiconductor">半导体材料</button>
+                        <button class="cat-btn macro-filter" data-macro="a_share" data-sub="ai">人工智能</button>
+                        <button class="cat-btn macro-filter" data-macro="a_share" data-sub="grid">电网设备</button>
+                        <button class="cat-btn macro-filter" data-macro="a_share" data-sub="robot">机器人</button>
+
+                        <span class="category-title" style="margin-left: 8px;">其他:</span>
+                        <button class="cat-btn macro-filter" data-macro="other" data-sub="commodities">大宗商品</button>
+                        <button class="cat-btn macro-filter" data-macro="other" data-sub="crypto">加密货币</button>
+                        <button class="cat-btn macro-filter" data-macro="other" data-sub="index">主流指数</button>
+                    </div>
+
+                    <div class="search-box-wrap">
+                        <input type="text" id="searchInput" placeholder="🔍 搜索代码或名称...">
+                    </div>
+                </div>
+
+                <!-- 定投参数面板（移动端默认隐藏，桌面端与原申购状态并排） -->
                 <div class="global-dca-filter-card" id="gDcaCard" style="margin-bottom: 0; flex: 1; min-width: 320px; align-self: stretch;">
                     <div class="global-dca-filter-header" style="cursor: default;">
                         <span class="global-dca-filter-title">📊 动态定投参数配置</span>
@@ -4220,13 +4414,6 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                         </select>
                         <button id="gDcaApplyBtn">计算并刷新排序</button>
                     </div>
-                </div>
-
-                <div class="buy-status-filter-card" style="background: var(--table-bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; display: flex; align-items: center; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.03); flex-wrap: wrap; min-height: 42px; box-sizing: border-box; align-self: stretch;">
-                    <span class="category-title" style="margin-right: 4px;">申购状态:</span>
-                    <button class="cat-btn buy-filter active" data-buy="all">全部</button>
-                    <button class="cat-btn buy-filter" data-buy="open">仅开放申购</button>
-                    <button class="cat-btn buy-filter" data-buy="closed">暂停申购</button>
                 </div>
             </div>
 
@@ -5528,6 +5715,137 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                 }});
             }});
         }});
+
+        // ===== 移动端「市场大类」折叠控制 =====
+        (function() {{
+            function setupMobileFilterToggle() {{
+                const toggle = document.getElementById('mobileFilterToggle');
+                const subBar = document.getElementById('subFilterBar');
+                const currentLabel = document.getElementById('mobileFilterCurrent');
+                if (!toggle || !subBar) return;
+
+                const isMobile = () => window.innerWidth <= 992;
+
+                function expand() {{
+                    // 互斥：先关闭定投参数面板
+                    const dcaCardEl = document.getElementById('gDcaCard');
+                    const dcaBtnEl = document.getElementById('dcaToggleBtn');
+                    const dcaArrowEl = document.getElementById('dcaToggleArrow');
+                    if (dcaCardEl) dcaCardEl.classList.remove('mobile-expanded');
+                    if (dcaBtnEl) dcaBtnEl.classList.remove('active');
+                    if (dcaArrowEl) dcaArrowEl.textContent = '▼';
+
+                    subBar.classList.add('mobile-expanded');
+                    toggle.classList.add('expanded');
+                }}
+                function collapse() {{
+                    subBar.classList.remove('mobile-expanded');
+                    toggle.classList.remove('expanded');
+                }}
+                function updateCurrentLabel() {{
+                    const activeBtn = subBar.querySelector('.cat-btn.macro-filter.active');
+                    if (activeBtn && currentLabel) {{
+                        // 去掉前导 emoji/符号，只保留文字
+                        const txt = activeBtn.textContent.replace(/^[^\\w\\u4e00-\\u9fa5]+/, '').trim();
+                        currentLabel.textContent = txt || activeBtn.textContent.trim();
+                    }}
+                }}
+
+                // 点击开关按钮：展开 / 收起
+                toggle.addEventListener('click', function(e) {{
+                    e.stopPropagation();
+                    if (subBar.classList.contains('mobile-expanded')) collapse();
+                    else expand();
+                }});
+
+                // 点击任意大类按钮：更新标签 + 自动收起
+                subBar.querySelectorAll('.cat-btn').forEach(btn => {{
+                    btn.addEventListener('click', function() {{
+                        updateCurrentLabel();
+                        if (isMobile()) {{
+                            setTimeout(collapse, 160);
+                        }}
+                    }});
+                }});
+
+                // 点击面板外部自动收起
+                document.addEventListener('click', function(e) {{
+                    if (!isMobile()) return;
+                    if (!subBar.classList.contains('mobile-expanded')) return;
+                    if (toggle.contains(e.target) || subBar.contains(e.target)) return;
+                    collapse();
+                }});
+
+                // 窗口尺寸变化到桌面端时清除展开状态
+                window.addEventListener('resize', function() {{
+                    if (!isMobile()) collapse();
+                }});
+
+                updateCurrentLabel();
+            }}
+
+            if (document.readyState === 'loading') {{
+                document.addEventListener('DOMContentLoaded', setupMobileFilterToggle);
+            }} else {{
+                setupMobileFilterToggle();
+            }}
+        }})();
+
+        // ===== 移动端「动态定投参数」折叠控制 =====
+        (function() {{
+            function setupDcaMobileToggle() {{
+                const btn = document.getElementById('dcaToggleBtn');
+                const dcaCard = document.getElementById('gDcaCard');
+                const arrow = document.getElementById('dcaToggleArrow');
+                if (!btn || !dcaCard) return;
+
+                const isMobile = () => window.innerWidth <= 992;
+
+                function expand() {{
+                    // 互斥：先关闭市场大类面板
+                    const subBarEl = document.getElementById('subFilterBar');
+                    const filterToggleEl = document.getElementById('mobileFilterToggle');
+                    if (subBarEl) subBarEl.classList.remove('mobile-expanded');
+                    if (filterToggleEl) filterToggleEl.classList.remove('expanded');
+
+                    dcaCard.classList.add('mobile-expanded');
+                    btn.classList.add('active');
+                    if (arrow) arrow.textContent = '▲';
+                }}
+                function collapse() {{
+                    dcaCard.classList.remove('mobile-expanded');
+                    btn.classList.remove('active');
+                    if (arrow) arrow.textContent = '▼';
+                }}
+
+                btn.addEventListener('click', function(e) {{
+                    e.stopPropagation();
+                    if (!isMobile()) return;   // 桌面端不响应
+                    if (dcaCard.classList.contains('mobile-expanded')) collapse();
+                    else expand();
+                }});
+
+                // 点击卡片/按钮外部时自动收起
+                document.addEventListener('click', function(e) {{
+                    if (!isMobile()) return;
+                    if (!dcaCard.classList.contains('mobile-expanded')) return;
+                    if (btn.contains(e.target) || dcaCard.contains(e.target)) return;
+                    collapse();
+                }});
+
+                // 切换到桌面端尺寸时清除展开态
+                window.addEventListener('resize', function() {{
+                    if (!isMobile()) collapse();
+                }});
+            }}
+
+            if (document.readyState === 'loading') {{
+                document.addEventListener('DOMContentLoaded', setupDcaMobileToggle);
+            }} else {{
+                setupDcaMobileToggle();
+            }}
+        }})();
+
     </script>
 </body>
 </html>
