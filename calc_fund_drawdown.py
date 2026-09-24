@@ -64,11 +64,12 @@ PROD_FUNDS = [
     "019155", "016668", "501225", "015202", "001668", "000043", "007280", "019449",
     "019454", "019455",
     # 纳指被动组
-    "017091", "016057", "160213", "019172", "019441", "018043", "019547", "016532",
+    "017091", "016055", "160213", "019172", "019441", "018043", "019547", "016532",
     "040046", "161130", "016452", "270042", "019736", "000834", "019524", "015299",
     "539001", "018966",
     # 标普被动组
     "161125", "007721", "017028", "050025", "018064", "096001", "017641", "018738",
+    "161128",
     # CPO 组
     "022365", "540010", "002112", "011892", "021528",
     "009645", "011370", "011452", "016371", "001956",
@@ -105,13 +106,14 @@ US_ACTIVE_CODES = {
 }
 
 NDX_PASSIVE_CODES = {
-    "017091", "016057", "160213", "019172", "019441", "018043", "019547", "016532",
+    "017091", "016055", "160213", "019172", "019441", "018043", "019547", "016532",
     "040046", "161130", "016452", "270042", "019736", "000834", "019524", "015299",
     "539001", "018966"
 }
 
 SPX_PASSIVE_CODES = {
-    "161125", "007721", "017028", "050025", "018064", "096001", "017641", "018738"
+    "161125", "007721", "017028", "050025", "018064", "096001", "017641", "018738",
+    "161128"
 }
 
 # 分级 C 份额到主代码/A 份额映射
@@ -1372,6 +1374,48 @@ def fetch_holdings(opener, code):
     except Exception: pass
     return []
 
+# ==============================================================================
+# 费率提取辅助函数（识别 --- / -- / 不适用 等"无此项费用"占位符）
+# ==============================================================================
+_FEE_LABELS = ['管理费率', '托管费率', '销售服务费率', '申购费率', '赎回费率', '认购费率']
+
+def _extract_fee_rate(html_text, label, max_chars=300):
+    """从 HTML 文本中提取某个费率标签后的数字（%）。
+
+    返回值语义：
+      - 字符串 "0.00"  → 该费用明确不存在（源页面为 --- / -- / 不适用 / 无 等占位符）
+      - 字符串 "x.xx"  → 抓到了具体费率数字
+      - None          → HTML 中未找到该标签
+    """
+    if not html_text or label not in html_text:
+        return None
+
+    pos = html_text.find(label)
+    if pos < 0:
+        return None
+
+    window = html_text[pos + len(label): pos + len(label) + max_chars]
+
+    # 1) 截断到下一个费率标签之前，避免跨标签乱抓数字
+    for stop in _FEE_LABELS:
+        if stop == label:
+            continue
+        stop_pos = window.find(stop)
+        if stop_pos >= 0:
+            window = window[:stop_pos]
+
+    # 2) 识别"无此项费用"的占位符（--- / -- / 不适用 / 无）
+    ph = re.search(r'[-–—]{2,}|不适用|无', window)
+    if ph:
+        # 占位符后面 60 字符内若没有任何"数字%"，即认定为"无此项费用"
+        after = window[ph.end(): ph.end() + 60]
+        if not re.search(r'[\d.]+\s*%', after):
+            return "0.00"
+
+    # 3) 正常情况：抓第一个 "数字%"
+    num = re.search(r'([\d.]+)\s*%', window)
+    return num.group(1) if num else None
+
 def fetch_fund_detail_meta(opener, code):
     meta = {
         "name": f"基金_{code}", "scale": "未知", "scale_val": -1.0, "fee_manage": None, "fee_custody": None,
@@ -1391,12 +1435,13 @@ def fetch_fund_detail_meta(opener, code):
     if main_html:
         name_match = re.search(r'<title>(.*?)基金', main_html)
         if name_match: meta["name"] = name_match.group(1).strip() + "基金"
-        manage_match = re.search(r'管理费率?[：:]\s*([\d.]+)%', main_html)
-        if manage_match: meta["fee_manage"] = manage_match.group(1)
-        custody_match = re.search(r'托管费率?[：:]\s*([\d.]+)%', main_html)
-        if custody_match: meta["fee_custody"] = custody_match.group(1)
-        sales_match = re.search(r'销售服务费率?[：:]\s*([\d.]+)%', main_html)
-        if sales_match: meta["fee_sales"] = sales_match.group(1)
+        # 使用带占位符识别的通用提取函数
+        _v = _extract_fee_rate(main_html, '管理费率')
+        if _v is not None: meta["fee_manage"] = _v
+        _v = _extract_fee_rate(main_html, '托管费率')
+        if _v is not None: meta["fee_custody"] = _v
+        _v = _extract_fee_rate(main_html, '销售服务费率')
+        if _v is not None: meta["fee_sales"] = _v
         rate_section = re.search(r'申购费率[：:](.*?)(?=<div|$)', main_html, re.S)
         if rate_section:
             rates = re.findall(r'([\d.]+%)', rate_section.group(1))
@@ -1432,14 +1477,14 @@ def fetch_fund_detail_meta(opener, code):
         if rate_match:
             rate_text = rate_match.group(1)
             if meta["fee_manage"] is None:
-                m = re.search(r'管理费[：:]\s*([\d.]+)%', rate_text)
-                if m: meta["fee_manage"] = m.group(1)
+                _v = _extract_fee_rate(rate_text, '管理费')
+                if _v is not None: meta["fee_manage"] = _v
             if meta["fee_custody"] is None:
-                c = re.search(r'托管费[：:]\s*([\d.]+)%', rate_text)
-                if c: meta["fee_custody"] = c.group(1)
+                _v = _extract_fee_rate(rate_text, '托管费')
+                if _v is not None: meta["fee_custody"] = _v
             if meta["fee_sales"] is None:
-                s = re.search(r'销售服务费[：:]\s*([\d.]+)%', rate_text)
-                if s: meta["fee_sales"] = s.group(1)
+                _v = _extract_fee_rate(rate_text, '销售服务费')
+                if _v is not None: meta["fee_sales"] = _v
         buy_source_m = re.search(r'var\s+fund_sourceRate\s*=\s*"([^"]+)";', js_content)
         buy_rate_m = re.search(r'var\s+fund_Rate\s*=\s*"([^"]+)";', js_content)
         if buy_source_m and buy_source_m.group(1): meta["fee_source"] = buy_source_m.group(1)
@@ -1469,14 +1514,14 @@ def fetch_fund_detail_meta(opener, code):
         with opener.open(req, timeout=5) as resp:
             f10_html = resp.read().decode('utf-8', errors='ignore')
             if meta["fee_manage"] is None:
-                mm = re.search(r'管理费率.*?([\d.]+)%', f10_html, re.S)
-                if mm: meta["fee_manage"] = mm.group(1)
+                _v = _extract_fee_rate(f10_html, '管理费率')
+                if _v is not None: meta["fee_manage"] = _v
             if meta["fee_custody"] is None:
-                cc = re.search(r'托管费率.*?([\d.]+)%', f10_html, re.S)
-                if cc: meta["fee_custody"] = cc.group(1)
+                _v = _extract_fee_rate(f10_html, '托管费率')
+                if _v is not None: meta["fee_custody"] = _v
             if meta["fee_sales"] is None:
-                ss = re.search(r'销售服务费率.*?([\d.]+)%', f10_html, re.S)
-                if ss: meta["fee_sales"] = ss.group(1)
+                _v = _extract_fee_rate(f10_html, '销售服务费率')
+                if _v is not None: meta["fee_sales"] = _v
             if meta["scale"] == "未知":
                 scale_m = re.search(r'基金规模.*?([\d.]+)\s*亿元', f10_html, re.S)
                 if scale_m:
