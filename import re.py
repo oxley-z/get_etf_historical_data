@@ -3304,6 +3304,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             gap: 12px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.03);
             flex-shrink: 0;
+            box-sizing: border-box;
         }}
 
         /* 移动端折叠开关（桌面端默认隐藏） */
@@ -3372,6 +3373,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             border: 1px solid var(--border);
             border-radius: 8px;
             padding: 6px 12px;
+            box-sizing: border-box;
             margin-bottom: 8px;
             display: flex;
             align-items: center;
@@ -4011,6 +4013,92 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             .dca-result-card:last-child {{ grid-column: span 2; }}
             .footer-note {{ flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 12px; }}
             .annual-card-grid {{ grid-template-columns: 1fr !important; }}
+
+            /* ===== 简洁模式：移动端列宽优化（仅窄屏生效） ===== */
+            #fundView.simple-mode {{
+                padding-left: 2%;
+                padding-right: 2%;
+            }}
+            #fundView.simple-mode .table-container {{
+                padding: 4px 6px;
+                overflow-x: auto;
+            }}
+            #fundView.simple-mode #fundTable {{
+                min-width: 720px !important;
+                table-layout: fixed !important;
+                font-size: 11px;
+            }}
+            #fundView.simple-mode #fundTable th,
+            #fundView.simple-mode #fundTable td {{
+                padding: 4px 2px !important;
+                font-size: 10px !important;
+                line-height: 1.3;
+            }}
+
+            /* 收藏列 */
+            #fundView.simple-mode #fundTable th:nth-child(1),
+            #fundView.simple-mode #fundTable td:nth-child(1) {{
+                width: 40px !important;
+                min-width: 40px !important;
+            }}
+
+            /* 代码列 */
+            #fundView.simple-mode #fundTable th:nth-child(2),
+            #fundView.simple-mode #fundTable td:nth-child(2) {{
+                width: 62px !important;
+                min-width: 62px !important;
+                font-size: 10px !important;
+            }}
+
+            /* 名称列 */
+            #fundView.simple-mode #fundTable th:nth-child(3),
+            #fundView.simple-mode #fundTable td:nth-child(3) {{
+                width: 130px !important;
+                min-width: 130px !important;
+                white-space: normal !important;
+                word-break: break-word !important;
+                font-size: 10px !important;
+            }}
+
+            /* 规模列 */
+            #fundView.simple-mode #fundTable th:nth-child(4),
+            #fundView.simple-mode #fundTable td:nth-child(4) {{
+                width: 60px !important;
+                min-width: 60px !important;
+                font-size: 10px !important;
+            }}
+
+            /* 状态列（宽度与近一周一致） */
+            #fundView.simple-mode #fundTable th:nth-child(7),
+            #fundView.simple-mode #fundTable td:nth-child(7) {{
+                width: 62px !important;
+                min-width: 62px !important;
+                white-space: normal !important;
+                font-size: 10px !important;
+            }}
+
+            /* 6 个数值列 */
+            #fundView.simple-mode #fundTable th:nth-child(16),
+            #fundView.simple-mode #fundTable td:nth-child(16),
+            #fundView.simple-mode #fundTable th:nth-child(17),
+            #fundView.simple-mode #fundTable td:nth-child(17),
+            #fundView.simple-mode #fundTable th:nth-child(18),
+            #fundView.simple-mode #fundTable td:nth-child(18),
+            #fundView.simple-mode #fundTable th:nth-child(19),
+            #fundView.simple-mode #fundTable td:nth-child(19),
+            #fundView.simple-mode #fundTable th:nth-child(20),
+            #fundView.simple-mode #fundTable td:nth-child(20),
+            #fundView.simple-mode #fundTable th:nth-child(21),
+            #fundView.simple-mode #fundTable td:nth-child(21) {{
+                width: 62px !important;
+                min-width: 62px !important;
+                font-size: 10px !important;
+            }}
+
+            /* 简洁模式展开行：图表高度适配小屏 */
+            #fundView.simple-mode .holding-row .chart-container {{
+                min-height: 220px;
+            }}
         }}
         @media (max-width: 480px) {{
             .macro-metrics-grid {{ grid-template-columns: 1fr; }}
@@ -4142,6 +4230,142 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             z-index: 5;
             box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         }}
+
+        /* ===== 基金看板：默认 / 简洁 视图模式 ===== */
+        .view-mode-btn.active {{
+            background: #e67e22 !important;
+            color: #fff !important;
+            border-color: #e67e22 !important;
+            font-weight: 700;
+        }}
+
+        /* ===== 简洁模式：表头精简 ===== */
+        .th-simple {{ display: none; }}
+        #fundView.simple-mode .th-full {{ display: none; }}
+        #fundView.simple-mode .th-simple {{ display: inline; }}
+
+        /* 简洁模式：整体布局参照首页 —— 两侧各留 5% 空白 */
+        #fundView.simple-mode {{
+            padding-left: 5%;
+            padding-right: 5%;
+            box-sizing: border-box;
+            max-width: 1440px;
+            margin: 0 auto;
+            width: 100%;
+        }}
+
+        /* 简洁模式：搜索栏缩短 */
+        #fundView.simple-mode .search-box-wrap {{
+            width: 180px;
+        }}
+
+        /* 简洁模式：隐藏不需要的列（保留 1,2,3,4,7,16,17,18,19,20,21） */
+        #fundView.simple-mode #fundTable th:nth-child(5),
+        #fundView.simple-mode #fundTable th:nth-child(6),
+        #fundView.simple-mode #fundTable th:nth-child(8),
+        #fundView.simple-mode #fundTable th:nth-child(9),
+        #fundView.simple-mode #fundTable th:nth-child(10),
+        #fundView.simple-mode #fundTable th:nth-child(11),
+        #fundView.simple-mode #fundTable th:nth-child(12),
+        #fundView.simple-mode #fundTable th:nth-child(13),
+        #fundView.simple-mode #fundTable th:nth-child(14),
+        #fundView.simple-mode #fundTable th:nth-child(15),
+        #fundView.simple-mode #fundTable th:nth-child(22),
+        #fundView.simple-mode #fundTable td:nth-child(5),
+        #fundView.simple-mode #fundTable td:nth-child(6),
+        #fundView.simple-mode #fundTable td:nth-child(8),
+        #fundView.simple-mode #fundTable td:nth-child(9),
+        #fundView.simple-mode #fundTable td:nth-child(10),
+        #fundView.simple-mode #fundTable td:nth-child(11),
+        #fundView.simple-mode #fundTable td:nth-child(12),
+        #fundView.simple-mode #fundTable td:nth-child(13),
+        #fundView.simple-mode #fundTable td:nth-child(14),
+        #fundView.simple-mode #fundTable td:nth-child(15),
+        #fundView.simple-mode #fundTable td:nth-child(22) {{
+            display: none !important;
+        }}
+
+        /* 简洁模式：表头固定布局、解除 min-width、按比例分配列宽 */
+        #fundView.simple-mode #fundTable {{
+            min-width: 0 !important;
+            table-layout: fixed !important;
+            width: 100%;
+        }}
+
+        /* 简洁模式：收藏列（窄） */
+        #fundView.simple-mode #fundTable th:nth-child(1),
+        #fundView.simple-mode #fundTable td:nth-child(1) {{
+            width: 5%;
+            min-width: 40px;
+            text-align: center;
+        }}
+
+        /* 简洁模式：代码列（窄） */
+        #fundView.simple-mode #fundTable th:nth-child(2),
+        #fundView.simple-mode #fundTable td:nth-child(2) {{
+            width: 7%;
+            min-width: 65px;
+            text-align: left;
+        }}
+
+        /* 简洁模式：基金名称列（宽，主信息） */
+        #fundView.simple-mode #fundTable th:nth-child(3),
+        #fundView.simple-mode #fundTable td:nth-child(3) {{
+            width: 22%;
+            min-width: 150px;
+            text-align: left;
+            white-space: normal;
+            word-break: break-word;
+        }}
+
+        /* 简洁模式：最新规模列 */
+        #fundView.simple-mode #fundTable th:nth-child(4),
+        #fundView.simple-mode #fundTable td:nth-child(4) {{
+            width: 8%;
+            min-width: 70px;
+            text-align: left;
+        }}
+
+        /* 简洁模式：申购状态/限额列（宽度与近一周一致） */
+        #fundView.simple-mode #fundTable th:nth-child(7),
+        #fundView.simple-mode #fundTable td:nth-child(7) {{
+            width: 8.5%;
+            min-width: 80px;
+            text-align: left;
+        }}
+
+        /* 简洁模式：近一周/近一月/近三月/近半年/近一年/今年内（6 个数值列，统一宽度） */
+        #fundView.simple-mode #fundTable th:nth-child(16),
+        #fundView.simple-mode #fundTable td:nth-child(16),
+        #fundView.simple-mode #fundTable th:nth-child(17),
+        #fundView.simple-mode #fundTable td:nth-child(17),
+        #fundView.simple-mode #fundTable th:nth-child(18),
+        #fundView.simple-mode #fundTable td:nth-child(18),
+        #fundView.simple-mode #fundTable th:nth-child(19),
+        #fundView.simple-mode #fundTable td:nth-child(19),
+        #fundView.simple-mode #fundTable th:nth-child(20),
+        #fundView.simple-mode #fundTable td:nth-child(20),
+        #fundView.simple-mode #fundTable th:nth-child(21),
+        #fundView.simple-mode #fundTable td:nth-child(21) {{
+            width: 8.5%;
+            min-width: 80px;
+            text-align: right;
+        }}
+
+        /* 简洁模式：展开行只保留折线图 */
+        #fundView.simple-mode .holding-row .holdings-container,
+        #fundView.simple-mode .holding-row .country-card {{
+            display: none !important;
+        }}
+        #fundView.simple-mode .holding-row .right-chart-wrapper {{
+            flex: 0 0 100% !important;
+            width: 100% !important;
+        }}
+        #fundView.simple-mode .holding-row .chart-container {{
+            flex: 1 1 100% !important;
+            min-height: 260px;
+        }}
+
     </style>
 </head>
 <body>
@@ -4431,6 +4655,10 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                         <button class="cat-btn macro-filter" data-macro="other" data-sub="commodities">大宗商品</button>
                         <button class="cat-btn macro-filter" data-macro="other" data-sub="crypto">加密货币</button>
                         <button class="cat-btn macro-filter" data-macro="other" data-sub="index">主流指数</button>
+                        
+                        <span class="category-title" style="margin-left: 8px;">视图:</span>
+                        <button class="cat-btn view-mode-btn active" data-view-mode="default" title="默认模式：完整列 + 持仓/持有人/国家/图表">📋 默认</button>
+                        <button class="cat-btn view-mode-btn" data-view-mode="simple" title="简洁模式：精简列 + 仅折线图">⚡ 简洁</button>
                     </div>
 
                     <div class="search-box-wrap">
@@ -4466,13 +4694,13 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                 <table id="fundTable">
                     <thead>
                         <tr>
-                            <th data-col="0" onclick="handleHeaderClick(0)">收藏 <span class="sort-icon">⇅</span></th>
-                            <th data-col="1" onclick="handleHeaderClick(1)">代码 <span class="sort-icon">⇅</span></th>
-                            <th data-col="2" onclick="handleHeaderClick(2)">基金名称 / 赎回费率阶梯 <span class="sort-icon">⇅</span></th>
-                            <th data-col="3" onclick="handleHeaderClick(3)">最新规模 <span class="sort-icon">⇅</span></th>
+                            <th data-col="0" onclick="handleHeaderClick(0)"><span class="th-full">收藏</span><span class="th-simple">★</span> <span class="sort-icon">⇅</span></th>
+                            <th data-col="1" onclick="handleHeaderClick(1)"><span class="th-full">代码</span><span class="th-simple">代码</span> <span class="sort-icon">⇅</span></th>
+                            <th data-col="2" onclick="handleHeaderClick(2)"><span class="th-full">基金名称 / 赎回费率阶梯</span><span class="th-simple">名称</span> <span class="sort-icon">⇅</span></th>
+                            <th data-col="3" onclick="handleHeaderClick(3)"><span class="th-full">最新规模</span><span class="th-simple">规模</span> <span class="sort-icon">⇅</span></th>
                             <th data-col="4" onclick="handleHeaderClick(4)">运作费(管/托/销) <span class="sort-icon">⇅</span></th>
                             <th data-col="5" onclick="handleHeaderClick(5)">申购费率 <span class="sort-icon">⇅</span></th>
-                            <th data-col="6" onclick="handleHeaderClick(6)">申购状态/限额 <span class="sort-icon">⇅</span></th>
+                            <th data-col="6" onclick="handleHeaderClick(6)"><span class="th-full">申购状态/限额</span><span class="th-simple">状态</span> <span class="sort-icon">⇅</span></th>
                             <th data-col="7" onclick="handleHeaderClick(7)">最高净值 <span class="sort-icon">⇅</span></th>
                             <th data-col="8" onclick="handleHeaderClick(8)">最低净值 <span class="sort-icon">⇅</span></th>
                             <th data-col="9" onclick="handleHeaderClick(9)">最新净值 <span class="sort-icon">⇅</span></th>
@@ -4481,13 +4709,13 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                             <th data-col="12" onclick="handleHeaderClick(12)">修复程度 <span class="sort-icon">⇅</span></th>
                             <th data-col="13" onclick="handleHeaderClick(13)">修复时间 <span class="sort-icon">⇅</span></th>
                             <th data-col="14" onclick="handleHeaderClick(14)">{col_today_title} <span class="sort-icon">⇅</span></th>
-                            <th data-col="15" onclick="handleHeaderClick(15)">近一周 <span class="sort-icon">⇅</span></th>
-                            <th data-col="16" onclick="handleHeaderClick(16)">近一月 <span class="sort-icon">⇅</span></th>
-                            <th data-col="17" onclick="handleHeaderClick(17)">近三月 <span class="sort-icon">⇅</span></th>
-                            <th data-col="18" onclick="handleHeaderClick(18)">近半年 <span class="sort-icon">⇅</span></th>
-                            <th data-col="19" onclick="handleHeaderClick(19)">近一年 <span class="sort-icon">⇅</span></th>
-                            <th data-col="20" onclick="handleHeaderClick(20)">今年内 <span class="sort-icon">⇅</span></th>
-                            <th data-col="21" onclick="handleHeaderClick(21)"><span id="dcaHeaderTitle">月定投</span>收益 <span class="sort-icon">⇅</span></th>
+                            <th data-col="15" onclick="handleHeaderClick(15)"><span class="th-full">近一周</span><span class="th-simple">近一周</span> <span class="sort-icon">⇅</span></th>
+                            <th data-col="16" onclick="handleHeaderClick(16)"><span class="th-full">近一月</span><span class="th-simple">近一月</span> <span class="sort-icon">⇅</span></th>
+                            <th data-col="17" onclick="handleHeaderClick(17)"><span class="th-full">近三月</span><span class="th-simple">近三月</span> <span class="sort-icon">⇅</span></th>
+                            <th data-col="18" onclick="handleHeaderClick(18)"><span class="th-full">近半年</span><span class="th-simple">近半年</span> <span class="sort-icon">⇅</span></th>
+                            <th data-col="19" onclick="handleHeaderClick(19)"><span class="th-full">近一年</span><span class="th-simple">近一年</span> <span class="sort-icon">⇅</span></th>
+                            <th data-col="20" onclick="handleHeaderClick(20)"><span class="th-full">今年内</span><span class="th-simple">今年内</span> <span class="sort-icon">⇅</span></th>
+                            <th data-col="21" onclick="handleHeaderClick(21)"><span class="th-full"><span id="dcaHeaderTitle">月定投</span>收益</span><span class="th-simple">定投</span> <span class="sort-icon">⇅</span></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -5803,8 +6031,8 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                     else expand();
                 }});
 
-                // 点击任意大类按钮：更新标签 + 自动收起
-                subBar.querySelectorAll('.cat-btn').forEach(btn => {{
+                // 点击任意大类按钮：更新标签 + 自动收起（排除视图模式按钮）
+                subBar.querySelectorAll('.cat-btn:not(.view-mode-btn)').forEach(btn => {{
                     btn.addEventListener('click', function() {{
                         updateCurrentLabel();
                         if (isMobile()) {{
@@ -5888,6 +6116,61 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                 document.addEventListener('DOMContentLoaded', setupDcaMobileToggle);
             }} else {{
                 setupDcaMobileToggle();
+            }}
+        }})();
+
+        // ===== 基金看板：默认 / 简洁 视图模式切换 =====
+        (function() {{
+            function initViewModeSwitch() {{
+                const fundView = document.getElementById('fundView');
+                const modeBtns = document.querySelectorAll('.view-mode-btn');
+                if (!fundView || !modeBtns.length) return;
+
+                // 展开行的 colspan 随模式动态调整（22 ↔ 8）
+                function applyColspan(mode) {{
+                    const span = (mode === 'simple') ? '11' : '22';
+                    document.querySelectorAll('#fundTable td[colspan]').forEach(td => {{
+                        td.setAttribute('colspan', span);
+                    }});
+                }}
+
+                function setViewMode(mode) {{
+                    if (mode === 'simple') {{
+                        fundView.classList.add('simple-mode');
+                    }} else {{
+                        fundView.classList.remove('simple-mode');
+                    }}
+
+                    modeBtns.forEach(b => {{
+                        b.classList.toggle('active', b.dataset.viewMode === mode);
+                    }});
+
+                    applyColspan(mode);
+                    localStorage.setItem('fundViewMode', mode);
+
+                    // 关键：关闭所有已展开行，避免旧图表宽度错乱
+                    document.querySelectorAll('#fundTable .holding-row').forEach(row => {{
+                        row.classList.remove('show');
+                        row.style.display = 'none';
+                    }});
+                }}
+
+                // 初始化：从 localStorage 恢复用户偏好
+                const saved = localStorage.getItem('fundViewMode') || 'default';
+                setViewMode(saved);
+
+                modeBtns.forEach(btn => {{
+                    btn.addEventListener('click', function(e) {{
+                        e.stopPropagation();
+                        setViewMode(this.dataset.viewMode);
+                    }});
+                }});
+            }}
+
+            if (document.readyState === 'loading') {{
+                document.addEventListener('DOMContentLoaded', initViewModeSwitch);
+            }} else {{
+                initViewModeSwitch();
             }}
         }})();
 
