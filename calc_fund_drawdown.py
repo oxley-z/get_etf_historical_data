@@ -129,11 +129,15 @@ MAIN_CODE_MAP = {
     "019156": "019155",
 }
 
+# 指数历年回报的完整目标清单（用于缓存完整性校验）
+ANNUAL_INDEX_TARGETS = ["纳指100", "标普500", "费城半导体指数", "沪深300", "科创50", "恒生科技"]
+
 INDEX_NAMES = {
     "NDX": "纳斯达克100指数",
     "SPX": "标普500指数",
-    "SOXX": "iShares 半导体ETF",
-    "SOXL": "三倍做多半导体ETF-Direxion"
+    "SOX": "费城半导体指数",
+    "SOXL": "三倍做多半导体ETF-Direxion",
+    "XLK": "信息科技行业ETF-SPDR"
 }
 
 # 【修改】原 PRECIOUS_METALS_NAMES 扩展为大宗商品（新增布伦特原油、LME铜）
@@ -152,9 +156,12 @@ CRYPTO_NAMES = {
     "BNB": "币安币 (BNB/USDT)"
 }
 
-SINA_INDEX_MAP = {
-    "NDX": ".NDX",
-    "SPX": ".INX",
+SINA_US_INDEX_MAP = {
+    "NDX":  ".ndx",
+    "SPX":  ".inx",
+    "SOX":  ".sox",
+    "SOXL": "soxl",
+    "XLK":  "xlk",
 }
 
 CACHE_DIR = "cache"
@@ -311,6 +318,48 @@ def fetch_index_valuations(opener):
             
     return results
 
+def fetch_sina_us_kline(symbol_code, start_date_str="2025-01-01"):
+    """通过新浪美股日 K 线接口抓取历史数据（源自 get_meiguzhishu.py）。
+
+    返回格式：[{'date': 'YYYY-MM-DD', 'nav': float(收盘价)}, ...]
+    """
+    callback_name = "US_KLINE_CB"
+    url = (
+        f"https://stock.finance.sina.com.cn/usstock/api/jsonp.php/{callback_name}"
+        f"/US_MinKService.getDailyK?symbol={urllib.parse.quote(symbol_code)}"
+    )
+
+    headers = {
+        "User-Agent": DEFAULT_HEADERS["User-Agent"],
+        "Referer": "https://finance.sina.com.cn/",
+        "Accept": "*/*"
+    }
+    req = urllib.request.Request(url, headers=headers)
+    records = []
+
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            content = resp.read().decode("gbk", errors="ignore")
+            match = re.search(r'\((\[.*\])\)', content)
+            if not match:
+                return records
+
+            raw_list = json.loads(match.group(1))
+            for item in raw_list:
+                d_str = item.get("d")
+                if d_str and d_str >= start_date_str:
+                    try:
+                        nav = float(item.get("c", 0.0))
+                        if nav > 0:
+                            records.append({"date": d_str, "nav": nav})
+                    except (ValueError, TypeError):
+                        continue
+    except Exception:
+        pass
+
+    records.sort(key=lambda x: x["date"])
+    return records
+
 # ==============================================================================
 # 【保留】2000年后主要指数年度收益率及收盘点位获取模块（仅数据抓取，不再用于页面展示）
 # ==============================================================================
@@ -327,16 +376,24 @@ def fetch_index_annual_data():
     - 存在即直接读取返回，不再发起任何网络请求
     - 需刷新时手动删除该文件后重新运行
     """
-    # ===== 1. 优先读取本地缓存 =====
+    # ===== 1. 优先读取本地缓存（带完整性校验） =====
     cache_file = os.path.join(CACHE_DIR, "index_annual.json")
     if os.path.exists(cache_file):
         try:
             with open(cache_file, "r", encoding="utf-8") as f:
                 cached = json.load(f)
+
             if isinstance(cached, dict) and cached:
-                print(f"📅 检测到本地缓存 {cache_file}，直接使用（共 {len(cached)} 个指数）")
-                print(f"📊 指数年度数据最终获取成功: {len(cached)}/5 （来源：本地缓存）")
-                return cached
+                cached_keys = set(cached.keys())
+                expected_keys = set(ANNUAL_INDEX_TARGETS)
+                missing = expected_keys - cached_keys
+
+                if not missing:
+                    print(f"📅 检测到本地缓存 {cache_file}，直接使用（共 {len(cached)} 个指数）")
+                    print(f"📊 指数年度数据最终获取成功: {len(cached)}/{len(ANNUAL_INDEX_TARGETS)} （来源：本地缓存）")
+                    return cached
+                else:
+                    print(f"📅 缓存 {cache_file} 缺少以下指数，将重新抓取: {sorted(missing)}")
             else:
                 print(f"📅 缓存文件 {cache_file} 内容为空或格式不正确，将重新抓取...")
         except Exception as e:
@@ -489,6 +546,33 @@ def fetch_index_annual_data():
 
         return records
 
+    def _fetch_sox_annual_returns():
+        """从 historyofmarket.com 获取费城半导体指数(SOX)历年回报。
+
+        该接口直接返回年度回报率（百分比），无需二次计算。
+        返回格式：[{'year': int, 'close': None, 'pct': float}, ...]
+        """
+        url = "https://historyofmarket.com/api/semi/annual-returns.json"
+        req = urllib.request.Request(url, headers=DEFAULT_HEADERS)
+        try:
+            with _opener.open(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            series = data.get("series", [])
+            yearly_data = []
+            for item in series:
+                year = item.get("year")
+                pct = item.get("value")
+                if year and pct is not None:
+                    yearly_data.append({
+                        "year": int(year),
+                        "close": None,          # 接口未提供年末收盘点位
+                        "pct": round(float(pct), 2)
+                    })
+            yearly_data.sort(key=lambda x: x["year"])
+            return yearly_data
+        except Exception:
+            return []
+
     def _calculate_annual_metrics(records, start_year=2000):
         """计算年度收益率与年末收盘点位"""
         if not records:
@@ -541,6 +625,11 @@ def fetch_index_annual_data():
             "fetcher": lambda: _fetch_historyofmarket_robust("https://historyofmarket.com/api/sp500/century.json") or _fetch_sina_us(".INX")
         },
         {
+            "name": "费城半导体指数", "ticker": "SOX",
+            "fetcher": lambda: _fetch_sox_annual_returns(),
+            "precomputed": True,          # 标记：返回值已是 yearly_data，无需再计算
+        },
+        {
             "name": "沪深300", "ticker": "000300",
             "fetcher": lambda: _fetch_sohu_index("zs_000300")
         },
@@ -564,18 +653,25 @@ def fetch_index_annual_data():
                 print("❌ 无数据")
                 continue
 
-            stats = _calculate_annual_metrics(records, start_year=2000)
-            if not stats:
+            if item.get("precomputed"):
+                # SOX 等直接返回 yearly_data 的接口，跳过年度计算
+                yearly_data = records
+            else:
+                stats = _calculate_annual_metrics(records, start_year=2000)
+                if not stats:
+                    print("❌ 年度数据为空")
+                    continue
+                yearly_data = []
+                for row in stats:
+                    yearly_data.append({
+                        "year": int(row["year"]),
+                        "close": round(row["end_point"], 2),
+                        "pct": round(row["annual_return"], 2)
+                    })
+
+            if not yearly_data:
                 print("❌ 年度数据为空")
                 continue
-
-            yearly_data = []
-            for row in stats:
-                yearly_data.append({
-                    "year": int(row["year"]),
-                    "close": round(row["end_point"], 2),
-                    "pct": round(row["annual_return"], 2)
-                })
 
             result[name] = {
                 "ticker": item["ticker"],
@@ -587,7 +683,7 @@ def fetch_index_annual_data():
             print(f"❌ 异常: {e}")
             continue
 
-    print(f"📊 指数年度数据最终获取成功: {len(result)}/{len(targets)}")
+        print(f"📊 指数年度数据最终获取成功: {len(result)}/{len(ANNUAL_INDEX_TARGETS)}")
 
     # ===== 2. 抓取成功后写入本地缓存 =====
     if result:
@@ -2045,7 +2141,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
     AI_CODES = {"024663", "024726", "023286", "023408", "025506", "025493", "025653", "005963", "014162", "011840", "024412", "024775", "026613", "023551", "024561"}
     GRID_CODES = {"025857", "023639", "023675", "019411", "167002", "020425", "002164", "017133", "017042", "026681", "016387", "025833", "011172", "001665", "018919"}
     ROBOT_CODES = {"016531", "018345", "020482", "018125", "007519", "014243", "018957", "003835", "014939", "008998", "004233", "008182", "017968", "024648"}
-    INDEX_SET_LOCAL = {"NDX", "SPX", "SOXX", "SOXL"}
+    INDEX_SET_LOCAL = {"NDX", "SPX", "SOX", "SOXL", "XLK"}
     COMMODITIES_LOCAL = {"XAU", "AUM", "XAG", "BRENT", "CAD"}
     CRYPTO_LOCAL = {"BTC", "ETH", "SOL", "BNB"}
     col_count = 22
@@ -2215,8 +2311,9 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
         INDEX_URL_MAP = {
             "NDX":  "https://quote.eastmoney.com/gb/zsNDX100.html",
             "SPX":  "https://quote.eastmoney.com/gb/zsSPX.html",
-            "SOXX": "https://quote.eastmoney.com/us/SOXX.html",
+            "SOX":  "https://cn.investing.com/indices/phlx-semiconductor",
             "SOXL": "https://quote.eastmoney.com/us/SOXL.html",
+            "XLK":  "https://quote.eastmoney.com/us/XLK.html",
             "XAU":  "https://cn.investing.com/currencies/xau-usd",
             "AUM":  "https://quote.eastmoney.com/qihuo/aum.html",
             "XAG":  "https://cn.investing.com/currencies/xag-usd",
@@ -2604,7 +2701,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
     # ===== 生成指数历年回报 HTML (优化版 v3) =====
     index_annual_html = ""
     if index_annual_data and isinstance(index_annual_data, dict):
-        index_order = ["纳指100", "标普500", "沪深300", "科创50", "恒生科技"]
+        index_order = ANNUAL_INDEX_TARGETS
         index_annual_html = '<div class="index-annual-grid" style="margin: 20px 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">'
         index_annual_html += '<div style="grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 0;">'
         index_annual_html += '<h3 style="margin: 0; font-size: 16px; color: var(--header-text); border-left: 4px solid var(--link-color); padding-left: 8px;">📈 指数历年回报 (2000年至今)</h3>'
@@ -2673,7 +2770,8 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             index_annual_html += '<div class="annual-card-grid">'
             for row in yearly_data:
                 year = row.get("year", "")
-                close_val = row.get("close", 0)
+                close_val = row.get("close")
+                close_display = f"{close_val:,.2f}" if close_val is not None else "--"
                 pct_val = row.get("pct", 0)
                 if pct_val > 0:
                     pct_color = "#d93025"; pct_sign = "+"; bar_color = "#d93025"
@@ -2685,7 +2783,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                 index_annual_html += f'''
                 <div class="annual-year-row">
                     <span class="annual-year-col">{year}</span>
-                    <span class="annual-points-col">{close_val:,.2f}</span>
+                    <span class="annual-points-col">{close_display}</span>
                     <span class="annual-pct-col" style="color: {pct_color};">{pct_sign}{pct_val:.2f}%</span>
                     <div class="annual-bar-col">
                         <div class="annual-zero-line"></div>
@@ -2702,7 +2800,8 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             index_annual_html += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 6px;">'
             for row in yearly_data:
                 year = row.get("year", "")
-                close_val = row.get("close", 0)
+                close_val = row.get("close")
+                close_heatmap_display = f"{close_val:,.2f}" if close_val is not None else "--"
                 pct_val = row.get("pct", 0)
                 # 提高最小 alpha，让文字始终有足够对比度
                 if pct_val > 0:
@@ -2718,7 +2817,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                 <div class="annual-heatmap-cell" style="background:{bg_color}; border-radius:4px; padding:6px 2px; text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); cursor: default;">
                     <div style="font-size:10px; font-weight:600; color:#ffffff;">{year}</div>
                     <div style="font-size:13px; font-weight:800; color:#ffffff; letter-spacing: 0.2px;">{pct_val:+.2f}%</div>
-                    <div style="font-size:9px; font-weight:500; color:rgba(255,255,255,0.92);">{close_val:,.2f}</div>
+                    <div style="font-size:9px; font-weight:500; color:rgba(255,255,255,0.92);">{close_heatmap_display}</div>
                 </div>
                 '''
             index_annual_html += '</div>'
@@ -4959,7 +5058,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                                     const sign = val >= 0 ? '+' : '';
                                     return [
                                         `涨跌幅: ${{sign}}${{val.toFixed(2)}}%`,
-                                        `年末收盘: ${{Number(closes[c.dataIndex]).toLocaleString()}}`
+                                        `年末收盘: ${{closes[c.dataIndex] != null ? Number(closes[c.dataIndex]).toLocaleString() : '--'}}`
                                     ];
                                 }}
                             }}
@@ -6497,21 +6596,11 @@ def fetch_currency_data(symbol, start_date, end_date):
     return None
 
 
-def fetch_index_data(symbol, start_date, end_date):
+def _process_hist_df(df, start_date, end_date):
+    """通用：从含日期/收盘列的 DataFrame 中提取 [{'date','nav'}, ...]"""
+    if df is None or df.empty:
+        return None
     try:
-        df = None
-        if symbol in SINA_INDEX_MAP:
-            sina_symbol = SINA_INDEX_MAP[symbol]
-            df = ak.index_us_stock_sina(symbol=sina_symbol)
-        elif symbol in ["SOXL", "SOXX"]:
-            for try_symbol in [f"105.{symbol}", symbol, f"106.{symbol}"]:
-                try:
-                    df = ak.stock_us_hist(symbol=try_symbol, period="daily", start_date=start_date.replace("-", ""), end_date=end_date.replace("-", ""), adjust="")
-                    if df is not None and not df.empty: break
-                except Exception: continue
-
-        if df is None or df.empty: return None
-
         date_col = '日期' if '日期' in df.columns else ('date' if 'date' in df.columns else df.columns[0])
         close_col = '收盘' if '收盘' in df.columns else ('close' if 'close' in df.columns else df.columns[4])
 
@@ -6526,11 +6615,77 @@ def fetch_index_data(symbol, start_date, end_date):
         for _, row in df.iterrows():
             try:
                 nav = float(row[close_col])
-                if nav > 0: data.append({"date": row['date_str'], "nav": nav})
-            except Exception: continue
+                if nav > 0:
+                    data.append({"date": row['date_str'], "nav": nav})
+            except Exception:
+                continue
         return data if data else None
     except Exception:
         return None
+
+
+def fetch_index_data(symbol, start_date, end_date):
+    """抓取主流指数/ETF 历史行情，带本地缓存。
+
+    数据源优先级（与 get_meiguzhishu.py 保持一致）：
+      1) 新浪美股接口 US_MinKService.getDailyK（主数据源，已实测稳定）
+      2) Yahoo Finance 兜底（防止新浪偶发限流）
+
+    缓存策略：
+      - 缓存文件：cache/nav/{symbol}.json
+      - 已覆盖请求区间时直接返回缓存，不再发起网络请求
+    """
+    cache_file = os.path.join(NAV_CACHE_DIR, f"{symbol}.json")
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                cache = json.load(f)
+            if cache.get('start_date', '') <= start_date and cache.get('end_date', '') >= end_date:
+                return cache.get('data', [])
+        except Exception:
+            pass
+
+    data = None
+
+    # ---- 数据源 1：新浪美股接口 ----
+    sina_code = SINA_US_INDEX_MAP.get(symbol)
+    if sina_code:
+        try:
+            raw = fetch_sina_us_kline(sina_code, start_date)
+            if raw:
+                data = [r for r in raw if r["date"] <= end_date]
+                if not data:
+                    data = None
+        except Exception:
+            data = None
+
+    # ---- 数据源 2：Yahoo Finance 兜底 ----
+    if not data:
+        yahoo_syms = {
+            "NDX":  "^NDX",
+            "SPX":  "^GSPC",
+            "SOX":  "^SOX",
+            "SOXL": "SOXL",
+            "XLK":  "XLK",
+        }
+        ysym = yahoo_syms.get(symbol)
+        if ysym:
+            try:
+                data = fetch_yahoo_history(ysym, start_date, end_date)
+            except Exception:
+                data = None
+
+    if data:
+        try:
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(
+                    {'start_date': start_date, 'end_date': end_date, 'data': data},
+                    f, ensure_ascii=False, indent=2
+                )
+        except Exception:
+            pass
+        return data
+    return None
 
 def main():
     today_str = now_beijing().strftime("%Y-%m-%d")
@@ -6562,7 +6717,7 @@ def main():
         target_funds = PROD_FUNDS
         target_commodities = ["XAU", "AUM", "XAG", "BRENT", "CAD"]
         target_cryptos = ["BTC", "ETH", "SOL", "BNB"]
-        target_indices = ["NDX", "SPX", "SOXX", "SOXL"]
+        target_indices = ["NDX", "SPX", "SOX", "SOXL", "XLK"]
         print("\n=======================================================")
         print("🚀 当前处于【正式发布阶段 (PROD MODE)】")
         print(f"👉 正在抓取全量 {len(target_funds)} 只基金与全品类宏观大类资产...")
