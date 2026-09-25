@@ -3490,28 +3490,28 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
         {
             "category": "📊 估值与数据",
             "links": [
-                {"name": "蛋卷估值中心", "url": "https://danjuanfunds.com/djmodule/value-center?channel=1300100141", "desc": "全市场指数估值与定投参考"},
-                {"name": "History of Market", "url": "https://historyofmarket.com/", "desc": "美股百年历史数据与市场统计"},
-                {"name": "Morningstar 晨星中国", "url": "https://www.morningstar.cn/", "desc": "全球权威基金评级与研究报告"},
-                {"name": "WiseETF", "url": "https://www.wise-etf.com/", "desc": "美股ETF/QDII基金估值与溢价监控"},
                 {"name": "纳指估值助手", "url": "https://nsdk.top/", "desc": "纳指基金估值与持仓参考"},
+                {"name": "蛋卷估值中心", "url": "https://danjuanfunds.com/djmodule/value-center?channel=1300100141", "desc": "全市场指数估值与定投参考"},
+                {"name": "QDII申购限额监控(pmtools)", "url": "https://pmtools.com.cn/qdii", "desc": "QDII基金数据分析与投资参考"},
             ]
         },
         {
             "category": "🔬 基金分析与工具",
             "links": [
-                {"name": "基金决策宝", "url": "https://jjpro.cn/", "desc": "基金组合分析与投研决策辅助工具"},
-                {"name": "QDII申购限额监控", "url": "https://pmtools.com.cn/qdii", "desc": "QDII基金数据分析与投资参考"},
-                {"name": "定投估值计算机", "url": "https://btcdca.me/", "desc": "多资产定投策略与估值评分"},
+                {"name": "DCA HUB定投估值计算机(btcdca)", "url": "https://btcdca.me/", "desc": "多资产定投策略与估值评分"},
+                {"name": "晨星中国", "url": "https://www.morningstar.cn/", "desc": "全球权威基金评级与研究报告"},
+                {"name": "WiseETF", "url": "https://www.wise-etf.com/", "desc": "美股ETF/QDII基金估值与溢价监控"},
+                {"name": "基金决策宝(jjpro)", "url": "https://jjpro.cn/", "desc": "基金组合分析与投研决策辅助工具"},
                 {"name": "股查查", "url": "https://guchacha.com/", "desc": "专业的企业/股票基本面查询工具"},
-                {"name": "WISE HOLD", "url": "https://www.wise-hold.com/", "desc": "追踪机构持仓与政商名人投资动向"},
             ]
         },
         {
             "category": "📰 资讯与行情",
             "links": [
                 {"name": "FiNews 美股日报", "url": "https://finews.elsetech.app/", "desc": "每日美股盘后总结与新闻聚合"},
+                {"name": "美股编年史", "url": "https://historyofmarket.com/", "desc": "美股百年历史数据与市场统计"},
                 {"name": "Yahoo 财经香港", "url": "https://hk.finance.yahoo.com/", "desc": "港股/美股实时行情与财经资讯"},
+                {"name": "WISE HOLD", "url": "https://www.wise-hold.com/", "desc": "追踪机构持仓与政商名人投资动向"},
             ]
         },
     ]
