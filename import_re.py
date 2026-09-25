@@ -240,8 +240,7 @@ class _RateLimiter:
 
 
 _F10_LIMITER = _RateLimiter(rate=1.2, burst=2)
-_F10_CACHE_DIR = os.path.join(CACHE_DIR, "f10")
-os.makedirs(_F10_CACHE_DIR, exist_ok=True)
+# ★ 已取消 F10 HTML 本地缓存：不再创建 cache/f10 目录，也不再写盘
 
 
 # --- 3. 底层抓取：限速 + 514 专属退避 + 普通重试 ---
@@ -283,28 +282,11 @@ def _fetch_f10_html(url, max_retries=4, timeout=15):
 
     raise last_exc
 
-
-# --- 4. 带本地缓存的包装（7 天有效） ---
+# --- 4. 直接网络抓取（已取消本地 HTML 缓存，不落盘） ---
 def _fetch_f10_html_cached(code, url):
-    cache_file = os.path.join(_F10_CACHE_DIR, f"{code}.html")
-    if os.path.exists(cache_file):
-        try:
-            if time.time() - os.path.getmtime(cache_file) < 7 * 86400:
-                with open(cache_file, "r", encoding="utf-8") as f:
-                    cached = f.read()
-                if cached and "管理费" in cached:
-                    return cached
-        except Exception:
-            pass
+    """保留函数名与签名以兼容旧调用；内部不再读写任何磁盘文件。"""
+    return _fetch_f10_html(url)
 
-    html = _fetch_f10_html(url)
-    try:
-        with open(cache_file, "w", encoding="utf-8") as f:
-            f.write(html)
-    except Exception:
-        pass
-    return html
-# ==============================================================================
 # ================= requests.Session 包装器：复用连接，兼容 urllib 风格 =================
 class _RespWrapper:
     """把 requests.Response 包装成 urllib 风格的响应对象。"""
@@ -2102,7 +2084,10 @@ def fetch_fund_detail_meta(opener, code):
                 sgzt = d_mob.get("SGZT")               # 申购状态
                 sgztmark = d_mob.get("SGZTMARK")       # 带限额说明
                 if sgzt:
-                    meta["buy_status"] = str(sgzt).strip()
+                    _bs = str(sgzt).strip()
+                    # 过滤掉 East Money 偶发返回的字符串 "None" / "null" 等
+                    if _bs and _bs.lower() not in ("none", "null", "nan", "nil", "-"):
+                        meta["buy_status"] = _bs
                 if sgztmark:
                     m_lim = re.search(r'单日累计购买上限([\d.]+)(万?)元', str(sgztmark))
                     if m_lim:
@@ -2199,7 +2184,6 @@ def fetch_fund_detail_meta(opener, code):
             except Exception:
                 pass
 
-# ===== 运作费抓取：天天基金 F10 静态页（requests 直连版，避开 urllib header 坑）=====
     _q = MAIN_CODE_MAP.get(code, code)
     _codes = [code] if _q == code else [code, _q]
     for _c in _codes:
@@ -2209,13 +2193,12 @@ def fetch_fund_detail_meta(opener, code):
             break
         try:
             f10_url = f"https://fundf10.eastmoney.com/jjfl_{_c}.html"
-            f10_html = _fetch_f10_html_cached(_c, f10_url)
             r = requests.get(f10_url, headers={
                 "User-Agent": DEFAULT_HEADERS["User-Agent"],
                 "Referer": f10_url,
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             }, timeout=8)
-            f10_html = r.text  # requests 自动处理编码
+            f10_html = r.text
 
             # 剥离 HTML 标签，压缩空白
             clean = re.sub(r'<[^>]+>', ' ', f10_html)
@@ -2243,8 +2226,7 @@ def fetch_fund_detail_meta(opener, code):
                 print(f"    [F10] {_c}: 管理={meta.get('fee_manage')} 托管={meta.get('fee_custody')} 销服={meta.get('fee_sales')}")
         except Exception as e:
             print(f"    [F10] {_c} 异常: {e}")
-            pass
-# ============================================================
+
 # ===== 运作费兜底：蛋卷基金（覆盖 F10 静态页缺失的次新基金）=====
     if (meta.get("fee_manage") in (None, "0.00")
             or meta.get("fee_custody") in (None, "0.00")):
@@ -2400,8 +2382,19 @@ def fetch_from_eastmoney(opener, code, start_date, end_date):
                         continue
                     empty_streak = 0
                     for item in lsjz:
-                        if item.get("DWJZ"):
-                            all_data.append({"date": item["FSRQ"], "nav": float(item["DWJZ"])})
+                        # ★ 优先用累计净值 LJJZ（剔除分红影响）：
+                        #   - 涨幅统计与天天基金页面口径一致
+                        #   - 最大回撤不再把分红跳水误算成回撤
+                        #   - LJJZ 缺失时回退 DWJZ
+                        nav_str = item.get("LJJZ")
+                        if not nav_str or str(nav_str).strip() in ("--", ""):
+                            nav_str = item.get("DWJZ")
+                        if not nav_str or str(nav_str).strip() in ("--", ""):
+                            continue
+                        try:
+                            all_data.append({"date": item["FSRQ"], "nav": float(nav_str)})
+                        except (ValueError, TypeError):
+                            continue
                     # ★ 只在返回不足一页时才认为到底；等于 20 就继续翻页
                     if len(lsjz) < page_size:
                         break
@@ -2503,6 +2496,151 @@ def fetch_fund_annual_returns(fund_code: str) -> dict:
         pass
 
     return returns
+
+# ==============================================================================
+# 基金年化跟踪误差 & 同类平均抓取模块（合并自 tracking_error.py）
+# 数据源：天天基金 tsdata 页面 https://fundf10.eastmoney.com/tsdata_{code}.html
+# ==============================================================================
+TRACKING_ERROR_CACHE_DIR = os.path.join(CACHE_DIR, "tracking_error")
+os.makedirs(TRACKING_ERROR_CACHE_DIR, exist_ok=True)
+
+
+def _te_clean(s):
+    if s is None:
+        return ""
+    return re.sub(r"[\s\u3000]+", "", s)
+
+
+def _te_parse_page(html_text):
+    result = {
+        "tracking_index": "", "tracking_error": "", "peer_avg": "",
+        "deadline": "", "sharp_1y": "", "sharp_2y": "", "sharp_3y": "",
+        "std_1y": "", "std_2y": "", "std_3y": "",
+    }
+    if not html_text:
+        return result
+
+    # ===== 1. 反转义 =====
+    text = html_text
+    if '\\u003c' in text or '\\u003e' in text or '\\u0026' in text:
+        text = (text.replace('\\u003c', '<').replace('\\u003e', '>')
+                    .replace('\\u0026', '&').replace('\\u0022', '"'))
+    if ('&lt;td' in text) or ('&lt;tr' in text) or ('&lt;table' in text):
+        try:
+            text = html.unescape(text)
+        except Exception:
+            pass
+
+    def _clean_cell(s):
+        s = re.sub(r'<[^>]+>', '', s)
+        s = s.replace('&nbsp;', ' ').replace('&amp;', '&')
+        return re.sub(r'[\s\u3000]+', '', s)
+
+    def _row_cells(tr_inner):
+        tds = re.findall(r'<t[dh][^>]*>(.*?)</t[dh]>', tr_inner, re.S)
+        return [_clean_cell(td) for td in tds]
+
+    def _is_num(v):
+        return bool(re.match(r'^-?\d+(?:\.\d+)?$', v or ''))
+
+    def _is_pct(v):
+        return bool(re.match(r'^-?\d+(?:\.\d+)?%$', v or ''))
+
+    # ===== 2. 夏普比率 / 标准差（全局首列精确匹配） =====
+    for tr_inner in re.findall(r'<tr[^>]*>(.*?)</tr>', text, re.S):
+        cells = _row_cells(tr_inner)
+        if len(cells) < 2:
+            continue
+        first = cells[0]
+        if ('夏普比率' in first) and not result["sharp_1y"]:
+            vals = cells[1:4]
+            if len(vals) >= 1 and _is_num(vals[0]): result["sharp_1y"] = vals[0]
+            if len(vals) >= 2 and _is_num(vals[1]): result["sharp_2y"] = vals[1]
+            if len(vals) >= 3 and _is_num(vals[2]): result["sharp_3y"] = vals[2]
+        elif ('标准差' in first) and not result["std_1y"]:
+            vals = cells[1:4]
+            if len(vals) >= 1 and _is_num(vals[0]): result["std_1y"] = vals[0]
+            if len(vals) >= 2 and _is_num(vals[1]): result["std_2y"] = vals[1]
+            if len(vals) >= 3 and _is_num(vals[2]): result["std_3y"] = vals[2]
+
+    # ===== 3. 跟踪误差：只在包含"跟踪指数"的同一张 <table> 内解析 =====
+    for tbl_match in re.finditer(r'<table[^>]*>(.*?)</table>', text, re.S):
+        tbl_content = tbl_match.group(1)
+        # 该表必须同时出现"跟踪指数"和"年化跟踪误差"关键词
+        if ('跟踪指数' not in tbl_content) or ('年化跟踪误差' not in tbl_content):
+            continue
+
+        for tr_inner in re.findall(r'<tr[^>]*>(.*?)</tr>', tbl_content, re.S):
+            cells = _row_cells(tr_inner)
+            if len(cells) < 3:
+                continue
+            first = cells[0]
+            # 跳过所有表头 / 标签行
+            if any(k in first for k in ('跟踪指数', '年化跟踪误差', '标准差', '夏普比率', '年化波动率')):
+                continue
+            # 数据行：后两列均为严格百分比
+            if _is_pct(cells[1]) and _is_pct(cells[2]):
+                result["tracking_index"] = first
+                result["tracking_error"] = cells[1]
+                result["peer_avg"] = cells[2]
+                break
+        if result["tracking_error"]:
+            break
+
+    # ===== 4. 截止日期 =====
+    dm = re.search(r'截止至[：:]\s*(\d{4}-\d{2}-\d{2})', text)
+    if dm:
+        result["deadline"] = dm.group(1)
+
+    return result
+
+
+def fetch_fund_tracking_error(fund_code, max_retries=3):
+    """抓取天天基金 tsdata 页面的「年化跟踪误差」「同类平均」「夏普比率」。
+
+    返回值示例：{"tracking_index": "纳斯达克100指数", "tracking_error": "1.43%",
+                "peer_avg": "0.85%", "deadline": "2025-09-30",
+                "sharp_1y": "3.05", "sharp_2y": "2.10", "sharp_3y": "1.85"}
+    失败时返回空字典 {}。
+    """
+    cache_file = os.path.join(TRACKING_ERROR_CACHE_DIR, f"{fund_code}.json")
+    if os.path.exists(cache_file):
+        try:
+            if time.time() - os.path.getmtime(cache_file) < 7 * 86400:   # 7 天有效
+                with open(cache_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+        except Exception:
+            pass
+
+    url = f"https://fundf10.eastmoney.com/tsdata_{fund_code}.html"
+    headers = {
+        "User-Agent": DEFAULT_HEADERS["User-Agent"],
+        "Referer": "https://fundf10.eastmoney.com/",
+    }
+
+    for attempt in range(max_retries):
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                html_text = resp.read().decode("utf-8", errors="ignore")
+            parsed = _te_parse_page(html_text)
+
+            # ★ 只要抓到任意一类有效数据就缓存返回（原逻辑要求必须抓跟踪误差，会丢弃夏普比率）
+            if parsed and (
+                parsed.get("tracking_error")
+                or parsed.get("sharp_1y")
+                or parsed.get("std_1y")
+            ):
+                try:
+                    with open(cache_file, "w", encoding="utf-8") as f:
+                        json.dump(parsed, f, ensure_ascii=False, indent=2)
+                except Exception:
+                    pass
+                return parsed
+        except Exception:
+            time.sleep(2)
+
+    return {}
 
 def _cme_html_tables(raw_html: str):
     """使用标准库提取 CME/QuikStrike 页面中的 HTML 表格。"""
@@ -2967,6 +3105,297 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
     COMMODITIES_LOCAL = {"XAU", "AUM", "XAG", "BRENT", "CAD"}
     CRYPTO_LOCAL = {"BTC", "ETH", "SOL", "BNB"}
     col_count = 22
+    # ================= QDII 监控数据分组 =================
+    EMERGING_KWS = ["新兴市场", "新兴", "越南", "印度", "巴西", "东南亚"]
+
+    QDII_GROUP_LABELS = {
+        "us_active":   "美股主动",
+        "ndx_passive": "纳斯达克100",
+        "spx_passive": "标普500",
+        "emerging":    "新兴市场",
+        "other":       "其他",
+    }
+
+    def _qdii_group(code, name):
+        for kw in EMERGING_KWS:
+            if kw in name:
+                return "emerging"
+        if code in US_ACTIVE_CODES:
+            return "us_active"
+        if code in NDX_PASSIVE_CODES:
+            return "ndx_passive"
+        if code in SPX_PASSIVE_CODES:
+            return "spx_passive"
+        return "other"
+
+    def _buy_category(data):
+        bs = (data.get('buy_status', '') or '')
+        lim = (data.get('buy_limit', '') or '')
+        bs = str(bs).strip()
+        lim = str(lim).strip()
+        if bs.lower() in ("none", "null", "nan"):
+            bs = ""
+        if lim.lower() in ("none", "null", "nan"):
+            lim = ""
+        if '暂停' in bs or '封闭' in bs:
+            return 'paused'
+        if lim and lim not in ('--', '无限额', ''):
+            return 'limited'
+        return 'open'
+
+    # ============ 年化跟踪误差 & 同类平均 ============
+    # ★ 仅使用 tsdata 页面的权威数据，不再本地兜底计算
+    #    原因：本地计算用「基金净值 vs 对标指数净值」的日收益率差异标准差，
+    #          无法考虑汇率波动 / 交易日时差 / 分红 / 跟踪行业偏离等因素，
+    #          对跟踪非标普500/非纳指100的基金（如 161128 跟踪标普信息技术）
+    #          会产生数十个百分点的错误结果，比源数据的 "--" 更具误导性。
+
+    def _pct_str_to_num(s):
+        """把 '1.43%' / '1.43' / '' 等转成 float，失败返回 None。"""
+        if s is None:
+            return None
+        m = re.search(r'([\d.]+)', str(s))
+        if not m:
+            return None
+        try:
+            return float(m.group(1))
+        except Exception:
+            return None
+
+    _seen_qdii_codes = set()
+    qdii_funds = []
+    for r in results:
+        code = r['code']
+        # ★ 去重：同一代码在 QDII 监控中只展示一次
+        if code in _seen_qdii_codes:
+            continue
+        if code in CPO_CODES or code in STORAGE_CODES or code in SEMICONDUCTOR_CODES:
+            continue
+        if code in AI_CODES or code in GRID_CODES or code in ROBOT_CODES:
+            continue
+        if code in COMMODITIES_LOCAL or code in CRYPTO_LOCAL or code in INDEX_SET_LOCAL:
+            continue
+        _seen_qdii_codes.add(code)
+        grp_key = _qdii_group(code, r.get('name', ''))
+
+        # ★ 只取 tsdata 源数据
+        te_data = r.get('te_data', {}) or {}
+        te_str = (te_data.get('tracking_error') or '').strip()
+        peer_str = (te_data.get('peer_avg') or '').strip()
+
+        qdii_funds.append({
+            "data": r,
+            "group": grp_key,
+            "group_label": QDII_GROUP_LABELS[grp_key],
+            "buy_cat": _buy_category(r),
+            "te_str": te_str,
+            "peer_str": peer_str,
+            "sharp_1y": (te_data.get('sharp_1y') or '').strip(),
+            "sharp_2y": (te_data.get('sharp_2y') or '').strip(),
+            "sharp_3y": (te_data.get('sharp_3y') or '').strip(),
+        })
+
+    qdii_group_counts = {k: sum(1 for x in qdii_funds if x["group"] == k)
+                        for k in QDII_GROUP_LABELS}
+    buy_status_counts = {k: sum(1 for x in qdii_funds if x["buy_cat"] == k)
+                        for k in ("open", "limited", "paused")}
+
+    # ============ 筛选栏 ============
+    qdii_filter_html = f'''
+    <div class="qdii-filter-bar">
+        <div class="qdii-filter-group">
+            <span class="qdii-filter-label">跟踪标的</span>
+            <button class="qdii-chip active" data-filter="track" data-value="all">全部 {len(qdii_funds)}</button>
+            <button class="qdii-chip" data-filter="track" data-value="ndx_passive">纳斯达克100 {qdii_group_counts["ndx_passive"]}</button>
+            <button class="qdii-chip" data-filter="track" data-value="spx_passive">标普500 {qdii_group_counts["spx_passive"]}</button>
+            <button class="qdii-chip" data-filter="track" data-value="us_active">美股主动 {qdii_group_counts["us_active"]}</button>
+            <button class="qdii-chip" data-filter="track" data-value="emerging">新兴市场 {qdii_group_counts["emerging"]}</button>
+            <button class="qdii-chip" data-filter="track" data-value="other">其他 {qdii_group_counts["other"]}</button>
+        </div>
+        <div class="qdii-filter-group">
+            <span class="qdii-filter-label">状态</span>
+            <button class="qdii-chip active" data-filter="buy" data-value="all">全部 {len(qdii_funds)}</button>
+            <button class="qdii-chip" data-filter="buy" data-value="open">开放申购 {buy_status_counts["open"]}</button>
+            <button class="qdii-chip" data-filter="buy" data-value="limited">限大额申购 {buy_status_counts["limited"]}</button>
+            <button class="qdii-chip" data-filter="buy" data-value="paused">暂停申购 {buy_status_counts["paused"]}</button>
+        </div>
+        <div class="qdii-search-wrap">
+            <input type="text" id="qdiiSearchInput" placeholder="搜索代码 / 名称...">
+        </div>
+    </div>
+    '''
+
+    # ============ 表格行 ============
+    def _clean_none_str(v):
+        """把 'None' / 'null' / 'nan' / 'nil' 等字符串视同空值。"""
+        if v is None:
+            return None
+        s = str(v).strip()
+        if s.lower() in ("none", "null", "nan", "nil", ""):
+            return None
+        return s
+
+    def _fmt_pct(v):
+        if v is None:
+            return '<span style="color:var(--footer-text);">--</span>'
+        # 过滤字符串 "None" / "null" 等
+        if isinstance(v, str):
+            if v.strip().lower() in ("none", "null", "nan", "nil", ""):
+                return '<span style="color:var(--footer-text);">--</span>'
+            try:
+                v = float(v)
+            except ValueError:
+                return '<span style="color:var(--footer-text);">--</span>'
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            return '<span style="color:var(--footer-text);">--</span>'
+        cls = 'gain-positive' if v > 0 else ('gain-negative' if v < 0 else '')
+        sign = '+' if v > 0 else ''
+        return f'<span class="{cls}">{sign}{v:.2f}%</span>'
+
+    def _status_badge(data):
+        bs = _clean_none_str(data.get('buy_status', '')) or ''
+        lim = _clean_none_str(data.get('buy_limit', '')) or ''
+        if '暂停' in bs or '封闭' in bs:
+            return '<span class="qdii-badge qdii-badge-paused">● 暂停申购</span>'
+        if lim and lim not in ('--', '无限额'):
+            return '<span class="qdii-badge qdii-badge-limited">● 限大额申购</span>'
+        return '<span class="qdii-badge qdii-badge-open">● 开放申购</span>'
+
+    qdii_rows_html = ""
+    for item in qdii_funds:
+        r = item["data"]
+        fund_url = f"https://fund.eastmoney.com/{r['code']}.html"
+
+        # 日累计限额
+        lim = r.get('buy_limit', '') or ''
+        if lim and lim not in ('--', '无限额', ''):
+            limit_display = f'<span class="qdii-limit-num">{lim}</span>'
+            m = re.search(r'([\d.]+)', lim)
+            limit_sort = float(m.group(1)) if m else 999999
+            if '万' in lim:
+                limit_sort *= 10000
+        elif item["buy_cat"] == "paused":
+            limit_display = '<span style="color:var(--footer-text);">--</span>'
+            limit_sort = 999999
+        else:
+            limit_display = '<span style="color:var(--footer-text);">无限额</span>'
+            limit_sort = 9999999
+
+        # 手续费
+        fee_pur = (r.get('fee_purchase', '') or '').strip()
+        if fee_pur in ('0.00%', '0%', '0.00'):
+            fee_display = '<span class="qdii-fee-free">免</span>'
+            fee_sort = 0.0
+        elif fee_pur and fee_pur not in ('--',):
+            fee_display = f'<span class="qdii-fee-num">{fee_pur}</span>'
+            m = re.search(r'([\d.]+)', fee_pur)
+            fee_sort = float(m.group(1)) if m else 999
+        else:
+            fee_display = '<span style="color:var(--footer-text);">--</span>'
+            fee_sort = 999
+
+        # 最新规模
+        scale_str = r.get('scale', '--') or '--'
+        m = re.search(r'([\d.]+)', scale_str)
+        scale_sort = float(m.group(1)) if m else -1
+
+        # 近一年
+        yg = r.get('year_gain')
+        year_sort = yg if yg is not None else -9999
+
+        # 年化跟踪误差（来自 tsdata 抓取）
+        te_str = item.get('te_str', '')
+        peer_str = item.get('peer_str', '')
+        te_num = _pct_str_to_num(te_str)
+        peer_num = _pct_str_to_num(peer_str)
+
+        if te_num is None:
+            te_display = '<span style="color:var(--footer-text);">--</span>'
+            te_sort = -1
+        else:
+            te_display = f'<span class="qdii-te-num">{te_num:.2f}%</span>'
+            te_sort = te_num
+
+        if peer_num is None:
+            peer_display = '<span style="color:var(--footer-text);">--</span>'
+            peer_sort = -1
+        else:
+            peer_display = f'<span class="qdii-peer-num">{peer_num:.2f}%</span>'
+            peer_sort = peer_num
+
+        # ★ 夏普比率（近1/2/3年纵向堆叠）
+        s1 = item.get('sharp_1y', '')
+        s2 = item.get('sharp_2y', '')
+        s3 = item.get('sharp_3y', '')
+
+        def _sharp_cell_val(v):
+            if not v or str(v).strip().lower() in ('', '--', 'none', 'null', 'nan'):
+                return '<span style="color:var(--footer-text);">--</span>'
+            return f'<span class="qdii-sharp-num">{v}</span>'
+
+        # 排序基准：优先用近1年，其次近2年
+        _s1n = _pct_str_to_num(s1) if s1 else None
+        _s2n = _pct_str_to_num(s2) if s2 else None
+        sharp_sort = _s1n if _s1n is not None else (_s2n if _s2n is not None else -999)
+
+        sharp_display = (
+            f'<div class="qdii-sharp-inner">'
+            f'<div class="qdii-sharp-row"><span class="qdii-sharp-label">近1年</span>{_sharp_cell_val(s1)}</div>'
+            f'<div class="qdii-sharp-row"><span class="qdii-sharp-label">近2年</span>{_sharp_cell_val(s2)}</div>'
+            f'<div class="qdii-sharp-row"><span class="qdii-sharp-label">近3年</span>{_sharp_cell_val(s3)}</div>'
+            f'</div>'
+        )
+
+        qdii_rows_html += f'''
+        <tr class="qdii-row" data-group="{item['group']}" data-buy="{item['buy_cat']}" data-code="{r['code']}" data-name="{r['name']}">
+            <td class="qdii-code-cell" data-val="{r['code']}"><a href="{fund_url}" target="_blank">{r['code']}</a></td>
+            <td class="qdii-name-cell" data-val="{r['name']}"><a href="{fund_url}" target="_blank" title="{r['name']}">{r['name']}</a></td>
+            <td data-val="{item['group_label']}"><span class="qdii-track-tag" data-g="{item['group']}">{item['group_label']}</span></td>
+            <td data-val="{item['buy_cat']}">{_status_badge(r)}</td>
+            <td class="qdii-limit-cell" data-val="{limit_sort}">{limit_display}</td>
+            <td class="qdii-pct-cell" data-val="{year_sort}">{_fmt_pct(yg)}</td>
+            <td class="qdii-te-cell" data-val="{te_sort}">{te_display}</td>
+            <td class="qdii-sharp-cell" data-val="{sharp_sort}">{sharp_display}</td>
+            <td class="qdii-peer-cell" data-val="{peer_sort}">{peer_display}</td>
+            <td class="qdii-fee-cell" data-val="{fee_sort}">{fee_display}</td>
+            <td class="qdii-scale-cell" data-val="{scale_sort}">{scale_str}</td>
+        </tr>
+        '''
+
+    qdii_sections_html = f'''
+    <div class="qdii-container">
+        {qdii_filter_html}
+        <div class="qdii-table-card">
+            <div class="qdii-table-wrap">
+                <table id="qdiiTable">
+                    <thead>
+                        <tr>
+                            <th style="width:68px;"  data-sort="text" data-col="0">代码 <span class="sort-icon">⇅</span></th>
+                            <th style="width:22%;"   data-sort="text" data-col="1">基金简称 <span class="sort-icon">⇅</span></th>
+                            <th style="width:9%;"    data-sort="text" data-col="2">跟踪标的 <span class="sort-icon">⇅</span></th>
+                            <th style="width:10%;"   data-sort="text" data-col="3">申购状态 <span class="sort-icon">⇅</span></th>
+                            <th style="width:11%;"   data-sort="num"  data-col="4">日累计限额 <span class="sort-icon">⇅</span></th>
+                            <th style="width:7%;"    data-sort="num"  data-col="5">近一年 <span class="sort-icon">⇅</span></th>
+                            <th style="width:9%;"    data-sort="num"  data-col="6">年化跟踪误差 <span class="sort-icon">⇅</span></th>
+                            <th style="width:11%;"   data-sort="num"  data-col="7">夏普比率 <span class="sort-icon">⇅</span></th>
+                            <th style="width:8%;"    data-sort="num"  data-col="8">同类平均 <span class="sort-icon">⇅</span></th>
+                            <th style="width:6.5%;"  data-sort="num"  data-col="9">手续费 <span class="sort-icon">⇅</span></th>
+                            <th style="width:7.5%;"  data-sort="num"  data-col="10">最新规模 <span class="sort-icon">⇅</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {qdii_rows_html}
+                        <tr id="qdiiEmptyRow" class="qdii-empty-row" style="display:none;">
+                            <td colspan="11">当前筛选条件下暂无匹配基金</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    '''
 
     # ================= 【新增】止盈三信号逻辑计算 =================
     vix_val = metrics['vix']['val']
@@ -4919,6 +5348,365 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             box-sizing: border-box;
         }}
 
+        /* ===== QDII 监控视图（表格风格） ===== */
+        .qdii-container {{
+            flex: 1;
+            overflow-y: auto;
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 16px 1.5%;
+            width: 100%;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }}
+        .qdii-filter-bar {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px 16px;
+            align-items: center;
+            background: var(--table-bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 14px;
+            box-shadow: var(--card-shadow);
+            flex-shrink: 0;
+        }}
+        .qdii-filter-group {{
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }}
+        .qdii-filter-label {{
+            font-size: 12px;
+            color: var(--footer-text);
+            font-weight: 600;
+            margin-right: 2px;
+        }}
+        .qdii-chip {{
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 3px 12px;
+            font-size: 12px;
+            color: var(--text);
+            cursor: pointer;
+            transition: all 0.18s ease;
+            font-weight: 500;
+            white-space: nowrap;
+            font-family: inherit;
+        }}
+        .qdii-chip:hover {{
+            border-color: var(--link-color);
+            color: var(--link-color);
+        }}
+        .qdii-chip.active {{
+            background: var(--link-color);
+            color: #fff;
+            border-color: var(--link-color);
+            font-weight: 600;
+        }}
+        .qdii-search-wrap {{
+            margin-left: auto;
+            flex-shrink: 0;
+        }}
+        .qdii-search-wrap input {{
+            width: 220px;
+            height: 30px;
+            padding: 4px 14px;
+            border-radius: 15px;
+            border: 1px solid var(--input-border);
+            background: var(--input-bg);
+            color: var(--text);
+            font-size: 12px;
+            outline: none;
+            box-sizing: border-box;
+        }}
+        .qdii-search-wrap input:focus {{
+            border-color: var(--link-color);
+        }}
+
+        .qdii-table-card {{
+            background: var(--table-bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            box-shadow: var(--card-shadow);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }}
+        .qdii-table-wrap {{
+            overflow-x: auto;
+            overflow-y: auto;
+            max-height: calc(100vh - 220px);
+        }}
+        #qdiiTable {{
+            width: 100%;
+            min-width: 0;             /* ★ 去掉固定 min-width，让它自适应容器 */
+            border-collapse: collapse;
+            font-size: 12px;
+            table-layout: fixed;
+        }}
+        #qdiiTable thead th {{
+            position: sticky;
+            top: 0;
+            background: var(--header-bg);
+            color: var(--footer-text);
+            font-size: 11px;
+            font-weight: 600;
+            text-align: left;
+            padding: 12px 10px;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+            letter-spacing: 0.3px;
+            z-index: 2;
+        }}
+        #qdiiTable tbody td {{
+            padding: 12px 10px;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            vertical-align: middle;
+        }}
+        #qdiiTable tbody tr {{
+            transition: background 0.15s ease;
+        }}
+        #qdiiTable tbody tr:hover {{
+            background: var(--hover-bg);
+        }}
+        #qdiiTable tbody tr:last-child td {{
+            border-bottom: none;
+        }}
+
+        .qdii-code-cell a {{
+            font-family: "SFMono-Regular", Consolas, monospace;
+            font-weight: 700;
+            color: var(--footer-text);
+            text-decoration: none;
+            font-size: 12px;
+            letter-spacing: 0.3px;
+        }}
+        .qdii-code-cell a:hover {{
+            color: var(--link-color);
+        }}
+        .qdii-name-cell a {{
+            color: var(--text);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 13px;
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }}
+        .qdii-name-cell a:hover {{
+            color: var(--link-color);
+        }}
+        .qdii-track-tag {{
+            display: inline-block;
+            padding: 3px 10px;
+            font-size: 11px;
+            border-radius: 10px;
+            font-weight: 600;
+            white-space: nowrap;
+            border: 1px solid transparent;
+        }}
+        /* ★ 跟踪标的按分类着色 */
+        .qdii-track-tag[data-g="us_active"] {{
+            background: rgba(156, 39, 176, 0.12);
+            color: #9c27b0;
+            border-color: rgba(156, 39, 176, 0.35);
+        }}
+        .qdii-track-tag[data-g="ndx_passive"] {{
+            background: rgba(26, 115, 232, 0.12);
+            color: #1a73e8;
+            border-color: rgba(26, 115, 232, 0.35);
+        }}
+        .qdii-track-tag[data-g="spx_passive"] {{
+            background: rgba(24, 128, 56, 0.12);
+            color: #188038;
+            border-color: rgba(24, 128, 56, 0.35);
+        }}
+        .qdii-track-tag[data-g="emerging"] {{
+            background: rgba(230, 126, 34, 0.12);
+            color: #e67e22;
+            border-color: rgba(230, 126, 34, 0.35);
+        }}
+        .qdii-track-tag[data-g="other"] {{
+            background: rgba(112, 117, 122, 0.12);
+            color: #70757a;
+            border-color: rgba(112, 117, 122, 0.35);
+        }}
+        [data-theme="dark"] .qdii-track-tag[data-g="us_active"] {{
+            background: rgba(206, 147, 216, 0.18); color: #ce93d8; border-color: rgba(206, 147, 216, 0.4);
+        }}
+        [data-theme="dark"] .qdii-track-tag[data-g="ndx_passive"] {{
+            background: rgba(138, 180, 248, 0.18); color: #8ab4f8; border-color: rgba(138, 180, 248, 0.4);
+        }}
+        [data-theme="dark"] .qdii-track-tag[data-g="spx_passive"] {{
+            background: rgba(129, 201, 149, 0.18); color: #81c995; border-color: rgba(129, 201, 149, 0.4);
+        }}
+        [data-theme="dark"] .qdii-track-tag[data-g="emerging"] {{
+            background: rgba(252, 183, 120, 0.18); color: #fcb778; border-color: rgba(252, 183, 120, 0.4);
+        }}
+        [data-theme="dark"] .qdii-track-tag[data-g="other"] {{
+            background: rgba(180, 180, 180, 0.18); color: #b0b0b0; border-color: rgba(180, 180, 180, 0.4);
+        }}
+
+        /* ★ 申购状态胶囊标签（与跟踪标的同风格） */
+        .qdii-badge {{
+            display: inline-block;
+            padding: 3px 10px;
+            font-size: 11px;
+            border-radius: 10px;
+            font-weight: 600;
+            white-space: nowrap;
+            border: 1px solid transparent;
+        }}
+        .qdii-badge-open {{
+            background: rgba(24, 128, 56, 0.12);
+            color: #188038;
+            border-color: rgba(24, 128, 56, 0.35);
+        }}
+        .qdii-badge-limited {{
+            background: rgba(230, 126, 34, 0.12);
+            color: #e67e22;
+            border-color: rgba(230, 126, 34, 0.35);
+        }}
+        .qdii-badge-paused {{
+            background: rgba(112, 117, 122, 0.12);
+            color: #70757a;
+            border-color: rgba(112, 117, 122, 0.35);
+        }}
+
+        /* 暗色模式下的柔和色 */
+        [data-theme="dark"] .qdii-badge-open {{
+            background: rgba(129, 201, 149, 0.18);
+            color: #81c995;
+            border-color: rgba(129, 201, 149, 0.4);
+        }}
+        [data-theme="dark"] .qdii-badge-limited {{
+            background: rgba(252, 183, 120, 0.18);
+            color: #fcb778;
+            border-color: rgba(252, 183, 120, 0.4);
+        }}
+        [data-theme="dark"] .qdii-badge-paused {{
+            background: rgba(180, 180, 180, 0.18);
+            color: #b0b0b0;
+            border-color: rgba(180, 180, 180, 0.4);
+        }}
+
+        /* ★ 年化跟踪误差单元格 */
+        .qdii-te-cell {{
+            text-align: right !important;
+        }}
+
+        .qdii-peer-cell {{
+            text-align: right !important;
+        }}
+        .qdii-peer-num {{
+            font-family: "SFMono-Regular", Consolas, monospace;
+            font-weight: 700;
+            color: #1a73e8;
+            font-size: 12px;
+        }}
+
+        /* ★ 夏普比率单元格（纵向三行：近1/2/3年） */
+        .qdii-sharp-cell {{
+            text-align: right !important;
+            padding-top: 6px !important;
+            padding-bottom: 6px !important;
+        }}
+        .qdii-sharp-inner {{
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            align-items: flex-end;
+        }}
+        .qdii-sharp-row {{
+            display: flex;
+            align-items: baseline;
+            gap: 4px;
+            font-size: 10px;
+            white-space: nowrap;
+            line-height: 1.3;
+        }}
+        .qdii-sharp-label {{
+            color: var(--footer-text);
+            font-size: 9px;
+            min-width: 26px;
+            text-align: left;
+        }}
+        .qdii-sharp-num {{
+            font-family: "SFMono-Regular", Consolas, monospace;
+            font-weight: 700;
+            color: #9c27b0;
+            font-size: 11px;
+        }}
+
+        .qdii-te-num {{
+            font-family: "SFMono-Regular", Consolas, monospace;
+            font-weight: 700;
+            color: #e67e22;
+            font-size: 12px;
+        }}
+        /* ★ 表头可排序 */
+        #qdiiTable thead th[data-sort] {{
+            cursor: pointer;
+            user-select: none;
+        }}
+        #qdiiTable thead th[data-sort]:hover {{
+            background: var(--hover-bg);
+            color: var(--link-color);
+        }}
+        #qdiiTable thead th .sort-icon {{
+            font-size: 10px;
+            color: var(--footer-text);
+            margin-left: 2px;
+            opacity: 0.7;
+        }}
+        #qdiiTable thead th.sorted {{
+            color: var(--link-color);
+        }}
+        #qdiiTable thead th.sorted .sort-icon {{
+            color: var(--link-color);
+            opacity: 1;
+        }}
+
+        /* ===== QDII 表头排序 ===== */
+        #qdiiTable thead th[data-sort] {{
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.15s ease, color 0.15s ease;
+        }}
+        #qdiiTable thead th[data-sort]:hover {{
+            background: var(--hover-bg);
+            color: var(--link-color);
+        }}
+        #qdiiTable thead th .sort-icon {{
+            display: inline-block;
+            font-size: 10px;
+            color: var(--footer-text);
+            opacity: 0.6;
+            margin-left: 2px;
+            transition: opacity 0.15s, color 0.15s;
+        }}
+        #qdiiTable thead th:hover .sort-icon {{
+            opacity: 1;
+        }}
+        #qdiiTable thead th.sorted {{
+            color: var(--link-color);
+        }}
+        #qdiiTable thead th.sorted .sort-icon {{
+            color: var(--link-color);
+            opacity: 1;
+            font-weight: bold;
+        }}
+
         @media (max-width: 1200px) {{
             .index-metrics-grid, .friend-links-grid {{ grid-template-columns: repeat(3, 1fr); }}
         }}
@@ -4944,6 +5732,19 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             .macro-metrics-grid {{ grid-template-columns: repeat(2, 1fr); gap: 8px; }}
             .index-metrics-grid, .friend-links-grid {{ grid-template-columns: repeat(2, 1fr); gap: 8px; }}
             
+            .qdii-container {{ padding: 12px 4%; gap: 16px; }}
+            .qdii-cards-grid {{ grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }}
+            .qdii-nav {{ font-size: 18px; }}
+
+            .qdii-container {{ padding: 12px 3%; gap: 10px; }}
+            .qdii-filter-bar {{ padding: 8px 10px; gap: 8px; }}
+            .qdii-search-wrap {{ margin-left: 0; width: 100%; }}
+            .qdii-search-wrap input {{ width: 100%; }}
+            .qdii-table-wrap {{ max-height: none; }}
+            #qdiiTable {{ min-width: 1020px; font-size: 11px; }}
+            #qdiiTable thead th,
+            #qdiiTable tbody td {{ padding: 8px 8px; }}
+
             .home-grid-section {{ grid-template-columns: 1fr; gap: 10px; }}
             /* ===== 移动端：申购状态栏作为统一工具栏（一行布局） ===== */
             .dca-mobile-row {{
@@ -5225,6 +6026,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
         @media (max-width: 480px) {{
             .macro-metrics-grid {{ grid-template-columns: 1fr; }}
             .index-metrics-grid, .friend-links-grid {{ grid-template-columns: 1fr; }}
+            .qdii-cards-grid {{ grid-template-columns: 1fr; }}
         }}
 
         /* ===== 指数历年回报表格/卡片样式 ===== */
@@ -5506,6 +6308,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
         <div class="nav-tabs-group">
             <button class="nav-tab-btn active" data-view="homeView">🏠 首页概览</button>
             <button class="nav-tab-btn" data-view="fundView">📊 基金量化看板</button>
+            <button class="nav-tab-btn" data-view="qdiiView">🌐 QDII 监控</button>
         </div>
         <div class="nav-right-tools">
             <button class="theme-toggle" id="themeToggle">🌓 切换主题</button>
@@ -5786,8 +6589,8 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                         <button class="cat-btn macro-filter" data-macro="other" data-sub="index">主流指数</button>
                         
                         <span class="category-title" style="margin-left: 8px;">视图:</span>
-                        <button class="cat-btn view-mode-btn active" data-view-mode="default" title="默认模式：完整列 + 持仓/持有人/国家/图表">📋 默认</button>
-                        <button class="cat-btn view-mode-btn" data-view-mode="simple" title="简洁模式：精简列 + 仅折线图">⚡ 简洁</button>
+                        <button class="cat-btn view-mode-btn" data-view-mode="default" title="详细模式：完整列 + 持仓/持有人/国家/图表">📋 详细</button>
+                        <button class="cat-btn view-mode-btn active" data-view-mode="simple" title="简洁模式：精简列 + 仅折线图">⚡ 简洁</button>
                     </div>
 
                     <div class="search-box-wrap">
@@ -5863,6 +6666,12 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                 </div>
             </div>
         </section>
+
+        <!-- 视图 3：QDII 监控 -->
+        <section id="qdiiView" class="view-pane">
+            {qdii_sections_html}
+        </section>
+
     </main>
 
     <!-- 定投独立测算弹窗 -->
@@ -7285,7 +8094,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                 }}
 
                 // 初始化：从 localStorage 恢复用户偏好
-                const saved = localStorage.getItem('fundViewMode') || 'default';
+                const saved = localStorage.getItem('fundViewMode_v2') || 'simple';
                 setViewMode(saved);
 
                 modeBtns.forEach(btn => {{
@@ -7300,6 +8109,228 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                 document.addEventListener('DOMContentLoaded', initViewModeSwitch);
             }} else {{
                 initViewModeSwitch();
+            }}
+        }})();
+
+        // ===== QDII 监控筛选 =====
+        (function() {{
+            function initQdiiFilters() {{
+                const table = document.getElementById('qdiiTable');
+                if (!table) return;
+                const rows = table.querySelectorAll('tbody tr.qdii-row');
+                const emptyRow = document.getElementById('qdiiEmptyRow');
+                let currentTrack = 'all';
+                let currentBuy = 'all';
+                let keyword = '';
+
+                function applyFilters() {{
+                    let visible = 0;
+                    rows.forEach(row => {{
+                        const grp = row.getAttribute('data-group');
+                        const buy = row.getAttribute('data-buy');
+                        const code = (row.getAttribute('data-code') || '').toLowerCase();
+                        const name = (row.getAttribute('data-name') || '').toLowerCase();
+
+                        const matchTrack = (currentTrack === 'all') || (grp === currentTrack);
+                        const matchBuy   = (currentBuy === 'all') || (buy === currentBuy);
+                        const matchKw    = !keyword || code.includes(keyword) || name.includes(keyword);
+
+                        if (matchTrack && matchBuy && matchKw) {{
+                            row.style.display = '';
+                            visible++;
+                        }} else {{
+                            row.style.display = 'none';
+                        }}
+                    }});
+                    if (emptyRow) emptyRow.style.display = visible ? 'none' : '';
+                }}
+
+                document.querySelectorAll('.qdii-chip').forEach(chip => {{
+                    chip.addEventListener('click', function() {{
+                        const filterType = this.dataset.filter;
+                        const value = this.dataset.value;
+                        document.querySelectorAll(`.qdii-chip[data-filter="${{filterType}}"]`).forEach(c => c.classList.remove('active'));
+                        this.classList.add('active');
+                        if (filterType === 'track') currentTrack = value;
+                        else if (filterType === 'buy') currentBuy = value;
+                        applyFilters();
+                    }});
+                }});
+
+                const searchInput = document.getElementById('qdiiSearchInput');
+                if (searchInput) {{
+                    searchInput.addEventListener('input', function() {{
+                        keyword = this.value.trim().toLowerCase();
+                        applyFilters();
+                    }});
+                }}
+            }}
+            if (document.readyState === 'loading') {{
+                document.addEventListener('DOMContentLoaded', initQdiiFilters);
+            }} else {{
+                initQdiiFilters();
+            }}
+        }})();
+
+        // ===== QDII 列排序 =====
+        (function() {{
+            let qdiiSortCol = -1;
+            let qdiiSortAsc = true;
+
+            window.sortQdiiTable = function(colIndex) {{
+                const table = document.getElementById('qdiiTable');
+                if (!table) return;
+                const tbody = table.querySelector('tbody');
+                const rows = Array.from(tbody.querySelectorAll('tr.qdii-row'));
+                const emptyRow = document.getElementById('qdiiEmptyRow');
+
+                // 切换排序方向
+                if (qdiiSortCol === colIndex) {{
+                    qdiiSortAsc = !qdiiSortAsc;
+                }} else {{
+                    qdiiSortCol = colIndex;
+                    qdiiSortAsc = true;
+                }}
+
+                const th = table.querySelector(`thead th:nth-child(${{colIndex + 1}})`);
+                const isNumeric = th && th.getAttribute('data-sort') === 'num';
+
+                rows.sort((a, b) => {{
+                    const cellA = a.children[colIndex];
+                    const cellB = b.children[colIndex];
+                    let va = cellA ? (cellA.getAttribute('data-val') || cellA.textContent.trim()) : '';
+                    let vb = cellB ? (cellB.getAttribute('data-val') || cellB.textContent.trim()) : '';
+
+                    if (isNumeric) {{
+                        const na = parseFloat(va);
+                        const nb = parseFloat(vb);
+                        const fa = isNaN(na) ? -1e15 : na;
+                        const fb = isNaN(nb) ? -1e15 : nb;
+                        return qdiiSortAsc ? fa - fb : fb - fa;
+                    }} else {{
+                        va = String(va);
+                        vb = String(vb);
+                        return qdiiSortAsc
+                            ? va.localeCompare(vb, 'zh-Hans-CN')
+                            : vb.localeCompare(va, 'zh-Hans-CN');
+                    }}
+                }});
+
+                const frag = document.createDocumentFragment();
+                rows.forEach(r => frag.appendChild(r));
+                if (emptyRow) frag.appendChild(emptyRow);
+                tbody.innerHTML = '';
+                tbody.appendChild(frag);
+
+                // 更新表头箭头
+                table.querySelectorAll('thead th').forEach((thEl, idx) => {{
+                    const icon = thEl.querySelector('.sort-icon');
+                    if (!icon) return;
+                    if (idx === colIndex) {{
+                        icon.textContent = qdiiSortAsc ? '▲' : '▼';
+                        thEl.classList.add('sorted');
+                    }} else {{
+                        icon.textContent = '⇅';
+                        thEl.classList.remove('sorted');
+                    }}
+                }});
+            }};
+        }})();
+
+        // ===== QDII 表格列排序 =====
+        (function() {{
+            let qdiiSortCol = -1;
+            let qdiiSortAsc = true;
+
+            function getCellValue(row, colIndex, isNumeric) {{
+                const cell = row.children[colIndex];
+                if (!cell) return isNumeric ? -1e15 : '';
+                let raw = cell.getAttribute('data-val');
+                if (raw === null || raw === undefined) {{
+                    raw = cell.textContent.trim();
+                }}
+                if (isNumeric) {{
+                    const n = parseFloat(raw);
+                    return isNaN(n) ? -1e15 : n;
+                }}
+                return String(raw);
+            }}
+
+            function sortQdiiTable(colIndex) {{
+                const table = document.getElementById('qdiiTable');
+                if (!table) return;
+                const tbody = table.querySelector('tbody');
+                const rows = Array.from(tbody.querySelectorAll('tr.qdii-row'));
+                if (rows.length < 2) return;
+
+                // 切换或重置排序方向
+                if (qdiiSortCol === colIndex) {{
+                    qdiiSortAsc = !qdiiSortAsc;
+                }} else {{
+                    qdiiSortCol = colIndex;
+                    qdiiSortAsc = true;
+                }}
+
+                const th = table.querySelector(`thead th[data-col="${{colIndex}}"]`);
+                const isNumeric = th && th.getAttribute('data-sort') === 'num';
+
+                rows.sort((a, b) => {{
+                    const va = getCellValue(a, colIndex, isNumeric);
+                    const vb = getCellValue(b, colIndex, isNumeric);
+                    if (isNumeric) {{
+                        return qdiiSortAsc ? va - vb : vb - va;
+                    }}
+                    return qdiiSortAsc
+                        ? va.localeCompare(vb, 'zh-Hans-CN')
+                        : vb.localeCompare(va, 'zh-Hans-CN');
+                }});
+
+                // 重新插入排序后的行（保留原有 display 状态，兼容筛选）
+                const frag = document.createDocumentFragment();
+                rows.forEach(r => frag.appendChild(r));
+                const emptyRow = document.getElementById('qdiiEmptyRow');
+                tbody.innerHTML = '';
+                tbody.appendChild(frag);
+                if (emptyRow) tbody.appendChild(emptyRow);
+
+                // 更新表头排序指示
+                table.querySelectorAll('thead th').forEach(thEl => {{
+                    const icon = thEl.querySelector('.sort-icon');
+                    if (!icon) return;
+                    const col = parseInt(thEl.getAttribute('data-col'), 10);
+                    if (col === colIndex) {{
+                        icon.textContent = qdiiSortAsc ? '▲' : '▼';
+                        thEl.classList.add('sorted');
+                    }} else {{
+                        icon.textContent = '⇅';
+                        thEl.classList.remove('sorted');
+                    }}
+                }});
+            }}
+
+            // 事件委托：绑定到表格，一次性生效
+            function bindQdiiSort() {{
+                const table = document.getElementById('qdiiTable');
+                if (!table) return;
+                if (table._sortBound) return;
+                table._sortBound = true;
+
+                table.addEventListener('click', function(e) {{
+                    const th = e.target.closest('thead th[data-sort]');
+                    if (!th) return;
+                    const colIndex = parseInt(th.getAttribute('data-col'), 10);
+                    if (isNaN(colIndex)) return;
+                    sortQdiiTable(colIndex);
+                }});
+            }}
+
+            // 挂到 window，兼容旧调用
+            window.sortQdiiTable = sortQdiiTable;
+
+            if (document.readyState === 'loading') {{
+                document.addEventListener('DOMContentLoaded', bindQdiiSort);
+            }} else {{
+                bindQdiiSort();
             }}
         }})();
 
@@ -7846,6 +8877,13 @@ def main():
             except Exception as e:
                 print(f"    ⚠️ {code} 年度收益抓取异常: {e}")
 
+            # ★ 新增：抓取年化跟踪误差 & 同类平均
+            te_data = {}
+            try:
+                te_data = fetch_fund_tracking_error(code)
+            except Exception as e:
+                print(f"    ⚠️ {code} 年化跟踪误差抓取异常: {e}")
+
             res.update({
                 "code": code,
                 "name": meta["name"],
@@ -7868,6 +8906,7 @@ def main():
                 "source": "天天基金",
                 "nav_data": raw_data_sorted,
                 "annual_returns": annual_returns,    # ★ 新增
+                "te_data": te_data,                  # ★ 新增
             })
             results.append(res)
             return code, meta["name"], res
@@ -7914,6 +8953,7 @@ def main():
                 "holder_struct": None, "countries_info": {"date": "--", "countries": []},
                 "source": "大宗商品行情", "nav_data": data,
                 "annual_returns": {},
+                "te_data": {},
             })
             return res, f"大宗商品 {symbol} ({meta_name})"
         except Exception as e:
@@ -7935,7 +8975,8 @@ def main():
                 "fee_purchase": "--", "fee_redemption": "--", "buy_status": "--", "buy_limit": "--",
                 "buy_limit_val": -1, "fee_total": "--", "fee_val": -1.0, "holdings": [],
                 "holder_struct": None, "countries_info": {"date": "--", "countries": []},
-                "source": "现货行情", "nav_data": data
+                "source": "现货行情", "nav_data": data,
+                "te_data": {},
             })
             return res, f"加密货币 {symbol} ({meta_name})"
         except Exception as e:
@@ -7957,7 +8998,8 @@ def main():
                 "fee_purchase": "--", "fee_redemption": "--", "buy_status": "--", "buy_limit": "--",
                 "buy_limit_val": -1, "fee_total": "--", "fee_val": -1.0, "holdings": [],
                 "holder_struct": None, "countries_info": {"date": "--", "countries": []},
-                "source": "指数行情", "nav_data": data
+                "source": "指数行情", "nav_data": data,
+                "te_data": {},
             })
             return res, f"主流指数 {symbol}"
         except Exception:
@@ -7983,6 +9025,18 @@ def main():
                 results.append(res)
                 print(f"  ✓ {label} 抓取成功, 数据量 {len(res.get('nav_data', []))}")
     # =====================================================================
+
+    # ★ 结果去重：同一代码只保留第一条（防止 PROD_FUNDS 字面重复或抓取重入）
+    _seen_res = set()
+    _deduped = []
+    for r in results:
+        c = r.get('code')
+        if c in _seen_res:
+            print(f"⚠️ 检测到重复代码 {c}，已忽略第二条")
+            continue
+        _seen_res.add(c)
+        _deduped.append(r)
+    results = _deduped
 
     if results:
         abs_path = generate_html_report(
