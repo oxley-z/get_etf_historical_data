@@ -13,6 +13,20 @@ FUNDS = {
     "014002": "浦银全球智能科技(QDII)C",
     "006555": "浦银全球智能科技(QDII)A",
     "012922": "易方达全球成长精选混合(QDII)C",
+    "000043": "嘉实美国(QDII)C",
+    "018036": "长城全球新能源(QDII)C",
+    "017731": "嘉实全球(QDII)C",
+    "021277": "广发全球(QDII)C",
+    "024239": "华夏全球科技(QDII)C",
+    "015202": "汇添富全球(QDII)C",
+    "018230": "易方达全球优质(QDII)C",
+    "017654": "创金合信全球(QDII)C",
+    "019156": "易方达全球配置(QDII)C",
+    "021662": "国服亚洲(QDII)C",
+    "018147": "建信新兴市场(QDII)C",
+    "008254": "华宝致远(QDII)C",
+    "022184": "富国全球(QDII)C",
+    "017437": "华宝纳斯达克(QDII)C",
 }
 
 
@@ -167,7 +181,6 @@ def find_latest_report(code):
 # ============================================================
 
 def get_report_content(report_id):
-
     url = (
         "https://np-cnotice-fund.eastmoney.com/"
         "api/content/ann"
@@ -179,24 +192,52 @@ def get_report_content(report_id):
         "art_code": report_id,
     }
 
-    r = session.get(
-        url,
-        params=params,
-        timeout=30,
-    )
-
+    r = session.get(url, params=params, timeout=30)
     r.raise_for_status()
 
-    data = r.json()
+    data = (r.json().get("data") or {})
 
-    if not data.get("data"):
-        return ""
+    # 1. 优先取 HTML 正文
+    content = data.get("notice_content") or ""
+    if content:
+        return content
 
-    return data["data"].get(
-        "notice_content",
-        ""
+    # 2. 调试时可以打开看看实际字段
+    # print("公告返回字段：", data.keys())
+
+    # 3. 尝试取 PDF 附件地址
+    pdf_url = (
+        data.get("attach_url")
+        or data.get("url")
+        or data.get("pdf_url")
+        or ""
     )
 
+    if not pdf_url:
+        return ""
+
+    if pdf_url.startswith("//"):
+        pdf_url = "https:" + pdf_url
+
+    try:
+        import io
+        import pdfplumber
+
+        pr = session.get(pdf_url, timeout=60)
+        pr.raise_for_status()
+
+        with pdfplumber.open(io.BytesIO(pr.content)) as pdf:
+            text = "\n".join(
+                (page.extract_text() or "")
+                for page in pdf.pages
+            )
+
+        return text
+
+    except Exception as e:
+        print(f"    PDF 正文解析失败：{e}")
+        print(f"    PDF 地址：{pdf_url}")
+        return ""
 
 # ============================================================
 # 4. 找国家配置章节
@@ -553,7 +594,7 @@ def process_fund(code):
         print(
             f"{item['country']:<10}"
             f"{item['value']:>22,.2f}"
-            f"{item['ratio']:>13.2f}"
+            f"{item['ratio']:>13.2f}%"
         )
 
 
