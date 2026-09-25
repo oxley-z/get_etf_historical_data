@@ -2420,6 +2420,90 @@ def fetch_from_eastmoney(opener, code, start_date, end_date):
 
     return all_data if all_data else None
 
+# ==============================================================================
+# 基金年度收益抓取模块（合并自 get_lishi_shouyi.py）
+# 数据源：天天基金 pingzhongdata 接口的 Data_netWorthTrend 变量
+# ==============================================================================
+ANNUAL_RETURNS_CACHE_DIR = os.path.join(CACHE_DIR, "annual_returns")
+os.makedirs(ANNUAL_RETURNS_CACHE_DIR, exist_ok=True)
+
+
+def fetch_fund_annual_returns(fund_code: str) -> dict:
+    """从天天基金 pingzhongdata 接口获取基金全部历史单位净值，计算每个自然年的年度收益率。
+
+    返回值示例：{"2020": 45.67, "2021": -12.34, ...}
+    失败时返回空字典 {}。
+    """
+    cache_file = os.path.join(ANNUAL_RETURNS_CACHE_DIR, f"{fund_code}.json")
+    if os.path.exists(cache_file):
+        try:
+            if time.time() - os.path.getmtime(cache_file) < 30 * 86400:   # 30 天有效
+                with open(cache_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+        except Exception:
+            pass
+
+    url = f"http://fund.eastmoney.com/pingzhongdata/{fund_code}.js"
+    headers = {
+        **DEFAULT_HEADERS,
+        "Referer": "http://fund.eastmoney.com/",
+    }
+
+    nav_list = None
+    for attempt in range(3):
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                text = resp.read().decode("utf-8", errors="ignore")
+            m = re.search(
+                r"Data_netWorthTrend\s*=\s*(\[\{.+?\}\]);",
+                text, re.DOTALL,
+            )
+            if m:
+                nav_list = json.loads(m.group(1))
+                break
+        except Exception:
+            time.sleep(2)
+            continue
+
+    if not nav_list:
+        return {}
+
+    # 按年份分组
+    year_data: dict = {}
+    for item in nav_list:
+        ts = item.get("x")
+        nav = item.get("y")
+        if ts is None or nav is None:
+            continue
+        try:
+            year = datetime.fromtimestamp(ts / 1000).year
+            year_data.setdefault(year, []).append((ts, nav))
+        except Exception:
+            continue
+
+    sorted_years = sorted(year_data.keys())
+    returns = {}
+    for i, year in enumerate(sorted_years):
+        records = sorted(year_data[year], key=lambda x: x[0])
+        end_nav = records[-1][1]
+        if i == 0:
+            start_nav = records[0][1]            # 首个年份：用该年第一个交易日
+        else:
+            prev_records = sorted(year_data[sorted_years[i - 1]], key=lambda x: x[0])
+            start_nav = prev_records[-1][1]      # 其余年份：用上一年最后一个交易日
+        if start_nav and start_nav != 0:
+            ret = (end_nav / start_nav - 1) * 100
+            returns[str(year)] = round(ret, 2)
+
+    try:
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump(returns, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+    return returns
+
 def _cme_html_tables(raw_html: str):
     """使用标准库提取 CME/QuikStrike 页面中的 HTML 表格。"""
     from html.parser import HTMLParser
@@ -3294,17 +3378,86 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             </div>
             """
 
+        # ===== ★ 构建年度收益 HTML（热力图 + 统计栏）=====
+        annual_returns = r.get('annual_returns', {}) or {}
+        if annual_returns:
+            sorted_years = sorted(annual_returns.keys())
+            pairs = [(yr, annual_returns[yr]) for yr in sorted_years]
+
+            # 热力图单元格
+            cells = []
+            for yr, v in pairs:
+                if v > 0:
+                    alpha = min(0.72 + abs(v) / 100.0 * 0.8, 0.98)
+                    bg = f"rgba(190, 30, 30, {alpha:.2f})"
+                elif v < 0:
+                    alpha = min(0.72 + abs(v) / 100.0 * 0.8, 0.98)
+                    bg = f"rgba(15, 110, 45, {alpha:.2f})"
+                else:
+                    bg = "rgba(110, 110, 110, 0.9)"
+                cells.append(
+                    f'<div class="fund-annual-heatmap-cell" style="background:{bg};">'
+                    f'<div class="fund-annual-year">{yr}</div>'
+                    f'<div class="fund-annual-pct">{v:+.2f}%</div>'
+                    f'</div>'
+                )
+            heatmap_html = '<div class="fund-annual-heatmap-grid">' + ''.join(cells) + '</div>'
+
+            # 统计信息
+            max_gain_year, max_gain = max(pairs, key=lambda x: x[1])
+            max_loss_year, max_loss = min(pairs, key=lambda x: x[1])
+            values = [v for _, v in pairs]
+            pos_years = sum(1 for v in values if v > 0)
+            neg_years = sum(1 for v in values if v < 0)
+            cum = 1.0
+            for v in values:
+                cum *= (1 + v / 100.0)
+            n_years = len(values)
+            if n_years > 0 and cum > 0:
+                ann_return = ((cum ** (1.0 / n_years)) - 1) * 100.0
+            else:
+                ann_return = 0.0
+            ann_color = "#d93025" if ann_return >= 0 else "#188038"
+
+            stats_html = f'''
+            <div class="fund-annual-stats-footer">
+                <div class="fund-annual-stat-item">
+                    <span class="fund-annual-stat-label">最大涨幅</span>
+                    <span class="fund-annual-stat-value" style="color:#d93025;">+{max_gain:.2f}%</span>
+                    <span class="fund-annual-stat-sub">{max_gain_year}</span>
+                </div>
+                <div class="fund-annual-stat-item">
+                    <span class="fund-annual-stat-label">最大跌幅</span>
+                    <span class="fund-annual-stat-value" style="color:#188038;">{max_loss:.2f}%</span>
+                    <span class="fund-annual-stat-sub">{max_loss_year}</span>
+                </div>
+                <div class="fund-annual-stat-item"><span class="fund-annual-stat-label">正收益年份</span><span class="fund-annual-stat-value">{pos_years} 年</span></div>
+                <div class="fund-annual-stat-item"><span class="fund-annual-stat-label">负收益年份</span><span class="fund-annual-stat-value">{neg_years} 年</span></div>
+                <div class="fund-annual-stat-item"><span class="fund-annual-stat-label">年化收益</span><span class="fund-annual-stat-value" style="color:{ann_color};">{ann_return:+.2f}%</span></div>
+            </div>
+            '''
+
+            annual_returns_html = heatmap_html + stats_html
+        else:
+            annual_returns_html = '<div class="chart-history-empty">暂无年度收益数据</div>'
+
         chart_html = f"""
         <div class="chart-container" id="chart-container-{r['code']}">
-            <div class="chart-controls">
-                <button class="period-btn active" data-period="week" data-code="{r['code']}">近一周</button>
-                <button class="period-btn" data-period="month" data-code="{r['code']}">近一月</button>
-                <button class="period-btn" data-period="quarter" data-code="{r['code']}">近三月</button>
-                <button class="period-btn" data-period="half" data-code="{r['code']}">近半年</button>
-                <button class="period-btn" data-period="year" data-code="{r['code']}">近一年</button>
-                <button class="period-btn" data-period="ytd" data-code="{r['code']}">今年内</button>
+            <div class="chart-history-panel">
+                <div class="chart-history-header">📅 年度收益率</div>
+                {annual_returns_html}
             </div>
-            <canvas id="chart-{r['code']}" width="400" height="200"></canvas>
+            <div class="chart-line-panel">
+                <div class="chart-controls">
+                    <button class="period-btn active" data-period="week" data-code="{r['code']}">近一周</button>
+                    <button class="period-btn" data-period="month" data-code="{r['code']}">近一月</button>
+                    <button class="period-btn" data-period="quarter" data-code="{r['code']}">近三月</button>
+                    <button class="period-btn" data-period="half" data-code="{r['code']}">近半年</button>
+                    <button class="period-btn" data-period="year" data-code="{r['code']}">近一年</button>
+                    <button class="period-btn" data-period="ytd" data-code="{r['code']}">今年内</button>
+                </div>
+                <canvas id="chart-{r['code']}" width="400" height="200"></canvas>
+            </div>
         </div>
         """
 
@@ -3457,15 +3610,20 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
 
             max_abs_pct = max([abs(r.get("pct", 0)) for r in yearly_data] + [1.0])
 
-            # ===== 计算统计信息 =====
-            returns = [r.get("pct", 0) for r in yearly_data]
-            max_gain = max(returns) if returns else 0.0
-            max_loss = min(returns) if returns else 0.0
-            pos_years = sum(1 for r in returns if r > 0)
-            neg_years = sum(1 for r in returns if r < 0)
+            # ===== 计算统计信息（含最大涨跌年份） =====
+            pairs = [(r.get("year", ""), r.get("pct", 0)) for r in yearly_data]
+            if pairs:
+                max_gain_year, max_gain = max(pairs, key=lambda x: x[1])
+                max_loss_year, max_loss = min(pairs, key=lambda x: x[1])
+            else:
+                max_gain_year = max_loss_year = ""
+                max_gain = max_loss = 0.0
+            returns = [v for _, v in pairs]
+            pos_years = sum(1 for v in returns if v > 0)
+            neg_years = sum(1 for v in returns if v < 0)
             cum = 1.0
-            for r in returns:
-                cum *= (1 + r / 100.0)
+            for v in returns:
+                cum *= (1 + v / 100.0)
             n_years = len(returns)
             if n_years > 0 and cum > 0:
                 ann_return = ((cum ** (1.0 / n_years)) - 1) * 100.0
@@ -3475,8 +3633,16 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
 
             stats_html = f'''
             <div class="annual-stats-footer">
-                <div class="annual-stat-item"><span class="annual-stat-label">最大涨幅</span><span class="annual-stat-value" style="color:#d93025;">+{max_gain:.2f}%</span></div>
-                <div class="annual-stat-item"><span class="annual-stat-label">最大跌幅</span><span class="annual-stat-value" style="color:#188038;">{max_loss:.2f}%</span></div>
+                <div class="annual-stat-item">
+                    <span class="annual-stat-label">最大涨幅</span>
+                    <span class="annual-stat-value" style="color:#d93025;">+{max_gain:.2f}%</span>
+                    <span class="annual-stat-sub">{max_gain_year}</span>
+                </div>
+                <div class="annual-stat-item">
+                    <span class="annual-stat-label">最大跌幅</span>
+                    <span class="annual-stat-value" style="color:#188038;">{max_loss:.2f}%</span>
+                    <span class="annual-stat-sub">{max_loss_year}</span>
+                </div>
                 <div class="annual-stat-item"><span class="annual-stat-label">正收益年份</span><span class="annual-stat-value">{pos_years} 年</span></div>
                 <div class="annual-stat-item"><span class="annual-stat-label">负收益年份</span><span class="annual-stat-value">{neg_years} 年</span></div>
                 <div class="annual-stat-item"><span class="annual-stat-label">年化收益率</span><span class="annual-stat-value" style="color:{ann_color};">{ann_return:+.2f}%</span></div>
@@ -4486,16 +4652,135 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             padding: 10px;
             box-shadow: var(--card-shadow);
             display: flex;
-            flex-direction: column;
+            flex-direction: row;
+            gap: 8px;
             min-height: 200px;
         }}
+        /* ★ 新增：左侧年度收益面板 */
+        .chart-history-panel {{
+            flex: 1 1 50%;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px dashed var(--border);
+            padding-right: 8px;
+            overflow: hidden;
+        }}
+        .chart-history-header {{
+            font-size: 12px;
+            font-weight: bold;
+            color: var(--header-text);
+            margin-bottom: 6px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }}
+
+        /* ★ 年度收益率热力图网格 */
+        .fund-annual-heatmap-grid {{
+            flex: 1;
+            overflow-y: auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+            gap: 6px;
+            align-content: start;
+            min-height: 0;
+            padding: 2px;
+        }}
+        .fund-annual-heatmap-cell {{
+            border-radius: 4px;
+            padding: 6px 2px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            cursor: default;
+            transition: transform 0.15s ease, outline 0.15s ease;
+            position: relative;
+            z-index: 1;
+        }}
+        .fund-annual-heatmap-cell:hover {{
+            transform: scale(1.10);
+            outline: 2px solid var(--link-color);
+            outline-offset: 1px;
+            z-index: 5;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }}
+        .fund-annual-year {{
+            font-size: 10px;
+            font-weight: 600;
+            color: #ffffff;
+            line-height: 1.1;
+        }}
+        .fund-annual-pct {{
+            font-size: 12px;
+            font-weight: 800;
+            color: #ffffff;
+            letter-spacing: 0.2px;
+            line-height: 1.1;
+        }}
+        .chart-history-empty {{
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--footer-text);
+            font-size: 11px;
+        }}
+        /* ★ 新增：右侧折线图面板 */
+        .chart-line-panel {{
+            flex: 1 1 50%;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+        }}
         .chart-controls {{ display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }}
-        .chart-controls button {{ background: var(--btn-bg); border: 1px solid var(--border); border-radius: 12px; padding: 2px 10px; font-size: 11px; cursor: pointer; color: var(--btn-text); }}
+        .chart-controls button {{ background: var(--btn-bg); border: 1px solid var(--border); border-radius: 12px; padding: 2px 8px; font-size: 10px; cursor: pointer; color: var(--btn-text); }}
         .chart-controls button.active {{ background: var(--btn-active-bg); color: var(--btn-active-text); }}
-        .chart-container canvas {{ width: 100% !important; height: auto !important; max-height: 200px; flex: 1; }}
+        .chart-line-panel canvas {{ width: 100% !important; height: auto !important; max-height: 200px; flex: 1; }}
         
         .footer-note {{ font-size: 11px; color: var(--footer-text); background: var(--footer-bg); padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }}
         
+        /* ★ 基金年度收益统计栏 */
+        .fund-annual-stats-footer {{
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 4px;
+            padding: 8px 2px 2px 2px;
+            margin-top: 6px;
+            border-top: 1px solid var(--border);
+            flex-shrink: 0;
+        }}
+        .fund-annual-stat-item {{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1px;
+            min-width: 46px;
+        }}
+        .fund-annual-stat-label {{
+            color: var(--footer-text);
+            font-size: 9px;
+            white-space: nowrap;
+        }}
+        .fund-annual-stat-value {{
+            font-weight: 700;
+            font-family: "SFMono-Regular", Consolas, monospace;
+            font-size: 11px;
+            color: var(--text);
+            line-height: 1.1;
+        }}
+        .fund-annual-stat-sub {{
+            font-size: 9px;
+            color: var(--footer-text);
+            font-weight: 500;
+            line-height: 1;
+        }}
+
         /* 定投回测模态弹窗 */
         .modal-overlay {{
             position: fixed;
@@ -5051,6 +5336,13 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             font-size: 13px;
             color: var(--text);
         }}
+        .annual-stat-sub {{
+            font-size: 10px;
+            color: var(--footer-text);
+            font-weight: 500;
+            line-height: 1;
+            margin-top: 1px;
+        }}
         .annual-mode-content {{
             padding-top: 4px;
         }}
@@ -5202,7 +5494,6 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             flex: 1 1 100% !important;
             min-height: 260px;
         }}
-
 
     </style>
 </head>
@@ -7548,6 +7839,13 @@ def main():
         is_qdii = code in US_ACTIVE_CODES or code in NDX_PASSIVE_CODES or code in SPX_PASSIVE_CODES
         res = analyze_fund_metrics(raw_data_sorted, args.end, cutoff_date, is_qdii=is_qdii)
         if res:
+            # ★ 新增：抓取并计算年度收益率
+            annual_returns = {}
+            try:
+                annual_returns = fetch_fund_annual_returns(code)
+            except Exception as e:
+                print(f"    ⚠️ {code} 年度收益抓取异常: {e}")
+
             res.update({
                 "code": code,
                 "name": meta["name"],
@@ -7568,7 +7866,8 @@ def main():
                 "holder_struct": meta.get("holder_struct", None),
                 "countries_info": meta.get("countries_info", {"date": "--", "countries": []}),
                 "source": "天天基金",
-                "nav_data": raw_data_sorted
+                "nav_data": raw_data_sorted,
+                "annual_returns": annual_returns,    # ★ 新增
             })
             results.append(res)
             return code, meta["name"], res
@@ -7613,7 +7912,8 @@ def main():
                 "fee_purchase": "--", "fee_redemption": "--", "buy_status": "--", "buy_limit": "--",
                 "buy_limit_val": -1, "fee_total": "--", "fee_val": -1.0, "holdings": [],
                 "holder_struct": None, "countries_info": {"date": "--", "countries": []},
-                "source": "大宗商品行情", "nav_data": data
+                "source": "大宗商品行情", "nav_data": data,
+                "annual_returns": {},
             })
             return res, f"大宗商品 {symbol} ({meta_name})"
         except Exception as e:
