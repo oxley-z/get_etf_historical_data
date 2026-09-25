@@ -10,6 +10,8 @@ import urllib.request
 import urllib.parse
 import akshare as ak
 import pandas as pd
+import requests
+from requests.adapters import HTTPAdapter
 from datetime import datetime, timedelta, timezone
 from calendar import monthrange
 from http.cookiejar import CookieJar
@@ -116,7 +118,6 @@ SPX_PASSIVE_CODES = {
     "161128"
 }
 
-# 分级 C 份额到主代码/A 份额映射
 # 分级 C 份额到主代码/A 份额映射（补全新增的美股/标普/行业子份额映射）
 MAIN_CODE_MAP = {
     "014002": "006555",
@@ -185,15 +186,51 @@ os.makedirs(COUNTRY_CACHE_DIR, exist_ok=True)
 
 _THREAD_LOCAL = threading.local()
 
+# ================= requests.Session 包装器：复用连接，兼容 urllib 风格 =================
+class _RespWrapper:
+    """把 requests.Response 包装成 urllib 风格的响应对象。"""
+    def __init__(self, resp):
+        self._r = resp
+    def read(self, amt=None):
+        return self._r.content if amt is None else self._r.raw.read(amt)
+    def __enter__(self):
+        return self
+    def __exit__(self, *args):
+        pass
+    def __getattr__(self, name):
+        return getattr(self._r, name)
+
+
+class RequestsOpener:
+    """urllib opener 的 requests 版替代品，复用连接池，大幅降低 TLS 握手开销。"""
+    def __init__(self):
+        self.session = requests.Session()
+        adapter = HTTPAdapter(
+            pool_connections=10,
+            pool_maxsize=20,
+            max_retries=0,
+            pool_block=False,
+        )
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
+        # 强制不使用环境代理
+        self.session.trust_env = False
+
+    def open(self, req, timeout=5, **kwargs):
+        url = req.full_url if hasattr(req, "full_url") else req
+        headers = dict(req.headers) if hasattr(req, "headers") else {}
+        r = self.session.get(url, headers=headers, timeout=timeout, stream=False)
+        return _RespWrapper(r)
+
+
 def get_thread_opener():
     if not hasattr(_THREAD_LOCAL, "opener"):
         _THREAD_LOCAL.opener = get_direct_opener()
     return _THREAD_LOCAL.opener
 
 def get_direct_opener():
-    cj = CookieJar()
-    proxy_handler = urllib.request.ProxyHandler({})
-    return urllib.request.build_opener(proxy_handler, urllib.request.HTTPCookieProcessor(cj))
+    return RequestsOpener()
+# =======================================================================================
 
 # ==============================================================================
 # 蛋卷指数估值获取模块 (融合 Guchacha 兜底引擎)
@@ -650,47 +687,41 @@ def fetch_index_annual_data():
         }
     ]
 
-    # ---------- 逐个获取并计算年度数据 ----------
-    for item in targets:
+    # ---------- 并行获取并计算年度数据 ----------
+    def _fetch_one_target(item):
         name = item["name"]
         try:
-            print(f"    → 拉取 {name} ...", end=" ")
             records = item["fetcher"]()
             if not records:
-                print("❌ 无数据")
-                continue
-
+                return name, None
             if item.get("precomputed"):
-                # SOX 等直接返回 yearly_data 的接口，跳过年度计算
                 yearly_data = records
             else:
                 stats = _calculate_annual_metrics(records, start_year=2000)
                 if not stats:
-                    print("❌ 年度数据为空")
-                    continue
-                yearly_data = []
-                for row in stats:
-                    yearly_data.append({
-                        "year": int(row["year"]),
-                        "close": round(row["end_point"], 2),
-                        "pct": round(row["annual_return"], 2)
-                    })
-
+                    return name, None
+                yearly_data = [
+                    {"year": int(row["year"]),
+                     "close": round(row["end_point"], 2),
+                     "pct":   round(row["annual_return"], 2)}
+                    for row in stats
+                ]
             if not yearly_data:
-                print("❌ 年度数据为空")
-                continue
-
-            result[name] = {
-                "ticker": item["ticker"],
-                "data": yearly_data
-            }
-            print(f"✅ 完成 ({len(yearly_data)} 个年度)")
-
+                return name, None
+            return name, {"ticker": item["ticker"], "data": yearly_data}
         except Exception as e:
-            print(f"❌ 异常: {e}")
-            continue
+            print(f"    ❌ {name} 异常: {e}")
+            return name, None
 
-        print(f"📊 指数年度数据最终获取成功: {len(result)}/{len(ANNUAL_INDEX_TARGETS)}")
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        futures = [executor.submit(_fetch_one_target, item) for item in targets]
+        for fut in as_completed(futures):
+            name, payload = fut.result()
+            if payload:
+                result[name] = payload
+                print(f"    ✅ {name}: {len(payload['data'])} 个年度")
+
+    print(f"📊 指数年度数据最终获取成功: {len(result)}/{len(ANNUAL_INDEX_TARGETS)}")
 
     # ===== 2. 抓取成功后写入本地缓存 =====
     if result:
@@ -706,7 +737,7 @@ def fetch_index_annual_data():
 # ==============================================================================
 # 多源宏观指标获取模块
 # ==============================================================================
-def fetch_from_yahoo_finance(opener, symbol: str, timeout: int = 5) -> float:
+def fetch_from_yahoo_finance(opener, symbol: str, timeout: int = 4) -> float:
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(symbol)}?interval=1d&range=5d"
     req = urllib.request.Request(url, headers=DEFAULT_HEADERS)
     with opener.open(req, timeout=timeout) as resp:
@@ -799,7 +830,7 @@ def get_cnn_fear_greed(opener) -> tuple[float, str, str, str]:
     }
     try:
         req_web = urllib.request.Request(cnn_page_url, headers=headers_web)
-        with opener.open(req_web, timeout=8) as resp:
+        with opener.open(req_web, timeout=5) as resp:
             html_text = resp.read().decode("utf-8", errors="ignore")
 
         score_match = re.search(r'"score"\s*:\s*([0-9]+(?:\.[0-9]+)?)', html_text)
@@ -829,7 +860,7 @@ def get_usd_cny(opener) -> tuple[float, str, str]:
     try:
         url = "https://hq.sinajs.cn/list=fx_susdcny"
         req = urllib.request.Request(url, headers={**DEFAULT_HEADERS, "Referer": "https://finance.sina.com.cn/"})
-        with opener.open(req, timeout=4) as resp:
+        with opener.open(req, timeout=3) as resp:
             content = resp.read().decode("gbk", errors="ignore")
             match = re.search(r'"([^"]+)"', content)
             if match:
@@ -842,7 +873,7 @@ def get_usd_cny(opener) -> tuple[float, str, str]:
     try:
         url = "https://open.er-api.com/v6/latest/USD"
         req = urllib.request.Request(url, headers=DEFAULT_HEADERS)
-        with opener.open(req, timeout=5) as resp:
+        with opener.open(req, timeout=4) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             rate = data.get("rates", {}).get("CNY")
             if rate is not None and float(rate) > 0:
@@ -1024,102 +1055,128 @@ def get_copper_lme(opener) -> tuple[float, str, str]:
     return 0.0, "获取失败", "https://cn.investing.com/commodities/copper"
 
 def get_btc_price(opener) -> tuple[float, str, str]:
-    """获取比特币最新现货价格。
-    优先 CoinGecko（GitHub Actions 友好），其次 Coinbase，最后国内镜像（仅本地可用）。
-    """
+    """获取比特币最新现货价格（4 个源并行竞速，谁先返回用谁）。"""
+    sources = [
+        (
+            "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd",
+            {**DEFAULT_HEADERS, "Accept": "application/json"},
+            5,
+            lambda j: (float(j.get("bitcoin", {}).get("usd", 0)),
+                       "CoinGecko (BTC/USD)", "https://www.coingecko.com/zh/coins/bitcoin"),
+        ),
+        (
+            "https://api.coinbase.com/v2/prices/BTC-USD/spot",
+            DEFAULT_HEADERS,
+            5,
+            lambda j: (float(j.get("data", {}).get("amount", 0)),
+                       "Coinbase (BTC/USD)", "https://www.coinbase.com/price/bitcoin"),
+        ),
+        (
+            "https://bian.4url.cn/api/v3/ticker/price?symbol=BTCUSDT",
+            {**DEFAULT_HEADERS, "Accept": "application/json"},
+            4,
+            lambda j: (float(j.get("price", 0)),
+                       "Binance镜像 (BTC/USDT)", "https://www.binance.com/zh-CN/trade/BTC_USDT"),
+        ),
+        (
+            "https://okx.4url.cn/api/v5/market/ticker?instId=BTC-USDT",
+            DEFAULT_HEADERS,
+            4,
+            lambda j: (float((j.get("data") or [{}])[0].get("last", 0)),
+                       "OKX镜像 (BTC/USDT)", "https://www.okx.com/zh-hans/trade-spot/btc-usdt"),
+        ),
+    ]
 
-    # ===== 数据源 1：CoinGecko（GitHub Actions / 本地 均可用）=====
-    try:
-        url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
-        req = urllib.request.Request(url, headers={
-            **DEFAULT_HEADERS,
-            "Accept": "application/json",
-        })
-        with opener.open(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            v = float(data.get("bitcoin", {}).get("usd", 0))
-            if v > 0:
-                return round(v, 2), "CoinGecko (BTC/USD)", "https://www.coingecko.com/zh/coins/bitcoin"
-    except Exception:
-        pass
-
-    # ===== 数据源 2：Coinbase 现货（GitHub Actions 可用）=====
-    try:
-        url = "https://api.coinbase.com/v2/prices/BTC-USD/spot"
-        req = urllib.request.Request(url, headers=DEFAULT_HEADERS)
-        with opener.open(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            v = float(data.get("data", {}).get("amount", 0))
-            if v > 0:
-                return round(v, 2), "Coinbase (BTC/USD)", "https://www.coinbase.com/price/bitcoin"
-    except Exception:
-        pass
-
-    # ===== 数据源 3：币安镜像（仅国内本地环境有效，GitHub Actions 大概率失败）=====
-    try:
-        url = "https://bian.4url.cn/api/v3/ticker/price?symbol=BTCUSDT"
-        req = urllib.request.Request(url, headers={
-            **DEFAULT_HEADERS,
-            "Accept": "application/json",
-        })
-        with opener.open(req, timeout=8) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            price = data.get("price")
-            if price:
-                v = float(price)
+    def _try(url, headers, timeout, parser):
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            with get_thread_opener().open(req, timeout=timeout) as resp:
+                j = json.loads(resp.read().decode("utf-8"))
+                v, src, u = parser(j)
                 if v > 0:
-                    return round(v, 2), "Binance镜像 (BTC/USDT)", "https://www.binance.com/zh-CN/trade/BTC_USDT"
-    except Exception:
-        pass
+                    return round(v, 2), src, u
+        except Exception:
+            pass
+        return None
 
-    # ===== 数据源 4：OKX 镜像（同上，仅国内本地）=====
-    try:
-        url = "https://okx.4url.cn/api/v5/market/ticker?instId=BTC-USDT"
-        req = urllib.request.Request(url, headers=DEFAULT_HEADERS)
-        with opener.open(req, timeout=8) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            rows = data.get("data", [])
-            if rows:
-                v = float(rows[0].get("last", 0))
-                if v > 0:
-                    return round(v, 2), "OKX镜像 (BTC/USDT)", "https://www.okx.com/zh-hans/trade-spot/btc-usdt"
-    except Exception:
-        pass
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        futs = [ex.submit(_try, u, h, t, p) for u, h, t, p in sources]
+        for f in as_completed(futs, timeout=6):
+            r = f.result()
+            if r:
+                # 取消其余任务
+                for x in futs:
+                    x.cancel()
+                return r
 
     return 0.0, "获取失败", "https://www.tradingview.com/symbols/BTCUSD/"
 
 def fetch_home_market_metrics(opener):
+    """并行抓取所有宏观指标（11 个任务并发），总耗时 ≈ 最慢的单个指标。"""
     now_str = now_beijing().strftime("%Y-%m-%d %H:%M:%S")
-    fng_score, fng_rating, fng_src, fng_url = get_cnn_fear_greed(opener)
-    vix_val, vix_src, vix_url = get_vix(opener)
+
+    # ============ 并行抓取所有宏观指标 ============
+    # 每个任务独立线程内创建自己的 opener（requests.Session 不是线程安全的）
+    indicator_specs = [
+        ("fng",           get_cnn_fear_greed,  (0.0, "暂无数据", "获取失败", "#")),
+        ("vix",           get_vix,             (0.0, "获取失败", "#")),
+        ("usdcny",        get_usd_cny,         (0.0, "获取失败", "#")),
+        ("vxn",           get_vxn,             (0.0, "获取失败", "#")),
+        ("skew",          get_skew,            (0.0, "获取失败", "#")),
+        ("brent",         get_brent_oil,       (0.0, "获取失败", "#")),
+        ("gold_london",   get_gold_london,     (0.0, "获取失败", "#")),
+        ("gold_shfe",     get_gold_shfe,       (0.0, "获取失败", "#")),
+        ("silver_london", get_silver_london,   (0.0, "获取失败", "#")),
+        ("copper_lme",    get_copper_lme,      (0.0, "获取失败", "#")),
+        ("btc",           get_btc_price,       (0.0, "获取失败", "#")),
+    ]
+    default_map = {k: d for k, _, d in indicator_specs}
+
+    def _run(fn, default):
+        try:
+            return fn(get_thread_opener())
+        except Exception as e:
+            print(f"    ⚠️ 宏观指标 {fn.__name__} 异常: {e}")
+            return default
+
+    out = {}
+    with ThreadPoolExecutor(max_workers=len(indicator_specs)) as ex:
+        future_map = {
+            ex.submit(_run, fn, default): key
+            for key, fn, default in indicator_specs
+        }
+        for fut in as_completed(future_map):
+            key = future_map[fut]
+            try:
+                out[key] = fut.result(timeout=60)     # 兜底 60s 单任务上限
+            except Exception as e:
+                print(f"    ⚠️ 宏观指标 {key} 超时/异常: {e}")
+                out[key] = default_map[key]
+
+    # ============ 解包结果 ============
+    fng_score, fng_rating, fng_src, fng_url       = out["fng"]
+    vix_val, vix_src, vix_url                     = out["vix"]
+    usdcny_val, usdcny_src, usdcny_url            = out["usdcny"]
+    vxn_val, vxn_src, vxn_url                     = out["vxn"]
+    skew_val, skew_src, skew_url                  = out["skew"]
+    brent_val, brent_src, brent_url               = out["brent"]
+    gold_val, gold_src, gold_url                  = out["gold_london"]
+    shfe_gold_val, shfe_gold_src, shfe_gold_url   = out["gold_shfe"]
+    silver_val, silver_src, silver_url            = out["silver_london"]
+    copper_val, copper_src, copper_url            = out["copper_lme"]
+    btc_val, btc_src, btc_url                     = out["btc"]
+    # ===============================================
+
+    # ============ 以下为原有状态计算逻辑，不变 ============
     vix_status = "数据暂缺" if vix_val <= 0 else ("极度恐慌" if vix_val >= 30 else ("警惕波动" if vix_val >= 20 else ("温和震荡" if vix_val >= 15 else "平稳低波")))
-
-    usdcny_val, usdcny_src, usdcny_url = get_usd_cny(opener)
     usdcny_status = "数据暂缺" if usdcny_val <= 0 else ("美元走强" if usdcny_val >= 7.30 else ("区间震荡" if usdcny_val >= 7.15 else "人民币升值"))
-
-    vxn_val, vxn_src, vxn_url = get_vxn(opener)
     vxn_status = "数据暂缺" if vxn_val <= 0 else ("科技股极恐" if vxn_val >= 30 else ("杀估值抛压" if vxn_val >= 22 else "波动平缓"))
-
-    skew_val, skew_src, skew_url = get_skew(opener)
     skew_status = "数据暂缺" if skew_val <= 0 else ("尾部黑天鹅预警" if skew_val >= 140 else ("风险积聚" if skew_val >= 132 else "常态平稳"))
-
-    brent_val, brent_src, brent_url = get_brent_oil(opener)
     brent_status = "数据暂缺" if brent_val <= 0 else ("极度高企" if brent_val >= 95 else ("通胀溢价" if brent_val >= 80 else ("温和中性" if brent_val >= 65 else "需求疲软")))
-
-    gold_val, gold_src, gold_url = get_gold_london(opener)
     gold_status = "数据暂缺" if gold_val <= 0 else ("极度高企" if gold_val >= 2500 else ("高位震荡" if gold_val >= 2000 else ("温和中性" if gold_val >= 1500 else "低位盘整")))
-
-    shfe_gold_val, shfe_gold_src, shfe_gold_url = get_gold_shfe(opener)
     shfe_gold_status = "数据暂缺" if shfe_gold_val <= 0 else ("极度高企" if shfe_gold_val >= 700 else ("高位震荡" if shfe_gold_val >= 600 else ("温和中性" if shfe_gold_val >= 500 else "低位盘整")))
-
-    silver_val, silver_src, silver_url = get_silver_london(opener)
     silver_status = "数据暂缺" if silver_val <= 0 else ("极度高企" if silver_val >= 35 else ("高位震荡" if silver_val >= 28 else ("温和中性" if silver_val >= 20 else "低位盘整")))
-
-    copper_val, copper_src, copper_url = get_copper_lme(opener)
     copper_status = "数据暂缺" if copper_val <= 0 else ("极度高企" if copper_val >= 10000 else ("高位震荡" if copper_val >= 8500 else ("温和中性" if copper_val >= 7000 else "需求疲软")))
-
-    # 【新增】比特币现货价格
-    btc_val, btc_src, btc_url = get_btc_price(opener)
     btc_status = "数据暂缺" if btc_val <= 0 else ("极度高企" if btc_val >= 100000 else ("高位震荡" if btc_val >= 70000 else ("温和中性" if btc_val >= 40000 else "低位盘整")))
 
     return {
@@ -1173,13 +1230,13 @@ def fetch_fund_country_distribution(opener, code, is_qdii=False):
             if candidates:
                 candidates.sort(key=lambda x: x["date"], reverse=True)
                 
-                for cand in candidates[:3]:
+                for cand in candidates[:2]:              # ★ 原 3
                     ann_url = f"https://np-cnotice-fund.eastmoney.com/api/content/ann?client_source=web_fund&show_all=1&art_code={cand['id']}"
                     req_ann = urllib.request.Request(ann_url, headers={
                         **DEFAULT_HEADERS,
                         "Referer": "https://fund.eastmoney.com/"
                     })
-                    with opener.open(req_ann, timeout=15) as resp:
+                    with opener.open(req_ann, timeout=8) as resp:   # ★ 原 15
                         data_ann = json.loads(resp.read().decode("utf-8"))
 
                     content = (data_ann.get("data") or {}).get("notice_content", "")
@@ -1427,7 +1484,7 @@ def fetch_holdings(opener, code):
 
     try:
         current_year = datetime.now().year
-        years = [str(current_year - i) for i in range(3)]
+        years = [str(current_year - i) for i in range(2)]   # ★ 原 3，减少 1/3 请求
         all_dfs = []
         for year in years:
             try:
@@ -1891,9 +1948,10 @@ def fetch_from_eastmoney(opener, code, start_date, end_date):
 
     all_data = []
     page_index = 1
-    page_size = 20
+    page_size = 100          # ★ 原 20，单次拉取量提升 5 倍
+    max_pages = 30           # ★ 安全上限，防止死循环
 
-    while True:
+    while page_index <= max_pages:
         base_url = "https://api.fund.eastmoney.com/f10/lsjz"
         params = {
             "callback": "jQuery11230_lsjz", "fundCode": code, "pageIndex": page_index, "pageSize": page_size,
@@ -1903,7 +1961,7 @@ def fetch_from_eastmoney(opener, code, start_date, end_date):
         headers = {"User-Agent": DEFAULT_HEADERS["User-Agent"], "Referer": f"https://fundf10.eastmoney.com/jjjz_{code}.html"}
         try:
             req = urllib.request.Request(url, headers=headers)
-            with opener.open(req, timeout=5) as resp:
+            with opener.open(req, timeout=8) as resp:
                 html = resp.read().decode('utf-8')
                 match = re.search(r'jQuery11230_lsjz\((.*)\)', html)
                 if match:
@@ -2043,26 +2101,45 @@ def fetch_cme_fedwatch(opener) -> dict:
         "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
     }
 
-    raw_html = ""
-    for url in iframe_urls:
+    # ============ 并行竞速 2 个 QuikStrike iframe URL ============
+    def _try_iframe(url):
         try:
             req = urllib.request.Request(url, headers=headers)
-            with opener.open(req, timeout=6) as resp:
-                candidate = resp.read().decode('utf-8', errors='ignore')
+            with get_thread_opener().open(req, timeout=4) as resp:   # 5→4
+                return resp.read().decode('utf-8', errors='ignore')
+        except Exception:
+            return ""
+
+    raw_html = ""
+    best_len = 0
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        futures = [ex.submit(_try_iframe, url) for url in iframe_urls]
+        for fut in as_completed(futures, timeout=6):
+            try:
+                candidate = fut.result()
+            except Exception:
+                continue
+            if not candidate:
+                continue
+            # 优先命中"好"页面
             if len(candidate) > 5000 and (
                 'MEETING INFORMATION' in candidate.upper()
                 or 'TARGET RATE' in candidate.upper()
                 or 'FedWatch' in candidate
             ):
                 raw_html = candidate
+                # 取消另一个还没回来的请求
+                for f in futures:
+                    f.cancel()
                 break
-            if len(candidate) > len(raw_html):
+            # 否则保留最长的备选
+            if len(candidate) > best_len:
+                best_len = len(candidate)
                 raw_html = candidate
-        except Exception:
-            continue
 
     if not raw_html:
         return result
+    # ============================================================
 
     try:
         tables = _cme_html_tables(raw_html)
@@ -6913,6 +6990,17 @@ def fetch_index_data(symbol, start_date, end_date):
         return data
     return None
 
+def _test_macro_metrics():
+    import time
+    o = get_direct_opener()
+    t0 = time.time()
+    m = fetch_home_market_metrics(o)
+    print(f"\n===== 总耗时: {time.time() - t0:.2f}s =====\n")
+    for k, v in m.items():
+        val = v.get("val", v.get("score"))
+        src = v.get("source", "")
+        print(f"{k:15s} {str(val):>12s}  [{src}]")
+
 def main():
     today_str = now_beijing().strftime("%Y-%m-%d")
     default_start = "2025-01-01"
@@ -6949,20 +7037,63 @@ def main():
         print(f"👉 正在抓取全量 {len(target_funds)} 只基金与全品类宏观大类资产...")
         print("=======================================================\n")
 
-    opener = get_direct_opener()
     print(f"统计区间: {args.start} 至 {args.end}")
-    
-    print("⏳ 正在抓取核心宏观指标 (CNN/VIX/汇率/大宗商品)...")
-    home_metrics = fetch_home_market_metrics(opener)
+    print("⏳ 正在并行抓取：核心宏观指标 / 指数估值 / 指数年度数据 / 美联储利率观测器...")
 
-    print("⏳ 正在抓取指数估值...")
-    index_valuations = fetch_index_valuations(opener)
+    # 每个并行任务用自己独立的 opener（RequestsOpener.session 非线程安全）
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        fut_metrics    = ex.submit(lambda: fetch_home_market_metrics(get_direct_opener()))
+        fut_valuations = ex.submit(lambda: fetch_index_valuations(get_direct_opener()))
+        fut_annual     = ex.submit(fetch_index_annual_data)
+        fut_fed        = ex.submit(lambda: fetch_fed_rate_monitor(get_direct_opener()))
 
-    print("⏳ 正在加载指数年度数据...")
-    index_annual_data = fetch_index_annual_data()
+        # 各自的默认值，用于优雅降级
+        DEFAULT_METRICS = {
+            "fng": {"score": 0.0, "rating": "暂无数据", "time": "", "source": "获取失败", "url": "#"},
+            "vix": {"val": 0.0, "status": "数据暂缺", "time": "", "source": "获取失败", "url": "#", "desc": ""},
+            "usdcny": {"val": 0.0, "status": "数据暂缺", "time": "", "source": "获取失败", "url": "#", "desc": ""},
+            "vxn": {"val": 0.0, "status": "数据暂缺", "time": "", "source": "获取失败", "url": "#", "desc": ""},
+            "skew": {"val": 0.0, "status": "数据暂缺", "time": "", "source": "获取失败", "url": "#", "desc": ""},
+            "brent": {"val": 0.0, "status": "数据暂缺", "time": "", "source": "获取失败", "url": "#", "desc": ""},
+            "gold_london": {"val": 0.0, "status": "数据暂缺", "time": "", "source": "获取失败", "url": "#", "desc": ""},
+            "gold_shfe": {"val": 0.0, "status": "数据暂缺", "time": "", "source": "获取失败", "url": "#", "desc": ""},
+            "silver_london": {"val": 0.0, "status": "数据暂缺", "time": "", "source": "获取失败", "url": "#", "desc": ""},
+            "copper_lme": {"val": 0.0, "status": "数据暂缺", "time": "", "source": "获取失败", "url": "#", "desc": ""},
+            "btc": {"val": 0.0, "status": "数据暂缺", "time": "", "source": "获取失败", "url": "#", "desc": ""},
+        }
 
-    print("⏳ 正在抓取美联储利率观测器...")
-    fed_monitor = fetch_fed_rate_monitor(opener)
+        try:
+            home_metrics = fut_metrics.result(timeout=120)
+        except Exception as e:
+            print(f"⚠️ 宏观指标抓取失败: {e}")
+            home_metrics = DEFAULT_METRICS
+
+        try:
+            index_valuations = fut_valuations.result(timeout=60)
+        except Exception as e:
+            print(f"⚠️ 指数估值抓取失败: {e}")
+            index_valuations = [
+                {"name": n, "ticker": "", "pe": "--", "pct": "--", "pct_raw": 0,
+                 "status": "⚪ 暂无数据", "color": "#70757a"}
+                for n in TARGET_INDICES
+            ]
+
+        try:
+            index_annual_data = fut_annual.result(timeout=120)
+        except Exception as e:
+            print(f"⚠️ 指数年度数据抓取失败: {e}")
+            index_annual_data = {}
+
+        try:
+            fed_monitor = fut_fed.result(timeout=60)
+        except Exception as e:
+            print(f"⚠️ 美联储利率观测器抓取失败: {e}")
+            fed_monitor = {
+                "source_url": "https://www.cmegroup.com/cn-s/markets/interest-rates/cme-fedwatch-tool.html",
+                "meeting_text": "--", "meeting_iso": "", "countdown_text": "暂无倒计时",
+                "futures_price": "--", "probabilities": [], "table_rows": [],
+                "update_text": "--", "source_name": "CME FedWatch",
+            }
     print(f"📊 核心宏观指标获取成功: 恐慌贪婪 {home_metrics['fng']['score']} | VIX {home_metrics['vix']['val']} | USD/CNY {home_metrics['usdcny']['val']} | VXN {home_metrics['vxn']['val']} | SKEW {home_metrics['skew']['val']}")
     print(f"🛢️ 大宗商品指标获取成功: 布伦特原油 {home_metrics['brent']['val']} | 伦敦金 {home_metrics['gold_london']['val']} | 沪金主连 {home_metrics['gold_shfe']['val']} | 伦敦银 {home_metrics['silver_london']['val']} | LME铜 {home_metrics['copper_lme']['val']} | BTC {home_metrics.get('btc', {}).get('val', 0.0)}")
     fed_prob_count = len(fed_monitor.get('probabilities', []))
@@ -7007,13 +7138,18 @@ def main():
             return code, meta["name"], res
         return code, meta["name"], None
 
-    max_workers = 3 if is_debug else 10
+    max_workers = 12 if is_debug else 25            # ★ 原 3 / 10
     print(f"⚙️ 启用多线程并发抓取 (并发数: {max_workers}) ...")
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(process_single_fund, code) for code in target_funds]
+        deadline = time.time() + (600 if is_debug else 3000)   # 全局预算：50 分钟
         for done_count, fut in enumerate(as_completed(futures), start=1):
+            if time.time() > deadline:
+                print("⏰ 达到总时间预算，跳过剩余基金任务（缓存已写入，下次可复用）")
+                executor.shutdown(wait=False, cancel_futures=True)
+                break
             try:
-                code, name, res = fut.result()
+                code, name, res = fut.result(timeout=180)     # 单只基金 3 分钟硬上限
             except Exception as exc:
                 print(f"[{done_count}/{len(target_funds)}] 处理异常: {exc}")
                 continue
@@ -7023,66 +7159,94 @@ def main():
             else:
                 print(f"[{done_count}/{len(target_funds)}] {code} - {name} ... ❌ 历史净值抓取失败")
 
-    for symbol in target_commodities:
+    def _process_commodity(symbol):
         try:
             if symbol in ["XAU", "AUM", "XAG"]:
                 data = fetch_precious_metals_data(symbol, args.start, args.end)
             else:
                 data = fetch_commodity_data(symbol, args.start, args.end)
-            if data:
-                meta_name = COMMODITY_NAMES.get(symbol, symbol)
-                res = analyze_fund_metrics(data, args.end, cutoff_date, is_qdii=False)
-                if res:
-                    res.update({
-                        "code": symbol, "name": meta_name, "scale": "--", "scale_val": -1.0,
-                        "fee_manage": "--", "fee_custody": "--", "fee_sales": "--", "fee_source": "--",
-                        "fee_purchase": "--", "fee_redemption": "--", "buy_status": "--", "buy_limit": "--",
-                        "buy_limit_val": -1, "fee_total": "--", "fee_val": -1.0, "holdings": [],
-                        "holder_struct": None, "countries_info": {"date": "--", "countries": []}, "source": "大宗商品行情", "nav_data": data
-                    })
-                    results.append(res)
-                    print(f"  ✓ 大宗商品 {symbol} ({meta_name}) 抓取成功, 数据量 {len(data)}")
+            if not data:
+                return None, None
+            meta_name = COMMODITY_NAMES.get(symbol, symbol)
+            res = analyze_fund_metrics(data, args.end, cutoff_date, is_qdii=False)
+            if not res:
+                return None, None
+            res.update({
+                "code": symbol, "name": meta_name, "scale": "--", "scale_val": -1.0,
+                "fee_manage": "--", "fee_custody": "--", "fee_sales": "--", "fee_source": "--",
+                "fee_purchase": "--", "fee_redemption": "--", "buy_status": "--", "buy_limit": "--",
+                "buy_limit_val": -1, "fee_total": "--", "fee_val": -1.0, "holdings": [],
+                "holder_struct": None, "countries_info": {"date": "--", "countries": []},
+                "source": "大宗商品行情", "nav_data": data
+            })
+            return res, f"大宗商品 {symbol} ({meta_name})"
         except Exception as e:
-            print(f"  ✗ 大宗商品 {symbol} 抓取异常: {e}")
+            print(f"  ✗ 大宗商品 {symbol} 异常: {e}")
+            return None, None
 
-    for symbol in target_cryptos:
+    def _process_crypto(symbol):
         try:
             data = fetch_crypto_data(symbol, args.start, args.end)
-            if data:
-                meta_name = CRYPTO_NAMES.get(symbol, symbol)
-                res = analyze_fund_metrics(data, args.end, cutoff_date, is_qdii=False)
-                if res:
-                    res.update({
-                        "code": symbol, "name": meta_name, "scale": "--", "scale_val": -1.0,
-                        "fee_manage": "--", "fee_custody": "--", "fee_sales": "--", "fee_source": "--",
-                        "fee_purchase": "--", "fee_redemption": "--", "buy_status": "--", "buy_limit": "--",
-                        "buy_limit_val": -1, "fee_total": "--", "fee_val": -1.0, "holdings": [],
-                        "holder_struct": None, "countries_info": {"date": "--", "countries": []}, "source": "现货行情", "nav_data": data
-                    })
-                    results.append(res)
-                    print(f"  ✓ 加密货币 {symbol} ({meta_name}) 抓取成功, 数据量 {len(data)}")
-                else:
-                    print(f"  ✗ 加密货币 {symbol} ({meta_name}) 指标计算失败")
-            else:
-                print(f"  ✗ 加密货币 {symbol} 抓取失败, 无数据")
+            if not data:
+                return None, None
+            meta_name = CRYPTO_NAMES.get(symbol, symbol)
+            res = analyze_fund_metrics(data, args.end, cutoff_date, is_qdii=False)
+            if not res:
+                return None, None
+            res.update({
+                "code": symbol, "name": meta_name, "scale": "--", "scale_val": -1.0,
+                "fee_manage": "--", "fee_custody": "--", "fee_sales": "--", "fee_source": "--",
+                "fee_purchase": "--", "fee_redemption": "--", "buy_status": "--", "buy_limit": "--",
+                "buy_limit_val": -1, "fee_total": "--", "fee_val": -1.0, "holdings": [],
+                "holder_struct": None, "countries_info": {"date": "--", "countries": []},
+                "source": "现货行情", "nav_data": data
+            })
+            return res, f"加密货币 {symbol} ({meta_name})"
         except Exception as e:
-            print(f"  ✗ 加密货币 {symbol} 抓取异常: {e}")
+            print(f"  ✗ 加密货币 {symbol} 异常: {e}")
+            return None, None
 
-    for symbol in target_indices:
+    def _process_index(symbol):
         try:
             data = fetch_index_data(symbol, args.start, args.end)
-            if data:
-                res = analyze_fund_metrics(data, args.end, cutoff_date, is_qdii=False)
-                if res:
-                    res.update({
-                        "code": symbol, "name": INDEX_NAMES.get(symbol, symbol), "scale": "--", "scale_val": -1.0,
-                        "fee_manage": "--", "fee_custody": "--", "fee_sales": "--", "fee_source": "--",
-                        "fee_purchase": "--", "fee_redemption": "--", "buy_status": "--", "buy_limit": "--",
-                        "buy_limit_val": -1, "fee_total": "--", "fee_val": -1.0, "holdings": [],
-                        "holder_struct": None, "countries_info": {"date": "--", "countries": []}, "source": "指数行情", "nav_data": data
-                    })
-                    results.append(res)
-        except Exception: pass
+            if not data:
+                return None, None
+            res = analyze_fund_metrics(data, args.end, cutoff_date, is_qdii=False)
+            if not res:
+                return None, None
+            res.update({
+                "code": symbol, "name": INDEX_NAMES.get(symbol, symbol),
+                "scale": "--", "scale_val": -1.0,
+                "fee_manage": "--", "fee_custody": "--", "fee_sales": "--", "fee_source": "--",
+                "fee_purchase": "--", "fee_redemption": "--", "buy_status": "--", "buy_limit": "--",
+                "buy_limit_val": -1, "fee_total": "--", "fee_val": -1.0, "holdings": [],
+                "holder_struct": None, "countries_info": {"date": "--", "countries": []},
+                "source": "指数行情", "nav_data": data
+            })
+            return res, f"主流指数 {symbol}"
+        except Exception:
+            return None, None
+
+    # 一次性并行执行三类资产
+    mixed_tasks = []
+    with ThreadPoolExecutor(max_workers=12) as executor:
+        for sym in target_commodities:
+            mixed_tasks.append(executor.submit(_process_commodity, sym))
+        for sym in target_cryptos:
+            mixed_tasks.append(executor.submit(_process_crypto, sym))
+        for sym in target_indices:
+            mixed_tasks.append(executor.submit(_process_index, sym))
+
+        for fut in as_completed(mixed_tasks):
+            try:
+                res, label = fut.result(timeout=180)
+            except Exception as e:
+                print(f"  ✗ 大类资产并行任务异常: {e}")
+                continue
+            if res:
+                results.append(res)
+                print(f"  ✓ {label} 抓取成功, 数据量 {len(res.get('nav_data', []))}")
+    # =====================================================================
 
     if results:
         abs_path = generate_html_report(
