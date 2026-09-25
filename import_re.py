@@ -1948,8 +1948,9 @@ def fetch_from_eastmoney(opener, code, start_date, end_date):
 
     all_data = []
     page_index = 1
-    page_size = 100          # ★ 原 20，单次拉取量提升 5 倍
-    max_pages = 30           # ★ 安全上限，防止死循环
+    page_size = 20           # ★ 东方财富 API 上限就是 20，不要再改大
+    max_pages = 200          # ★ 20 条/页 × 200 页 = 4000 条，够覆盖 10 年数据
+    empty_streak = 0         # 连续空页计数，防止死循环
 
     while page_index <= max_pages:
         base_url = "https://api.fund.eastmoney.com/f10/lsjz"
@@ -1967,13 +1968,24 @@ def fetch_from_eastmoney(opener, code, start_date, end_date):
                 if match:
                     res_json = json.loads(match.group(1))
                     lsjz = res_json.get("Data", {}).get("LSJZList", [])
-                    if not lsjz: break
+                    if not lsjz:
+                        empty_streak += 1
+                        if empty_streak >= 2:   # 连续两页空 → 到底了
+                            break
+                        page_index += 1
+                        continue
+                    empty_streak = 0
                     for item in lsjz:
-                        if item.get("DWJZ"): all_data.append({"date": item["FSRQ"], "nav": float(item["DWJZ"])})
-                    if len(lsjz) < page_size: break
+                        if item.get("DWJZ"):
+                            all_data.append({"date": item["FSRQ"], "nav": float(item["DWJZ"])})
+                    # ★ 只在返回不足一页时才认为到底；等于 20 就继续翻页
+                    if len(lsjz) < page_size:
+                        break
                     page_index += 1
-                else: break
-        except Exception: break
+                else:
+                    break
+        except Exception:
+            break
 
     if all_data:
         cache = {'start_date': start_date, 'end_date': end_date, 'data': all_data}
