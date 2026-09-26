@@ -19,6 +19,9 @@ from calendar import monthrange
 from http.cookiejar import CookieJar
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import requests
+from datetime import datetime
+
 
 # 强制清空代理环境变量
 for env_var in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]:
@@ -146,8 +149,7 @@ INDEX_NAMES = {
     "NDX": "纳斯达克100指数",
     "SPX": "标普500指数",
     "SOX": "费城半导体指数",
-    "SOXL": "三倍做多半导体ETF-Direxion",
-    "XLK": "信息科技行业ETF-SPDR"
+    "COMP": "纳斯达克综合指数",
 }
 
 # 【修改】原 PRECIOUS_METALS_NAMES 扩展为大宗商品（新增布伦特原油、LME铜）
@@ -170,9 +172,42 @@ SINA_US_INDEX_MAP = {
     "NDX":  ".ndx",
     "SPX":  ".inx",
     "SOX":  ".sox",
-    "SOXL": "soxl",
-    "XLK":  "xlk",
+    "COMP": ".ixic",
 }
+
+# ==================== 美股ETF 配置（合并自 fetch_us_etfs_data.py） ====================
+SINA_US_ETF_MAP = {
+    "QQQ":  "QQQ",
+    "SPY":  "SPY",
+    "IVV":  "IVV",
+    "IVW":  "IVW",
+    "VOO":  "VOO",
+    "SMH":  "SMH",
+    "VGT":  "VGT",
+    "ARKW": "ARKW",
+    "DIA":  "DIA",
+    "XLK":  "xlk",
+    "SOXL": "soxl",
+    "SOXQ": "soxq",
+}
+
+US_ETF_NAMES = {
+    "QQQ":  "纳斯达克100 ETF-Invesco",
+    "SPY":  "标普500 ETF-SPDR",
+    "IVV":  "标普500 ETF-iShares",
+    "IVW":  "标普500成长型 ETF-iShares",
+    "VOO":  "标普500 ETF-Vanguard",
+    "SMH":  "半导体 ETF-VanEck",
+    "VGT":  "信息科技 ETF-Vanguard",
+    "ARKW": "下一代互联网 ETF-ARK",
+    "DIA":  "道琼斯指数 ETF-SPDR",
+    "XLK":  "科技行业 ETF-SPDR",
+    "SOXL": "三倍做多半导体 ETF-Direxion",
+    "SOXQ": "半导体行业 ETF-SPDR"
+}
+
+US_ETF_LOCAL = set(US_ETF_NAMES.keys())
+# ===================================================================================
 
 CACHE_DIR = "cache"
 HOLDINGS_CACHE_DIR = os.path.join(CACHE_DIR, "holdings")
@@ -463,17 +498,19 @@ def fetch_index_valuations(opener):
             
     return results
 
-def fetch_sina_us_kline(symbol_code, start_date_str="2025-01-01"):
-    """通过新浪美股日 K 线接口抓取历史数据（源自 get_meiguzhishu.py）。
+def fetch_sina_us_kline(symbol_code, start_date_str="2000-01-01"):
+    """通过新浪美股日 K 线接口抓取历史数据（合并自 get_meiguzhishu.py 实测稳定版）。
 
-    返回格式：[{'date': 'YYYY-MM-DD', 'nav': float(收盘价)}, ...]
+    ★ 关键修复（相对旧实现）：
+       1) 去掉 URL 中的 &___qn=3 参数 —— 加了这个参数反而只返回近期数据；
+       2) 显式使用无代理的干净 opener，避免环境代理干扰；
+       3) 起始日期默认改为 2000-01-01，一次性拉完整历史用于计算年度收益率。
     """
     callback_name = "US_KLINE_CB"
     url = (
         f"https://stock.finance.sina.com.cn/usstock/api/jsonp.php/{callback_name}"
         f"/US_MinKService.getDailyK?symbol={urllib.parse.quote(symbol_code)}"
     )
-
     headers = {
         "User-Agent": DEFAULT_HEADERS["User-Agent"],
         "Referer": "https://finance.sina.com.cn/",
@@ -481,14 +518,13 @@ def fetch_sina_us_kline(symbol_code, start_date_str="2025-01-01"):
     }
     req = urllib.request.Request(url, headers=headers)
     records = []
-
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        _opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with _opener.open(req, timeout=15) as resp:
             content = resp.read().decode("gbk", errors="ignore")
             match = re.search(r'\((\[.*\])\)', content)
             if not match:
                 return records
-
             raw_list = json.loads(match.group(1))
             for item in raw_list:
                 d_str = item.get("d")
@@ -501,7 +537,6 @@ def fetch_sina_us_kline(symbol_code, start_date_str="2025-01-01"):
                         continue
     except Exception:
         pass
-
     records.sort(key=lambda x: x["date"])
     return records
 
@@ -3101,7 +3136,11 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
     AI_CODES = {"024663", "024726", "023286", "023408", "025506", "025493", "025653", "005963", "014162", "011840", "024412", "024775", "026613", "023551", "024561"}
     GRID_CODES = {"025857", "023639", "023675", "019411", "167002", "020425", "002164", "017133", "017042", "026681", "016387", "025833", "011172", "001665", "018919"}
     ROBOT_CODES = {"016531", "018345", "020482", "018125", "007519", "014243", "018957", "003835", "014939", "008998", "004233", "008182", "017968", "024648"}
-    INDEX_SET_LOCAL = {"NDX", "SPX", "SOX", "SOXL", "XLK"}
+    INDEX_SET_LOCAL = {"NDX", "SPX", "SOX", "COMP"}
+    US_ETF_LOCAL_SET = {
+        "QQQ", "SPY", "IVV", "IVW", "VOO", "SMH",
+        "VGT", "ARKW", "DIA", "XLK", "SOXL", "SOXQ"
+    }
     COMMODITIES_LOCAL = {"XAU", "AUM", "XAG", "BRENT", "CAD"}
     CRYPTO_LOCAL = {"BTC", "ETH", "SOL", "BNB"}
     col_count = 22
@@ -3173,7 +3212,8 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             continue
         if code in AI_CODES or code in GRID_CODES or code in ROBOT_CODES:
             continue
-        if code in COMMODITIES_LOCAL or code in CRYPTO_LOCAL or code in INDEX_SET_LOCAL:
+        if (code in COMMODITIES_LOCAL or code in CRYPTO_LOCAL
+                or code in INDEX_SET_LOCAL or code in US_ETF_LOCAL_SET):    # ★ 新增最后一项
             continue
         _seen_qdii_codes.add(code)
         grp_key = _qdii_group(code, r.get('name', ''))
@@ -3560,11 +3600,27 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
     rows_html = ""
     for r in results:
         INDEX_URL_MAP = {
-            "NDX":  "https://quote.eastmoney.com/gb/zsNDX100.html",
-            "SPX":  "https://quote.eastmoney.com/gb/zsSPX.html",
-            "SOX":  "https://cn.investing.com/indices/phlx-semiconductor",
-            "SOXL": "https://quote.eastmoney.com/us/SOXL.html",
-            "XLK":  "https://quote.eastmoney.com/us/XLK.html",
+            # ---- 主流指数（Yahoo 指数符号需加 ^ 前缀）----
+            "NDX":  "https://sg.finance.yahoo.com/quote/%5ENDX/",
+            "SPX":  "https://sg.finance.yahoo.com/quote/%5EGSPC/",
+            "SOX":  "https://sg.finance.yahoo.com/quote/%5ESOX/",
+            "COMP": "https://sg.finance.yahoo.com/quote/%5EIXIC/",
+
+            # ---- 美股 ETF（Yahoo 直接使用 ticker 作为符号）----
+            "QQQ":  "https://sg.finance.yahoo.com/quote/QQQ/",
+            "SPY":  "https://sg.finance.yahoo.com/quote/SPY/",
+            "IVV":  "https://sg.finance.yahoo.com/quote/IVV/",
+            "IVW":  "https://sg.finance.yahoo.com/quote/IVW/",
+            "VOO":  "https://sg.finance.yahoo.com/quote/VOO/",
+            "SMH":  "https://sg.finance.yahoo.com/quote/SMH/",
+            "VGT":  "https://sg.finance.yahoo.com/quote/VGT/",
+            "ARKW": "https://sg.finance.yahoo.com/quote/ARKW/",
+            "DIA":  "https://sg.finance.yahoo.com/quote/DIA/",
+            "XLK":  "https://sg.finance.yahoo.com/quote/XLK/",
+            "SOXL": "https://sg.finance.yahoo.com/quote/SOXL/",
+            "SOXQ": "https://sg.finance.yahoo.com/quote/SOXQ/",
+
+            # ---- 大宗商品与加密货币（保持原样，不修改）----
             "XAU":  "https://cn.investing.com/currencies/xau-usd",
             "AUM":  "https://quote.eastmoney.com/qihuo/aum.html",
             "XAG":  "https://cn.investing.com/currencies/xag-usd",
@@ -3603,6 +3659,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
         elif r['code'] in COMMODITIES_LOCAL: group = "commodities"; macro_category = "other"
         elif r['code'] in CRYPTO_LOCAL: group = "crypto"; macro_category = "other"
         elif r['code'] in INDEX_SET_LOCAL: group = "index"; macro_category = "other"
+        elif r['code'] in US_ETF_LOCAL_SET:  group = "us_etf";      macro_category = "us_share"   # ★ 新增
         elif r['code'] in NDX_PASSIVE_CODES: group = "ndx_passive"; macro_category = "us_share"
         elif r['code'] in SPX_PASSIVE_CODES: group = "spx_passive"; macro_category = "us_share"
         else: group = "us_active"; macro_category = "us_share"
@@ -3809,6 +3866,19 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
 
         # ===== ★ 构建年度收益 HTML（热力图 + 统计栏）=====
         annual_returns = r.get('annual_returns', {}) or {}
+
+        # ★ 主流指数：额外计算每年的年末收盘点位，用于在百分比下方展示
+        is_main_index = (group == "index")
+        annual_close_map = {}
+        if is_main_index and r.get('nav_data'):
+            # nav_data 已按日期升序排序，逐年覆盖即可得到年末值
+            for item in r['nav_data']:
+                try:
+                    year_key = str(item['date'])[:4]
+                    annual_close_map[year_key] = float(item['nav'])
+                except Exception:
+                    continue
+
         if annual_returns:
             sorted_years = sorted(annual_returns.keys())
             pairs = [(yr, annual_returns[yr]) for yr in sorted_years]
@@ -3824,10 +3894,19 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                     bg = f"rgba(15, 110, 45, {alpha:.2f})"
                 else:
                     bg = "rgba(110, 110, 110, 0.9)"
+
+                # ★ 主流指数：追加年末收盘点位
+                close_html = ""
+                if is_main_index:
+                    cv = annual_close_map.get(str(yr))
+                    close_display = f"{cv:,.2f}" if cv is not None else "--"
+                    close_html = f'<div class="fund-annual-close">{close_display}</div>'
+
                 cells.append(
                     f'<div class="fund-annual-heatmap-cell" style="background:{bg};">'
                     f'<div class="fund-annual-year">{yr}</div>'
                     f'<div class="fund-annual-pct">{v:+.2f}%</div>'
+                    f'{close_html}'
                     f'</div>'
                 )
             heatmap_html = '<div class="fund-annual-heatmap-grid">' + ''.join(cells) + '</div>'
@@ -5119,6 +5198,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
         .fund-annual-heatmap-cell {{
             border-radius: 4px;
             padding: 6px 2px;
+            min-height: 52px;
             text-align: center;
             display: flex;
             flex-direction: column;
@@ -5150,6 +5230,14 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             color: #ffffff;
             letter-spacing: 0.2px;
             line-height: 1.1;
+        }}
+        .fund-annual-close {{
+            font-size: 9px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.92);
+            line-height: 1.1;
+            margin-top: 1px;
+            letter-spacing: 0.2px;
         }}
         .chart-history-empty {{
             flex: 1;
@@ -6573,6 +6661,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                         <button class="cat-btn macro-filter" data-macro="us_share" data-sub="us_active">美股主动</button>
                         <button class="cat-btn macro-filter" data-macro="us_share" data-sub="ndx_passive">纳指被动</button>
                         <button class="cat-btn macro-filter" data-macro="us_share" data-sub="spx_passive">标普被动</button>
+                        <button class="cat-btn macro-filter" data-macro="us_share" data-sub="us_etf">美股ETF</button>   <!-- ★ 新增 -->
 
                         <span class="category-title" style="margin-left: 8px;">A股板块:</span>
                         <button class="cat-btn macro-filter" data-macro="a_share" data-sub="all">A股全量</button>
@@ -6589,8 +6678,8 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                         <button class="cat-btn macro-filter" data-macro="other" data-sub="index">主流指数</button>
                         
                         <span class="category-title" style="margin-left: 8px;">视图:</span>
+                        <button class="cat-btn view-mode-btn active" data-view-mode="simple" title="简洁模式：精简列 + 仅折线图">⚡ 默认</button>
                         <button class="cat-btn view-mode-btn" data-view-mode="default" title="详细模式：完整列 + 持仓/持有人/国家/图表">📋 详细</button>
-                        <button class="cat-btn view-mode-btn active" data-view-mode="simple" title="简洁模式：精简列 + 仅折线图">⚡ 简洁</button>
                     </div>
 
                     <div class="search-box-wrap">
@@ -8685,34 +8774,43 @@ def _process_hist_df(df, start_date, end_date):
         return None
 
 
+# 模块级常量：指数年度收益率的完整历史起点
+INDEX_FULL_START = "2000-01-01"
+
+
 def fetch_index_data(symbol, start_date, end_date):
-    """抓取主流指数/ETF 历史行情，带本地缓存。
+    """抓取主流指数历史行情，带本地缓存。
 
-    数据源优先级（与 get_meiguzhishu.py 保持一致）：
-      1) 新浪美股接口 US_MinKService.getDailyK（主数据源，已实测稳定）
-      2) Yahoo Finance 兜底（防止新浪偶发限流）
-
-    缓存策略：
-      - 缓存文件：cache/nav/{symbol}.json
-      - 已覆盖请求区间时直接返回缓存，不再发起网络请求
+    ★ 关键修复：
+       - 无论调用方传入的 start_date 是什么，都从 2000-01-01 拉取完整历史，
+         这样 compute_annual_returns_from_nav 才能算出 2000 年至今的年度收益率。
+       - start_date 参数仅用于缓存命中的宽松判断。
+       - 新浪接口（get_meiguzhishu.py 实测稳定版）为主源，Yahoo 兜底。
     """
     cache_file = os.path.join(NAV_CACHE_DIR, f"{symbol}.json")
+
+    # ---- 缓存读取：只要缓存覆盖了 [2000-01-01, end_date] 就可以复用 ----
     if os.path.exists(cache_file):
         try:
             with open(cache_file, 'r', encoding='utf-8') as f:
                 cache = json.load(f)
-            if cache.get('start_date', '') <= start_date and cache.get('end_date', '') >= end_date:
-                return cache.get('data', [])
+            c_start = cache.get('start_date', '')
+            c_end   = cache.get('end_date', '')
+            c_data  = cache.get('data', [])
+            if (c_start and c_end and c_data
+                    and c_start <= INDEX_FULL_START
+                    and c_end >= end_date):
+                return c_data
         except Exception:
             pass
 
     data = None
 
-    # ---- 数据源 1：新浪美股接口 ----
+    # ---- 数据源 1：新浪美股接口（全量历史）----
     sina_code = SINA_US_INDEX_MAP.get(symbol)
     if sina_code:
         try:
-            raw = fetch_sina_us_kline(sina_code, start_date)
+            raw = fetch_sina_us_kline(sina_code, INDEX_FULL_START)
             if raw:
                 data = [r for r in raw if r["date"] <= end_date]
                 if not data:
@@ -8720,19 +8818,18 @@ def fetch_index_data(symbol, start_date, end_date):
         except Exception:
             data = None
 
-    # ---- 数据源 2：Yahoo Finance 兜底 ----
+    # ---- 数据源 2：Yahoo Finance 兜底（同样全量）----
     if not data:
         yahoo_syms = {
             "NDX":  "^NDX",
             "SPX":  "^GSPC",
             "SOX":  "^SOX",
-            "SOXL": "SOXL",
-            "XLK":  "XLK",
+            "COMP": "^IXIC",
         }
         ysym = yahoo_syms.get(symbol)
         if ysym:
             try:
-                data = fetch_yahoo_history(ysym, start_date, end_date)
+                data = fetch_yahoo_history(ysym, INDEX_FULL_START, end_date)
             except Exception:
                 data = None
 
@@ -8740,13 +8837,133 @@ def fetch_index_data(symbol, start_date, end_date):
         try:
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(
-                    {'start_date': start_date, 'end_date': end_date, 'data': data},
+                    {
+                        'start_date': data[0]["date"],   # 实际最早日期
+                        'end_date':   end_date,
+                        'data':       data,
+                    },
                     f, ensure_ascii=False, indent=2
                 )
         except Exception:
             pass
         return data
     return None
+
+def fetch_us_etf_data(symbol, start_date, end_date):
+    """抓取美股 ETF 历史行情（合并自 fetch_us_etfs_data.py）。
+
+    ★ 关键修复：拉取【全量】历史（起始日固定为 1990-01-01），用于计算完整年度收益率。
+       原实现把 start_date（默认 2025-01-01）透传给新浪，导致只返回近期数据，
+       年度收益只能算出 1 个年份。
+
+    缓存策略：
+      - cache/nav/{symbol}.json 的 start_date 字段记录为【数据实际最早日期】，
+        后续请求只要落在缓存覆盖区间内即可命中。
+    """
+    cache_file = os.path.join(NAV_CACHE_DIR, f"{symbol}.json")
+
+    # ---- 缓存读取：只要最早日期 <= 请求起点 且 最晚日期 >= 请求终点 即可复用 ----
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                cache = json.load(f)
+            c_start = cache.get('start_date', '')
+            c_end = cache.get('end_date', '')
+            c_data = cache.get('data', [])
+            if c_start and c_end and c_start <= start_date and c_end >= end_date and c_data:
+                return c_data
+        except Exception:
+            pass
+
+    data = None
+
+    # ---- 数据源 1：新浪美股接口（拉全量历史）----
+    sina_code = SINA_US_ETF_MAP.get(symbol)
+    if sina_code:
+        try:
+            raw = fetch_sina_us_kline(sina_code, "1990-01-01")   # ★ 全量起点
+            if raw:
+                data = [r for r in raw if r["date"] <= end_date]
+                if not data:
+                    data = None
+        except Exception:
+            data = None
+
+    # ---- 数据源 2：Yahoo Finance 兜底（同样拉全量）----
+    if not data:
+        yahoo_syms = {
+            "QQQ":  "QQQ",
+            "SPY":  "SPY",
+            "IVV":  "IVV",
+            "IVW":  "IVW",
+            "VOO":  "VOO",
+            "SMH":  "SMH",
+            "VGT":  "VGT",
+            "ARKW": "ARKW",
+            "DIA":  "DIA",
+            "XLK":  "XLK",
+            "SOXL": "SOXL",
+        }
+        ysym = yahoo_syms.get(symbol)
+        if ysym:
+            try:
+                data = fetch_yahoo_history(ysym, "1990-01-01", end_date)   # ★ 全量起点
+            except Exception:
+                data = None
+
+    if data:
+        try:
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                # ★ 缓存的 start_date 记录为数据实际最早日期，便于后续命中判断
+                json.dump(
+                    {
+                        'start_date': data[0]["date"],   # 实际最早日期
+                        'end_date':   end_date,
+                        'data':       data,
+                    },
+                    f, ensure_ascii=False, indent=2
+                )
+        except Exception:
+            pass
+        return data
+    return None
+
+def compute_annual_returns_from_nav(nav_data):
+    """从 [{'date': 'YYYY-MM-DD', 'nav': float}, ...] 计算每个自然年的收益率。
+
+    规则（与 fetch_fund_annual_returns 保持一致）：
+      - 首个年份：用该年第一个交易日的 nav 作为基准
+      - 其余年份：用上一年最后一个交易日的 nav 作为基准
+    返回：{"2021": 27.35, "2022": -18.62, ...}，失败返回 {}
+    """
+    if not nav_data:
+        return {}
+
+    from collections import defaultdict as _dd
+    year_map = _dd(list)
+    for r in nav_data:
+        try:
+            yr = str(r["date"]).split("-")[0]
+            nav = float(r["nav"])
+            if nav > 0:
+                year_map[yr].append({"date": r["date"], "nav": nav})
+        except Exception:
+            continue
+
+    sorted_years = sorted(year_map.keys())
+    returns = {}
+    for i, yr in enumerate(sorted_years):
+        records = sorted(year_map[yr], key=lambda x: x["date"])
+        end_nav = records[-1]["nav"]
+        if i == 0:
+            start_nav = records[0]["nav"]        # 首年：该年第一个交易日
+        else:
+            prev_records = sorted(year_map[sorted_years[i - 1]], key=lambda x: x["date"])
+            start_nav = prev_records[-1]["nav"]  # 其余年份：上年最后一个交易日
+        if start_nav and start_nav > 0:
+            ret = (end_nav / start_nav - 1) * 100
+            returns[str(yr)] = round(ret, 2)
+    return returns
 
 def _test_macro_metrics():
     import time
@@ -8781,6 +8998,7 @@ def main():
         target_commodities = ["XAU", "BRENT"]
         target_cryptos = ["BTC"]
         target_indices = ["NDX"]
+        target_us_etfs = ["QQQ"]                    # ★ 新增
         print("\n=======================================================")
         print("🛠️ 当前处于【测试调试阶段 (DEBUG MODE)】")
         print(f"👉 仅抓取 {len(target_funds)} 只核心测试基金 + 极简大类资产样本")
@@ -8789,7 +9007,11 @@ def main():
         target_funds = PROD_FUNDS
         target_commodities = ["XAU", "AUM", "XAG", "BRENT", "CAD"]
         target_cryptos = ["BTC", "ETH", "SOL", "BNB"]
-        target_indices = ["NDX", "SPX", "SOX", "SOXL", "XLK"]
+        target_indices = ["NDX", "SPX", "SOX", "COMP"]
+        target_us_etfs = [
+            "QQQ", "SPY", "IVV", "IVW", "VOO", "SMH",
+            "VGT", "ARKW", "DIA", "XLK", "SOXL", "SOXQ"
+        ]
         print("\n=======================================================")
         print("🚀 当前处于【正式发布阶段 (PROD MODE)】")
         print(f"👉 正在抓取全量 {len(target_funds)} 只基金与全品类宏观大类资产...")
@@ -8991,6 +9213,14 @@ def main():
             res = analyze_fund_metrics(data, args.end, cutoff_date, is_qdii=False)
             if not res:
                 return None, None
+
+            # ★ 关键修复：从 nav_data 本地计算年度收益率
+            annual_returns = {}
+            try:
+                annual_returns = compute_annual_returns_from_nav(data)
+            except Exception as e:
+                print(f"    ⚠️ 主流指数 {symbol} 年度收益计算异常: {e}")
+
             res.update({
                 "code": symbol, "name": INDEX_NAMES.get(symbol, symbol),
                 "scale": "--", "scale_val": -1.0,
@@ -8999,10 +9229,45 @@ def main():
                 "buy_limit_val": -1, "fee_total": "--", "fee_val": -1.0, "holdings": [],
                 "holder_struct": None, "countries_info": {"date": "--", "countries": []},
                 "source": "指数行情", "nav_data": data,
+                "annual_returns": annual_returns,      # ★ 新增
                 "te_data": {},
             })
             return res, f"主流指数 {symbol}"
         except Exception:
+            return None, None
+
+    def _process_us_etf(symbol):
+        try:
+            data = fetch_us_etf_data(symbol, args.start, args.end)
+            if not data:
+                return None, None
+            res = analyze_fund_metrics(data, args.end, cutoff_date, is_qdii=False)
+            if not res:
+                return None, None
+
+            # ★ 从全量 nav_data 本地计算年度收益率
+            #    （与 fetch_us_etfs_data.py 的 aggregate_yearly_metrics 口径一致：
+            #      首年用第一个交易日净值作基准；其余年份用上一年最后交易日净值作基准）
+            annual_returns = {}
+            try:
+                annual_returns = compute_annual_returns_from_nav(data)
+            except Exception as e:
+                print(f"    ⚠️ 美股ETF {symbol} 年度收益计算异常: {e}")
+
+            res.update({
+                "code": symbol, "name": US_ETF_NAMES.get(symbol, symbol),
+                "scale": "--", "scale_val": -1.0,
+                "fee_manage": "--", "fee_custody": "--", "fee_sales": "--", "fee_source": "--",
+                "fee_purchase": "--", "fee_redemption": "--", "buy_status": "--", "buy_limit": "--",
+                "buy_limit_val": -1, "fee_total": "--", "fee_val": -1.0, "holdings": [],
+                "holder_struct": None, "countries_info": {"date": "--", "countries": []},
+                "source": "美股ETF行情", "nav_data": data,
+                "annual_returns": annual_returns,      # ★ 本地计算
+                "te_data": {},
+            })
+            return res, f"美股ETF {symbol} ({US_ETF_NAMES.get(symbol, symbol)})"
+        except Exception as e:
+            print(f"  ✗ 美股ETF {symbol} 异常: {e}")
             return None, None
 
     # 一次性并行执行三类资产
@@ -9014,6 +9279,8 @@ def main():
             mixed_tasks.append(executor.submit(_process_crypto, sym))
         for sym in target_indices:
             mixed_tasks.append(executor.submit(_process_index, sym))
+        for sym in target_us_etfs:                     # ★ 新增
+            mixed_tasks.append(executor.submit(_process_us_etf, sym))
 
         for fut in as_completed(mixed_tasks):
             try:
