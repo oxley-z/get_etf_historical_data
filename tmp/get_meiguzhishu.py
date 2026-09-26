@@ -1,5 +1,4 @@
 import os
-import re
 import json
 import time
 from datetime import datetime
@@ -7,69 +6,80 @@ import urllib.request
 import urllib.parse
 from collections import defaultdict
 
-# 1. 进程级清理系统残留代理
-for env_var in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]:
-    os.environ.pop(env_var, None)
+# ★ 如果在本地运行需要走代理翻墙，请注释掉下面这段代码；
+# ★ 如果在 GitHub Actions (海外服务器) 运行，保留或注释均可。
+# for env_var in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]:
+#     os.environ.pop(env_var, None)
 
+# 对应 Yahoo Finance 的标准代码与标的
 TARGET_ASSETS = [
-    {"code": ".ndx", "symbol": "NDX", "name": "纳斯达克100指数"},
-    {"code": ".inx", "symbol": "SPX", "name": "标普500指数"},
-    {"code": ".sox", "symbol": "SOX", "name": "费城半导体指数"},
-    {"code": "soxl", "symbol": "SOXL", "name": "三倍做多半导体ETF-Direxion"},
-    {"code": "xlk",  "symbol": "XLK",  "name": "信息科技行业ETF-SPDR"}
+    {"code": "^NDX",  "symbol": "NDX",  "name": "纳斯达克100指数"},
+    {"code": "^GSPC", "symbol": "SPX",  "name": "标普500指数"},
+    {"code": "^SOX",  "symbol": "SOX",  "name": "费城半导体指数"},
+    {"code": "SOXL",  "symbol": "SOXL", "name": "三倍做多半导体ETF-Direxion"},
+    {"code": "XLK",   "symbol": "XLK",  "name": "信息科技行业ETF-SPDR"}
 ]
 
-HEADERS = {
+# 模拟完整的浏览器请求头，防止雅虎 403 Forbidden 拦截
+YAHOO_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "Referer": "https://finance.sina.com.cn/",
-    "Accept": "*/*"
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://finance.yahoo.com/",
+    "Connection": "keep-alive"
 }
 
-# ★ 两个不同的起始日期
 DAILY_START_DATE = "2025-01-01"    # 每日净值 CSV 的起始日期
 ANNUAL_START_YEAR = 2000           # 年度收益率的起始年份
 
 
-def get_direct_opener():
-    return urllib.request.build_opener(urllib.request.ProxyHandler({}))
-
-
-def fetch_sina_us_kline(opener, symbol_code, start_date_str="2000-01-01"):
+def fetch_yahoo_kline(symbol_code, start_year=2000):
     """
-    通过新浪美股日 K 线接口抓取历史数据。
-    ★ 注意：这里传入较早的 start_date_str（如 2000-01-01），
-       一次性拿回完整历史，后续再在内存里切分。
+    通过 Yahoo Finance v8 接口拉取从指定年份开始的历史日线数据。
     """
-    callback_name = "US_KLINE_CB"
+    # 计算起始时间戳 (例如 2000-01-01 00:00:00)
+    period1 = int(time.mktime(time.strptime(f"{start_year}-01-01", "%Y-%m-%d")))
+    period2 = int(time.time())
+
     url = (
-        f"https://stock.finance.sina.com.cn/usstock/api/jsonp.php/{callback_name}"
-        f"/US_MinKService.getDailyK?symbol={urllib.parse.quote(symbol_code)}"
+        f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(symbol_code)}"
+        f"?period1={period1}&period2={period2}&interval=1d&events=history"
     )
 
-    req = urllib.request.Request(url, headers=HEADERS)
+    req = urllib.request.Request(url, headers=YAHOO_HEADERS)
     records = []
 
-    with opener.open(req, timeout=15) as resp:
-        content = resp.read().decode("gbk", errors="ignore")
-        match = re.search(r'\((\[.*\])\)', content)
-        if not match:
+    # 直接使用 urllib 默认 opener（会自动挂载系统代理）
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+        result = data.get("chart", {}).get("result", [])
+        if not result:
             return records
 
-        raw_list = json.loads(match.group(1))
-        for item in raw_list:
-            d_str = item.get("d")
-            if d_str and d_str >= start_date_str:
-                try:
-                    records.append({
-                        "date": d_str,
-                        "open": float(item.get("o", 0.0)),
-                        "high": float(item.get("h", 0.0)),
-                        "low": float(item.get("l", 0.0)),
-                        "close": float(item.get("c", 0.0)),
-                        "volume": int(float(item.get("v", 0)))
-                    })
-                except (ValueError, TypeError):
-                    continue
+        chart_data = result[0]
+        timestamps = chart_data.get("timestamp", [])
+        quote = chart_data.get("indicators", {}).get("quote", [{}])[0]
+
+        opens = quote.get("open", [])
+        highs = quote.get("high", [])
+        lows = quote.get("low", [])
+        closes = quote.get("close", [])
+        volumes = quote.get("volume", [])
+
+        for i in range(len(timestamps)):
+            # 过滤节假日休市或异常的空点位
+            if opens[i] is None or closes[i] is None:
+                continue
+
+            d_str = time.strftime("%Y-%m-%d", time.gmtime(timestamps[i]))
+            records.append({
+                "date": d_str,
+                "open": float(opens[i]),
+                "high": float(highs[i] or opens[i]),
+                "low": float(lows[i] or opens[i]),
+                "close": float(closes[i]),
+                "volume": int(volumes[i] or 0)
+            })
 
     records.sort(key=lambda x: x["date"])
     return records
@@ -77,11 +87,9 @@ def fetch_sina_us_kline(opener, symbol_code, start_date_str="2000-01-01"):
 
 def compute_annual_returns(records, start_year=2000):
     """
-    根据日线数据计算每个自然年的收益率（仅保留 start_year 及以后的年份）。
-    规则：
-      - 首个年份（start_year）：用该年第一个交易日的开盘价作为基准
-      - 后续年份：用上一年最后一个交易日的收盘价作为基准
-    返回列表: [(年份, 收益率%), ...]
+    根据日线数据计算每个自然年的收益率。
+    - 首个年份：用该年第一个交易日的开盘价作为基准
+    - 后续年份：用上一年最后一个交易日的收盘价作为基准
     """
     if not records:
         return []
@@ -89,7 +97,7 @@ def compute_annual_returns(records, start_year=2000):
     year_data = defaultdict(list)
     for r in records:
         year = int(r["date"][:4])
-        if year >= start_year - 1:      # 多保留一年，便于计算首年基准
+        if year >= start_year - 1:
             year_data[year].append(r)
 
     for year in year_data:
@@ -105,9 +113,9 @@ def compute_annual_returns(records, start_year=2000):
         last_rec = year_records[-1]
 
         if prev_year_close is None:
-            base_price = first_rec["open"]    # 首年用第一个交易日开盘价
+            base_price = first_rec["open"]
         else:
-            base_price = prev_year_close       # 其余年份用上年末收盘价
+            base_price = prev_year_close
 
         end_price = last_rec["close"]
 
@@ -119,27 +127,7 @@ def compute_annual_returns(records, start_year=2000):
 
     return annual_returns
 
-
-def save_to_csv(symbol, name, records, start_date_str, out_dir="market_data"):
-    """保存指定日期区间内的日线数据到 CSV。"""
-    if not os.path.exists(out_dir):
-        os.makedirs(out_dir)
-
-    filtered = [r for r in records if r["date"] >= start_date_str]
-    if not filtered:
-        return None
-
-    filename = os.path.join(out_dir, f"{symbol}_{name}_2025_至今.csv")
-    with open(filename, "w", encoding="utf-8-sig") as f:
-        f.write("日期,开盘点位,最高点位,最低点位,收盘点位,成交量\n")
-        for r in filtered:
-            f.write(f"{r['date']},{r['open']:.2f},{r['high']:.2f},{r['low']:.2f},{r['close']:.2f},{r['volume']}\n")
-    return filename, filtered
-
-
 def main():
-    opener = get_direct_opener()
-
     print("=" * 70)
     print(f" 每日净值: {DAILY_START_DATE} 至今")
     print(f" 年度收益率: {ANNUAL_START_YEAR} 年至今")
@@ -154,23 +142,15 @@ def main():
 
         print(f"正在拉取: {name} ({symbol}) ...", end=" ", flush=True)
         try:
-            # ★ 一次性拉取从 ANNUAL_START_YEAR 开始的完整历史
-            full_records = fetch_sina_us_kline(opener, code, f"{ANNUAL_START_YEAR}-01-01")
+            full_records = fetch_yahoo_kline(code, start_year=ANNUAL_START_YEAR)
             if not full_records:
                 print("❌ 未获取到数据")
                 continue
 
-            # 1) 每日净值 CSV：只取 2025-01-01 之后
-            csv_result = save_to_csv(symbol, name, full_records, DAILY_START_DATE)
-            if csv_result:
-                file_path, daily_records = csv_result
-            else:
-                file_path, daily_records = None, []
-
-            # 2) 年度收益率：基于全量历史计算
+            # 2) 计算 2000 年至今完整年度收益率
             annual_returns = compute_annual_returns(full_records, start_year=ANNUAL_START_YEAR)
 
-            # 3) 区间涨跌幅：仍以 2025-01-01 后的数据计算（用于汇总表）
+            # 3) 计算区间涨跌幅
             if daily_records:
                 first_row = daily_records[0]
                 last_row = daily_records[-1]

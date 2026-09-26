@@ -214,12 +214,14 @@ HOLDINGS_CACHE_DIR = os.path.join(CACHE_DIR, "holdings")
 NAV_CACHE_DIR = os.path.join(CACHE_DIR, "nav")
 HOLDER_CACHE_DIR = os.path.join(CACHE_DIR, "holder")
 COUNTRY_CACHE_DIR = os.path.join(CACHE_DIR, "country")
+FEE_CACHE_DIR = os.path.join(CACHE_DIR, "fees")
 
 os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(HOLDINGS_CACHE_DIR, exist_ok=True)
 os.makedirs(NAV_CACHE_DIR, exist_ok=True)
 os.makedirs(HOLDER_CACHE_DIR, exist_ok=True)
 os.makedirs(COUNTRY_CACHE_DIR, exist_ok=True)
+os.makedirs(FEE_CACHE_DIR, exist_ok=True)
 
 _THREAD_LOCAL = threading.local()
 
@@ -1990,6 +1992,22 @@ def _extract_redemption_tiers(html_text):
     return None
 
 def fetch_fund_detail_meta(opener, code):
+    cache_file = os.path.join(FEE_CACHE_DIR, f"{code}_meta.json")
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                cached = json.load(f)
+            # 校验是否具备完整的有效数据
+            if cached.get("fee_manage") not in (None, "--") and cached.get("fee_redemption") not in (None, "未知"):
+                # 动态补齐持仓、持有人与国家分布（这些内部有独立缓存）
+                is_qdii_fund = code in US_ACTIVE_CODES or code in NDX_PASSIVE_CODES or code in SPX_PASSIVE_CODES
+                cached["holdings"] = fetch_holdings(opener, code)
+                cached["holder_struct"] = fetch_fund_holder_structure(opener, code)
+                cached["countries_info"] = fetch_fund_country_distribution(opener, code, is_qdii=is_qdii_fund)
+                return cached
+        except Exception:
+            pass
+
     meta = {
         "name": f"基金_{code}", "scale": "未知", "scale_val": -1.0, "fee_manage": None, "fee_custody": None,
         "fee_sales": None, "fee_source": "", "fee_purchase": "0.00%", "fee_redemption": "未知", "buy_status": "--",
@@ -2076,7 +2094,7 @@ def fetch_fund_detail_meta(opener, code):
         if buy_source_m and buy_source_m.group(1): meta["fee_source"] = buy_source_m.group(1)
         if buy_rate_m and buy_rate_m.group(1): meta["fee_purchase"] = buy_rate_m.group(1)
 
-# ===== 基金规模提取：多通道穿透解析（支持最新资产净值、成立规模与募集规模） =====
+        # ===== 基金规模提取：多通道穿透解析（支持最新资产净值、成立规模与募集规模） =====
         query_c = MAIN_CODE_MAP.get(code, code)
         codes_to_try = [code] if query_c == code else [code, query_c]
 
@@ -2228,12 +2246,10 @@ def fetch_fund_detail_meta(opener, code):
             break
         try:
             f10_url = f"https://fundf10.eastmoney.com/jjfl_{_c}.html"
-            r = requests.get(f10_url, headers={
-                "User-Agent": DEFAULT_HEADERS["User-Agent"],
-                "Referer": f10_url,
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            }, timeout=8)
-            f10_html = r.text
+            # 改用脚本顶部已经定义好的受控抓取函数，自动享有限速与退避重试
+            f10_html = _fetch_f10_html(f10_url, max_retries=2, timeout=10)
+            if not f10_html:
+                continue
 
             # 剥离 HTML 标签，压缩空白
             clean = re.sub(r'<[^>]+>', ' ', f10_html)
@@ -2375,6 +2391,15 @@ def fetch_fund_detail_meta(opener, code):
     meta["holdings"] = fetch_holdings(opener, code)
     meta["holder_struct"] = fetch_fund_holder_structure(opener, code)
     meta["countries_info"] = fetch_fund_country_distribution(opener, code, is_qdii=is_qdii_fund)
+
+    if meta.get("fee_manage") not in (None, "--") and meta.get("fee_redemption") not in (None, "未知"):
+        try:
+            save_meta = {k: v for k, v in meta.items() if k not in ("holdings", "holder_struct", "countries_info")}
+            with open(cache_file, "w", encoding="utf-8") as f:
+                json.dump(save_meta, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
     return meta
 
 def fetch_from_eastmoney(opener, code, start_date, end_date):
@@ -8773,6 +8798,161 @@ def _process_hist_df(df, start_date, end_date):
     except Exception:
         return None
 
+# ==============================================================================
+# 【合并自 get_meiguzhishu.py】美股指数历史数据获取（Yahoo v8 chart 接口）
+# 仅用于补充 import_re.py 中主流指数（NDX/SPX/SOX/COMP）的完整历史与年度收益率
+# 不影响其他任何模块
+# ==============================================================================
+YAHOO_INDEX_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://finance.yahoo.com/",
+    "Connection": "keep-alive",
+}
+
+# Yahoo 指数代码映射（和 get_meiguzhishu.py 保持一致）
+YAHOO_INDEX_CODE_MAP = {
+    "NDX":  "^NDX",
+    "SPX":  "^GSPC",
+    "SOX":  "^SOX",
+    "COMP": "^IXIC",
+}
+
+
+def _build_yahoo_index_opener():
+    """构造 Yahoo 专用 opener。
+
+    说明：import_re.py 顶部清空了 HTTP(S)_PROXY 环境变量，但 urllib 默认 opener
+    不会走系统代理了。这里手动从系统配置读一次代理（Windows 下 getproxies()
+    会读注册表），从而让 Yahoo 请求依然能翻墙；否则就直连（海外服务器 / TUN 模式）。
+    """
+    proxy_url = None
+    try:
+        sys_proxies = urllib.request.getproxies()
+        for key in ("https", "http"):
+            if sys_proxies.get(key):
+                proxy_url = sys_proxies[key]
+                break
+    except Exception:
+        proxy_url = None
+
+    if proxy_url:
+        handler = urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url})
+        return urllib.request.build_opener(handler)
+    return urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
+def fetch_yahoo_index_kline(symbol_code, start_year=2000):
+    """通过 Yahoo Finance v8 接口拉取美股指数历史日线数据。
+    完全对照 get_meiguzhishu.py 的 fetch_yahoo_kline 实现。
+
+    返回：列表，每项含 date / open / high / low / close / volume / nav（nav == close）
+    """
+    period1 = int(time.mktime(time.strptime(f"{start_year}-01-01", "%Y-%m-%d")))
+    period2 = int(time.time())
+
+    url = (
+        f"https://query1.finance.yahoo.com/v8/finance/chart/"
+        f"{urllib.parse.quote(symbol_code)}"
+        f"?period1={period1}&period2={period2}&interval=1d&events=history"
+    )
+
+    req = urllib.request.Request(url, headers=YAHOO_INDEX_HEADERS)
+    records = []
+
+    opener = _build_yahoo_index_opener()
+    try:
+        with opener.open(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        print(f"    [Yahoo] {symbol_code} 请求异常: {type(e).__name__}: {e}")
+        return records
+
+    result = data.get("chart", {}).get("result", [])
+    if not result:
+        print(f"    [Yahoo] {symbol_code} result 为空")
+        return records
+
+    chart_data = result[0]
+    timestamps = chart_data.get("timestamp", [])
+    quote = chart_data.get("indicators", {}).get("quote", [{}])[0]
+
+    opens   = quote.get("open")   or []
+    highs   = quote.get("high")   or []
+    lows    = quote.get("low")    or []
+    closes  = quote.get("close")  or []
+    volumes = quote.get("volume") or []
+
+    for i in range(len(timestamps)):
+        if i >= len(opens)  or opens[i]  is None: continue
+        if i >= len(closes) or closes[i] is None: continue
+        d_str = time.strftime("%Y-%m-%d", time.gmtime(timestamps[i]))
+        c = float(closes[i])
+        records.append({
+            "date":   d_str,
+            "open":   float(opens[i]),
+            "high":   float(highs[i] if i < len(highs) and highs[i] is not None else opens[i]),
+            "low":    float(lows[i]  if i < len(lows)  and lows[i]  is not None else opens[i]),
+            "close":  c,
+            "volume": int(volumes[i] if i < len(volumes) and volumes[i] is not None else 0),
+            "nav":    c,
+        })
+
+    records.sort(key=lambda x: x["date"])
+    if records:
+        print(f"    [Yahoo] {symbol_code} 获取 {len(records)} 条 "
+              f"({records[0]['date']} ~ {records[-1]['date']})")
+    return records
+
+
+def compute_annual_returns_from_kline(records, start_year=2000):
+    """按 get_meiguzhishu.py 的 compute_annual_returns 方式计算年度收益率：
+       - 首个年份：用该年第一个交易日的开盘价
+       - 其余年份：用上一年最后一个交易日的收盘价
+    返回 {"2000": -36.84, "2001": -32.65, ...}
+    """
+    if not records:
+        return {}
+
+    from collections import defaultdict as _dd
+    year_data = _dd(list)
+    for r in records:
+        try:
+            year = int(str(r["date"])[:4])
+        except (ValueError, TypeError):
+            continue
+        if year >= start_year - 1:
+            year_data[year].append(r)
+
+    for year in year_data:
+        year_data[year].sort(key=lambda x: x["date"])
+
+    sorted_years = sorted(year_data.keys())
+    annual_returns = {}
+    prev_year_close = None
+
+    for year in sorted_years:
+        year_records = year_data[year]
+        if not year_records:
+            continue
+        first_rec = year_records[0]
+        last_rec  = year_records[-1]
+
+        if prev_year_close is None:
+            base_price = first_rec.get("open") or first_rec.get("close")
+        else:
+            base_price = prev_year_close
+        end_price = last_rec.get("close")
+
+        if year >= start_year and base_price and base_price > 0 and end_price:
+            ret = (end_price / base_price - 1) * 100.0
+            annual_returns[str(year)] = round(ret, 2)
+
+        prev_year_close = end_price
+
+    return annual_returns
 
 # 模块级常量：指数年度收益率的完整历史起点
 INDEX_FULL_START = "2000-01-01"
@@ -9207,19 +9387,38 @@ def main():
 
     def _process_index(symbol):
         try:
-            data = fetch_index_data(symbol, args.start, args.end)
+            data = None
+            annual_returns = {}
+
+            # ★ 优先尝试 Yahoo v8 接口（对齐 get_meiguzhishu.py 的口径）
+            yahoo_sym = YAHOO_INDEX_CODE_MAP.get(symbol)
+            if yahoo_sym:
+                kline_records = fetch_yahoo_index_kline(yahoo_sym, start_year=2000)
+                if kline_records:
+                    data = [
+                        {"date": r["date"], "nav": r["nav"]}
+                        for r in kline_records
+                        if r["date"] <= args.end
+                    ]
+                    annual_returns = compute_annual_returns_from_kline(
+                        kline_records, start_year=2000
+                    )
+
+            # 兜底：Yahoo 拿不到时退回原有新浪逻辑
+            if not data:
+                data = fetch_index_data(symbol, args.start, args.end)
+                if data:
+                    try:
+                        annual_returns = compute_annual_returns_from_nav(data)
+                    except Exception as e:
+                        print(f"    ⚠️ 主流指数 {symbol} 年度收益计算异常: {e}")
+
             if not data:
                 return None, None
+
             res = analyze_fund_metrics(data, args.end, cutoff_date, is_qdii=False)
             if not res:
                 return None, None
-
-            # ★ 关键修复：从 nav_data 本地计算年度收益率
-            annual_returns = {}
-            try:
-                annual_returns = compute_annual_returns_from_nav(data)
-            except Exception as e:
-                print(f"    ⚠️ 主流指数 {symbol} 年度收益计算异常: {e}")
 
             res.update({
                 "code": symbol, "name": INDEX_NAMES.get(symbol, symbol),
@@ -9228,12 +9427,13 @@ def main():
                 "fee_purchase": "--", "fee_redemption": "--", "buy_status": "--", "buy_limit": "--",
                 "buy_limit_val": -1, "fee_total": "--", "fee_val": -1.0, "holdings": [],
                 "holder_struct": None, "countries_info": {"date": "--", "countries": []},
-                "source": "指数行情", "nav_data": data,
-                "annual_returns": annual_returns,      # ★ 新增
+                "source": "指数行情(Yahoo v8)", "nav_data": data,
+                "annual_returns": annual_returns,
                 "te_data": {},
             })
             return res, f"主流指数 {symbol}"
-        except Exception:
+        except Exception as e:
+            print(f"    ✗ 主流指数 {symbol} 异常: {e}")
             return None, None
 
     def _process_us_etf(symbol):
