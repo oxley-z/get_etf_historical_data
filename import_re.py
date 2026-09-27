@@ -145,6 +145,8 @@ MAIN_CODE_MAP = {
 # 指数历年回报的完整目标清单（用于缓存完整性校验）
 ANNUAL_INDEX_TARGETS = ["纳指100", "标普500", "费城半导体指数", "沪深300", "科创50", "恒生科技"]
 
+CFTC_DASHBOARD_FILE = "cftc_dashboard.html"
+
 INDEX_NAMES = {
     "NDX": "纳斯达克100指数",
     "SPX": "标普500指数",
@@ -4510,6 +4512,17 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
         }}
         .nav-tab-btn:hover {{ background: var(--hover-bg); color: var(--link-color); }}
         .nav-tab-btn.active {{ background: var(--btn-active-bg); color: #fff; }}
+        /* ★ 新增：外部跳转型导航按钮（<a> 标签与 <button> 视觉一致） */
+        a.nav-tab-btn.nav-tab-link {{
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            color: var(--header-text);
+        }}
+        a.nav-tab-btn.nav-tab-link:hover {{
+            background: var(--hover-bg);
+            color: var(--link-color);
+        }}
         .nav-right-tools {{ display: flex; align-items: center; gap: 12px; }}
         .theme-toggle {{
             background: var(--header-bg);
@@ -4531,6 +4544,43 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
         }}
         .view-pane {{ display: none; flex-direction: column; height: 100%; min-height: 0; }}
         .view-pane.active {{ display: flex; }}
+
+        /* ★ 新增：CFTC资产数据内嵌框架 */
+        #allAssetView {{
+            padding: 0;
+            overflow: hidden;
+        }}
+        .asset-iframe-wrap {{
+            flex: 1;
+            min-height: 0;
+            background: var(--table-bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            box-shadow: var(--card-shadow);
+            overflow: hidden;
+            position: relative;
+            display: flex;
+        }}
+        .asset-iframe-wrap iframe {{
+            flex: 1;
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+            background: var(--table-bg);
+        }}
+        .asset-iframe-loading {{
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--footer-text);
+            font-size: 13px;
+            background: var(--table-bg);
+            z-index: 1;
+            pointer-events: none;
+        }}
 
         .home-container {{
             flex: 1;
@@ -6422,6 +6472,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             <button class="nav-tab-btn active" data-view="homeView">🏠 首页概览</button>
             <button class="nav-tab-btn" data-view="fundView">📊 基金量化看板</button>
             <button class="nav-tab-btn" data-view="qdiiView">🌐 QDII 监控</button>
+            <button class="nav-tab-btn" data-view="allAssetView">📊 CFTC资产数据</button>
         </div>
         <div class="nav-right-tools">
             <button class="theme-toggle" id="themeToggle">🌓 切换主题</button>
@@ -6786,6 +6837,21 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             {qdii_sections_html}
         </section>
 
+        <!-- ★ 新增 视图 4：CFTC资产数据（iframe 内嵌同目录下的 CFTC 面板） -->
+        <section id="allAssetView" class="view-pane">
+            <div class="asset-iframe-wrap">
+                <div class="asset-iframe-loading" id="assetIframeLoading">⏳ 正在加载CFTC资产数据面板...</div>
+                <iframe
+                    id="cftcFrame"
+                    data-src="{CFTC_DASHBOARD_FILE}"
+                    title="CFTC CFTC资产数据面板"
+                    loading="lazy"
+                    referrerpolicy="no-referrer"
+                    sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+                ></iframe>
+            </div>
+        </section>
+
     </main>
 
     <!-- 定投独立测算弹窗 -->
@@ -6869,6 +6935,22 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                 this.classList.add('active');
                 const targetView = document.getElementById(this.dataset.view);
                 if (targetView) targetView.classList.add('active');
+
+                // ★ 新增：懒加载CFTC资产 iframe（仅首次进入该视图时真正加载外部 HTML）
+                if (this.dataset.view === 'allAssetView') {{
+                    const frame = document.getElementById('cftcFrame');
+                    const loadingTip = document.getElementById('assetIframeLoading');
+                    if (frame && !frame.dataset.loaded) {{
+                        frame.dataset.loaded = '1';
+                        if (loadingTip) loadingTip.style.display = 'flex';
+                        frame.addEventListener('load', function() {{
+                            if (loadingTip) loadingTip.style.display = 'none';
+                        }}, {{ once: true }});
+                        frame.src = frame.getAttribute('data-src');
+                    }} else if (loadingTip) {{
+                        loadingTip.style.display = 'none';
+                    }}
+                }}
             }});
         }});
 
