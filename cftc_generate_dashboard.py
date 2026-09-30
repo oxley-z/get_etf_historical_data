@@ -357,6 +357,7 @@ def generate_dashboard(df):
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>CFTC 全维度智能量价面板</title>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <style>
@@ -520,6 +521,112 @@ def generate_dashboard(df):
         .pos {{ color: #d62728; font-weight: 600; }}
         .neg {{ color: #2ca02c; font-weight: 600; }}
         .neutral {{ color: #999; }}
+
+        /* ============ 工具类：移动端专属元素默认隐藏 ============ */
+        .home-row {{ padding: 10px 10px 0 10px; }}
+        .cal-toggle {{ display: none; }}
+
+        /* ============ 📱 移动端 / 小屏适配 ============ */
+        @media (max-width: 900px) {{
+            body {{
+                flex-direction: column;
+                height: auto;
+                min-height: 100vh;
+                min-height: 100dvh;
+                overflow-x: hidden;
+            }}
+            #sidebar {{
+                width: 100%;
+                flex-shrink: 0;
+                border-right: none;
+                border-bottom: 1px solid #ddd;
+            }}
+            .search-box {{ padding: 10px 12px; }}
+            #assetSearch {{ padding: 9px 12px; font-size: 14px; }}
+
+            /* 资产列表：移动端改为横向滑动的胶囊按钮，节省纵向空间 */
+            .home-row {{ padding: 8px 12px 0 12px; }}
+            .home-btn {{
+                width: auto !important;
+                padding: 8px 14px !important;
+                font-size: 13px !important;
+                border: 1px solid #e5e5e5 !important;
+                border-bottom: 1px solid #e5e5e5 !important;
+                border-radius: 16px !important;
+                background: #fff;
+            }}
+            .home-btn.active {{ border-color: #1890ff !important; }}
+            #assetList {{
+                flex: none;
+                display: flex;
+                flex-wrap: nowrap;
+                gap: 6px;
+                padding: 8px 12px 10px 12px;
+                overflow-x: auto;
+                overflow-y: hidden;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+            }}
+            #assetList::-webkit-scrollbar {{ display: none; }}
+            .asset-btn {{
+                flex: 0 0 auto;
+                width: auto;
+                margin-bottom: 0;
+                padding: 8px 12px;
+                font-size: 13px;
+                white-space: nowrap;
+                border-radius: 16px;
+                border-left: 1px solid #e5e5e5;
+                background: #fff;
+            }}
+            .asset-btn.active {{ border-left: 1px solid #1890ff; }}
+
+            /* 报告日历：移动端默认收起，点标题展开 */
+            .cal-toggle {{
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+                width: 100%;
+                padding: 10px 12px;
+                background: #fafafa;
+                border: none;
+                border-top: 1px solid #eee;
+                font-family: inherit;
+                font-size: 13px;
+                font-weight: 700;
+                color: #333;
+                cursor: pointer;
+            }}
+            .cal-toggle .arrow {{ font-size: 10px; color: #999; transition: transform 0.2s; }}
+            .cal-toggle.expanded .arrow {{ transform: rotate(90deg); }}
+            .calendar-container {{ display: none; }}
+            .calendar-container.expanded {{ display: block; }}
+            .calendar-cell {{ font-size: 12px; padding: 7px 0; min-height: 24px; }}
+
+            /* 主区域 */
+            #main {{ flex: none; padding: 12px; overflow: visible; }}
+            header {{ padding: 14px 16px; margin-bottom: 12px; }}
+            h1 {{ font-size: 18px; flex-wrap: wrap; gap: 6px; }}
+            .info {{ font-size: 13px; }}
+            #homeView {{ flex: none; overflow: visible; }}
+            /* 注意：必须给定确定高度，否则内部 #chart{{height:100%}} 会退化为 auto，图表画布会被压扁 */
+            #chart-container {{ flex: none; height: 58vh; min-height: 320px; padding: 10px; }}
+            .stats-grid {{ grid-template-columns: repeat(2, 1fr); gap: 10px; }}
+            .stat-card {{ padding: 14px 16px; }}
+            .stat-card .label {{ font-size: 12px; margin-bottom: 4px; }}
+            .stat-card .value {{ font-size: 20px; }}
+            .summary-container {{ flex: none; padding: 14px 16px; -webkit-overflow-scrolling: touch; }}
+            .summary-title {{ font-size: 15px; flex-wrap: wrap; }}
+            .summary-table {{ font-size: 13px; min-width: 620px; }}
+            .summary-table th {{ padding: 10px; }}
+            .summary-table td {{ padding: 10px; white-space: nowrap; }}
+        }}
+        @media (max-width: 480px) {{
+            .stat-card .value {{ font-size: 18px; }}
+            #chart-container {{ height: 62vh; min-height: 340px; }}
+            .summary-table {{ min-width: 560px; }}
+        }}
     </style>
 </head>
 <body>
@@ -527,11 +634,14 @@ def generate_dashboard(df):
         <div class="search-box">
             <input type="text" id="assetSearch" placeholder="🔍 搜索资产 (如: 超长期美债, 10年期)">
         </div>
-        <div style="padding: 10px 10px 0 10px;">
-            <button class="asset-btn home-btn active" onclick="showHome()">数据总览</button>
+        <div class="home-row">
+            <button class="asset-btn home-btn active" onclick="showHome()">📊 数据总览</button>
         </div>
 
         <!-- ★ 新增：报告日历 -->
+        <button type="button" class="cal-toggle" id="calToggle" aria-expanded="false">
+            <span>📅 报告日历</span><span class="arrow">▶</span>
+        </button>
         <div class="calendar-container">
             <div class="calendar-header">
                 <button type="button" onclick="calPrevMonth()" title="上一月">‹</button>
@@ -720,6 +830,18 @@ def generate_dashboard(df):
             }}
             calRender();
         }}
+
+        // ★ 移动端：报告日历折叠开关
+        (function() {{
+            const toggle = document.getElementById('calToggle');
+            const cal = document.querySelector('.calendar-container');
+            if (!toggle || !cal) return;
+            toggle.addEventListener('click', function() {{
+                const expanded = cal.classList.toggle('expanded');
+                toggle.classList.toggle('expanded', expanded);
+                toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+            }});
+        }})();
 
         window.addEventListener('resize', () => {{ if (myChart) myChart.resize(); }});
 
@@ -959,6 +1081,28 @@ def generate_dashboard(df):
                     }}
                 ]
             }};
+
+            // ★ 移动端：图表参数自适应（缩小字号、图例可横向滚动、提示框不溢出屏幕）
+            if (window.innerWidth <= 900) {{
+                option.grid = {{ left: 6, right: 10, top: 96, bottom: 54, containLabel: true }};
+                option.legend = Object.assign({{}}, option.legend, {{
+                    type: 'scroll',
+                    top: 4,
+                    itemWidth: 14,
+                    itemHeight: 8,
+                    itemGap: 8,
+                    textStyle: {{ fontSize: 11 }}
+                }});
+                option.tooltip.confine = true;
+                option.xAxis.axisLabel = {{ fontSize: 10, hideOverlap: true }};
+                option.yAxis[0].nameTextStyle = {{ fontSize: 10 }};
+                option.yAxis[0].axisLabel = {{ fontSize: 10 }};
+                option.yAxis[1].nameTextStyle = {{ fontSize: 10 }};
+                option.yAxis[1].axisLabel = {{ fontSize: 10 }};
+                option.dataZoom[0].height = 18;
+                option.dataZoom[0].bottom = 2;
+            }}
+
             const chart = getChart();
             chart.resize();
             chart.setOption(option, true);

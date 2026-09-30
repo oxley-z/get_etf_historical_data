@@ -4582,6 +4582,72 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             pointer-events: none;
         }}
 
+        /* ★ CFTC 内嵌面板顶部工具条（仅移动端显示） */
+        .asset-iframe-bar {{ display: none; }}
+        .asset-iframe-bar a {{
+            color: var(--link-color);
+            text-decoration: none;
+            font-weight: 600;
+            white-space: nowrap;
+        }}
+
+        /* ★ 移动端适配：CFTC 资产数据视图 */
+        @media (max-width: 992px) {{
+            /* 顶部 Tab 横向滑动，保证「CFTC资产数据」始终可点 */
+            .nav-tabs-group {{
+                order: 3;
+                width: 100%;
+                gap: 4px;
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                overflow-y: hidden;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+                padding: 2px 0;
+            }}
+            .nav-tabs-group::-webkit-scrollbar {{ display: none; }}
+            .nav-tab-btn .tab-ico {{ display: none; }}
+            .nav-tab-btn {{
+                flex: 0 0 auto;
+                padding: 6px 9px;
+                font-size: 12px;
+                white-space: nowrap;
+            }}
+
+            /* 内嵌面板：移动端改为纵向布局，iframe 撑满可视区域，避免高度塌陷 */
+            #allAssetView {{ overflow: visible; }}
+            .asset-iframe-wrap {{
+                flex: none;
+                flex-direction: column;
+                height: auto;
+                min-height: 0;
+            }}
+            .asset-iframe-bar {{
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+                flex-shrink: 0;
+                padding: 6px 10px;
+                font-size: 12px;
+                color: var(--footer-text);
+                background: var(--hover-bg);
+                border-bottom: 1px solid var(--border);
+            }}
+            .asset-iframe-bar span {{
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }}
+            .asset-iframe-wrap iframe {{
+                flex: none;
+                height: calc(100vh - 150px);
+                height: calc(100dvh - 150px);
+                min-height: 420px;
+            }}
+            .asset-iframe-loading {{ font-size: 12px; }}
+        }}
+
         .home-container {{
             flex: 1;
             overflow-y: auto;
@@ -6469,10 +6535,10 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
             {mode_badge}
         </div>
         <div class="nav-tabs-group">
-            <button class="nav-tab-btn active" data-view="homeView">🏠 首页概览</button>
-            <button class="nav-tab-btn" data-view="fundView">📊 基金量化看板</button>
-            <button class="nav-tab-btn" data-view="qdiiView">🌐 QDII 监控</button>
-            <button class="nav-tab-btn" data-view="allAssetView">📊 CFTC资产数据</button>
+            <button class="nav-tab-btn active" data-view="homeView"><span class="tab-ico">🏠</span>首页概览</button>
+            <button class="nav-tab-btn" data-view="fundView"><span class="tab-ico">📊</span>基金量化看板</button>
+            <button class="nav-tab-btn" data-view="qdiiView"><span class="tab-ico">🌐</span>QDII 监控</button>
+            <button class="nav-tab-btn" data-view="allAssetView"><span class="tab-ico">📊</span>CFTC资产数据</button>
         </div>
         <div class="nav-right-tools">
             <button class="theme-toggle" id="themeToggle">🌓 切换主题</button>
@@ -6840,6 +6906,10 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
         <!-- ★ 新增 视图 4：CFTC资产数据（iframe 内嵌同目录下的 CFTC 面板） -->
         <section id="allAssetView" class="view-pane">
             <div class="asset-iframe-wrap">
+                <div class="asset-iframe-bar">
+                    <span>📱 面板可上下滑动查看，图表可双指缩放</span>
+                    <a href="{CFTC_DASHBOARD_FILE}" target="_blank" rel="noopener">新窗口打开 ↗</a>
+                </div>
                 <div class="asset-iframe-loading" id="assetIframeLoading">⏳ 正在加载CFTC资产数据面板...</div>
                 <iframe
                     id="cftcFrame"
