@@ -76,7 +76,7 @@ PROD_FUNDS = [
     "539001", "018966",
     # 标普被动组
     "161125", "007721", "017028", "050025", "018064", "096001", "017641", "018738",
-    "161128",
+    "161128", "519981",
     # CPO 组
     "022365", "540010", "002112", "011892", "021528",
     "009645", "011370", "011452", "016371", "001956",
@@ -120,7 +120,7 @@ NDX_PASSIVE_CODES = {
 
 SPX_PASSIVE_CODES = {
     "161125", "007721", "017028", "050025", "018064", "096001", "017641", "018738",
-    "161128"
+    "161128", "519981"
 }
 
 # 分级 C 份额到主代码/A 份额映射（补全新增的美股/标普/行业子份额映射）
@@ -2769,16 +2769,36 @@ def _cme_rate_label(rate_text: str) -> str:
 
 
 def _cme_parse_date(text: str):
-    """解析 QuikStrike 常见的英文日期，如 28 Oct 2026。"""
+    """解析 QuikStrike 日期：支持英文(28 Oct 2026)、中文(28 10月 2026 / 2026年10月28日)、ISO 三种。"""
     months = {
         'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
         'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
     }
-    m = re.search(r'\b(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})\b', str(text or ''))
-    if not m:
-        m = re.search(r'\b(\d{4})[-/]([01]?\d)[-/]([0-3]?\d)\b', str(text or ''))
-        if m:
+    s = str(text or '')
+    # ISO / 斜杠：2026-10-28、2026/10/28
+    m = re.search(r'\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b', s)
+    if m:
+        try:
             return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except Exception:
+            return None
+    # 中文：2026年10月28日
+    m = re.search(r'(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日?', s)
+    if m:
+        try:
+            return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except Exception:
+            return None
+    # 中文倒序（QuikStrike 实际返回）：28 10月 2026
+    m = re.search(r'\b(\d{1,2})\s+(\d{1,2})\s*月\s*(\d{4})\b', s)
+    if m:
+        try:
+            return datetime(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+        except Exception:
+            return None
+    # 英文：28 Oct 2026
+    m = re.search(r'\b(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})\b', s)
+    if not m:
         return None
     mo = months.get(m.group(2).lower()[:3])
     if not mo:
@@ -2798,8 +2818,8 @@ def fetch_cme_fedwatch(opener) -> dict:
     """从 CME FedWatch 的官方 QuikStrike 页面读取下一次 FOMC 市场隐含概率"""
     source_url = "https://www.cmegroup.com/cn-s/markets/interest-rates/cme-fedwatch-tool.html"
     iframe_urls = [
+        "https://cmegroup-tools.quikstrike.net/User/QuikStrikeView.aspx?viewitemid=IntegratedFedWatchTool",
         "https://cmegroup-tools.quikstrike.net/User/QuikStrikeView.aspx?viewitemid=IntegratedFedWatchTool&userId=lwolf&jobRole=&company=&companyType=",
-        "https://cmegroup-tools.quikstrike.net/User/QuikStrikeTools.aspx?viewitemid=IntegratedFedWatchTool&userId=lwolf&jobRole=&company=&companyType=",
     ]
     result = {
         "source_url": source_url,
@@ -2893,35 +2913,29 @@ def fetch_cme_fedwatch(opener) -> dict:
                 break
 
         if target_table:
-            now_index = None
-            for row in target_table[:3]:
-                for idx, cell in enumerate(row):
-                    if re.search(r'\bNOW\b', cell.upper()):
-                        now_index = idx
-                        break
-                if now_index is not None:
-                    break
-            if now_index is None:
-                now_index = 1
-
+            # QuikStrike 数据行为 [利率区间, Now, 1 Day, 1 Week, 1 Month]，
+            # 表头行 "Now/1 Day/..." 相比数据行少一列（缺利率列），
+            # 因此不能再按表头下标偏移，直接取利率列之后的 4 个单元格。
             for row in target_table:
                 if not row or not re.search(r'\d+\s*[-–—]\s*\d+', row[0] if row else ''):
                     continue
                 rate_raw = re.sub(r'\s*\(Current\)', '', row[0], flags=re.I).strip()
-                values = row[now_index:] if now_index < len(row) else []
-                current = None
-                if values:
-                    current = _cme_num(values[0])
+                values = row[1:]
+                current = _cme_num(values[0]) if values else None
                 if current is None:
                     continue
                 rate_label = _cme_rate_label(rate_raw)
                 prev_day = values[1] if len(values) > 1 else '--'
                 prev_week = values[2] if len(values) > 2 else '--'
+                prev_day_num = _cme_num(prev_day)
+                prev_week_num = _cme_num(prev_week)
+                if current <= 0 and (not prev_day_num) and (not prev_week_num):
+                    continue  # 跳过长期为 0 的档位，避免表格被 20 多行空数据撑满
                 result['table_rows'].append({
                     'rate': rate_label,
                     'current': f"{current:.1f}",
-                    'prev_day': f"{_cme_num(prev_day):.1f}" if _cme_num(prev_day) is not None else '—',
-                    'prev_week': f"{_cme_num(prev_week):.1f}" if _cme_num(prev_week) is not None else '—',
+                    'prev_day': f"{prev_day_num:.1f}" if prev_day_num is not None else '—',
+                    'prev_week': f"{prev_week_num:.1f}" if prev_week_num is not None else '—',
                 })
                 if current > 0:
                     result['probabilities'].append({'rate': rate_label, 'pct': current})
@@ -2961,22 +2975,26 @@ def fetch_cme_fedwatch(opener) -> dict:
 
 
 def fetch_fed_rate_monitor(opener) -> dict:
-    """美联储利率观测器：多源抓取 + 优雅降级"""
-    result = fetch_cme_fedwatch(opener)
-    if result.get('probabilities') and result.get('meeting_iso'):
-        return result
+    """美联储利率观测器：CME FedWatch(QuikStrike) 为主源，Investing.com 为备用源。
+
+    两个源都取不到时不再回填写死的历史概率，而是返回明确的失败状态，
+    避免页面上出现“时间戳是今天、数据却是几个月前”的假数据。
+    """
+    cme_result = fetch_cme_fedwatch(opener)
+    if cme_result.get('probabilities'):
+        return cme_result
 
     source_url = "https://cn.investing.com/central-banks/fed-rate-monitor"
     result = {
         "source_url": source_url,
-        "meeting_text": "2026年10月29日 02:00",
-        "meeting_iso": "2026-10-29T02:00:00+08:00",
+        "meeting_text": "--",
+        "meeting_iso": "",
         "countdown_minutes": None,
         "countdown_text": "暂无倒计时",
-        "futures_price": "96.105",
+        "futures_price": "--",
         "probabilities": [],
         "table_rows": [],
-        "update_text": f"{datetime.now().strftime('%Y年%m月%d日 %H:%M')} CST",
+        "update_text": "--",
         "source_name": "Investing.com",
     }
 
@@ -3033,18 +3051,13 @@ def fetch_fed_rate_monitor(opener) -> dict:
         pass
 
     if not result['table_rows']:
-        result['meeting_text'] = "2026年10月29日 02:00"
-        result['meeting_iso'] = "2026-10-29T02:00:00+08:00"
-        result['futures_price'] = "96.105"
-        result['table_rows'] = [
-            {"rate": "3.50 - 3.75", "current": "—", "prev_day": "—", "prev_week": "28.0"},
-            {"rate": "3.75 - 4.00", "current": "42.6", "prev_day": "44.9", "prev_week": "54.1"},
-            {"rate": "4.00 - 4.25", "current": "57.4", "prev_day": "55.1", "prev_week": "18.0"}
-        ]
-        result['probabilities'] = [
-            {"rate": "3.75 - 4.00", "pct": 42.6},
-            {"rate": "4.00 - 4.25", "pct": 57.4}
-        ]
+        # 主源(CME)失败、备用源(Investing.com)也失败：如 CMEFedWatch 至少拿到了会议信息
+        # 就沿用它的会议时间/期货价格，其余如实标记为获取失败。
+        if cme_result.get('meeting_iso'):
+            for key in ('meeting_text', 'meeting_iso', 'futures_price', 'source_url', 'source_name'):
+                if cme_result.get(key):
+                    result[key] = cme_result[key]
+        result['update_text'] = "数据获取失败：无法访问 CME FedWatch / Investing.com"
 
     try:
         from datetime import timezone
