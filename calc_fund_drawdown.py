@@ -4051,6 +4051,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                 {"name": "WiseETF", "url": "https://www.wise-etf.com/", "desc": "美股ETF/QDII基金估值与溢价监控"},
                 {"name": "基金决策宝(jjpro)", "url": "https://jjpro.cn/", "desc": "基金组合分析与投研决策辅助工具"},
                 {"name": "股查查", "url": "https://guchacha.com/", "desc": "专业的企业/股票基本面查询工具"},
+                {"name": "ETF Flow Terminal", "url": "https://www.kzgflow.com/", "desc": "比特币、以太坊现货 ETF 历史资金流与最新变化"},
             ]
         },
         {
