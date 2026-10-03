@@ -30,6 +30,136 @@ REPORT_FILE_EXT = ".html"
 PRICE_CACHE_FILE = os.path.join(REPORT_DIR, "cftc_价格历史缓存.json")
 DATA_EXPORT_FILE = os.path.join(REPORT_DIR, "cftc_面板完整数据.json")
 
+# ================= 深色主题（与主看板联动） =================
+# 说明：这两段以普通字符串保存，模板里用 {CFTC_THEME_CSS} / {CFTC_THEME_JS} 注入，
+#       避免在 f-string 中转义大量花括号。
+CFTC_THEME_CSS = """
+        /* ============ 🌙 深色主题（与主看板主题联动） ============ */
+        [data-theme="dark"] { color-scheme: dark; }
+        [data-theme="dark"] body { background: #14161a; color: #d7dae0; }
+        [data-theme="dark"] #sidebar { background: #1b1e24; border-color: #2c313a; }
+        [data-theme="dark"] .search-box { background: #20242c; border-bottom-color: #2c313a; }
+        [data-theme="dark"] #assetSearch { background: #171a20; border-color: #343a45; color: #d7dae0; }
+        [data-theme="dark"] #assetSearch::placeholder { color: #7b828e; }
+        [data-theme="dark"] .asset-btn { color: #c8cdd6; }
+        [data-theme="dark"] .asset-btn:hover { background: #232a36; color: #7cc4ff; }
+        [data-theme="dark"] .asset-btn.active { background: #1d2b3d; color: #7cc4ff; border-left-color: #4a9eff; }
+        [data-theme="dark"] .home-btn { border-bottom-color: #2c313a; }
+        [data-theme="dark"] .calendar-container { background: #20242c; border-bottom-color: #2c313a; }
+        [data-theme="dark"] .calendar-header .cal-title { color: #d7dae0; }
+        [data-theme="dark"] .calendar-header button { background: #171a20; border-color: #343a45; color: #a9b1bd; }
+        [data-theme="dark"] .calendar-header button:hover { background: #1d2b3d; color: #7cc4ff; border-color: #4a9eff; }
+        [data-theme="dark"] .calendar-weekdays span,
+        [data-theme="dark"] .calendar-legend,
+        [data-theme="dark"] .cal-toggle .arrow { color: #7b828e; }
+        [data-theme="dark"] .calendar-cell,
+        [data-theme="dark"] .calendar-cell.no-report { color: #4a515c; }
+        [data-theme="dark"] .calendar-cell.has-report { background: #1d2b3d; color: #7cc4ff; border-color: #2f4a6b; }
+        [data-theme="dark"] .calendar-cell.has-report:hover { background: #4a9eff; color: #0f1115; border-color: #4a9eff; }
+        [data-theme="dark"] .calendar-legend .dot.blue { background: #1d2b3d; border-color: #2f4a6b; }
+        [data-theme="dark"] .calendar-legend .dot.gray { background: #262b33; border-color: #343a45; }
+        [data-theme="dark"] .cal-toggle { background: #20242c; border-top-color: #2c313a; color: #d7dae0; }
+        [data-theme="dark"] header,
+        [data-theme="dark"] #chart-container,
+        [data-theme="dark"] .stat-card,
+        [data-theme="dark"] .summary-container { background: #1b1e24; box-shadow: 0 4px 12px rgba(0,0,0,0.35); }
+        [data-theme="dark"] h1,
+        [data-theme="dark"] .stat-card .value,
+        [data-theme="dark"] .summary-title { color: #e8eaee; }
+        [data-theme="dark"] .info { color: #a9b1bd; }
+        [data-theme="dark"] .sub-info,
+        [data-theme="dark"] .stat-card .label { color: #8b93a1; }
+        [data-theme="dark"] .type-yield { background: #3a1e1e; color: #ff7875; border-color: #7a3b3b; }
+        [data-theme="dark"] .type-futures { background: #1e2f1e; color: #73d13d; border-color: #3d6b3d; }
+        [data-theme="dark"] .type-proxy { background: #16263a; color: #69c0ff; border-color: #2f4a6b; }
+        [data-theme="dark"] .type-index { background: #241a33; color: #b37feb; border-color: #4b3a6b; }
+        [data-theme="dark"] .type-yf { background: #33290f; color: #ffc069; border-color: #6b5620; }
+        [data-theme="dark"] .type-custom { background: #33172a; color: #ff85c0; border-color: #6b3358; }
+        [data-theme="dark"] .summary-table th { background: #20242c; color: #a9b1bd; border-bottom-color: #2c313a; }
+        [data-theme="dark"] .summary-table td { border-bottom-color: #262b33; color: #c8cdd6; }
+        [data-theme="dark"] .summary-table tbody tr:hover { background: #232a36; }
+        [data-theme="dark"] .neutral { color: #7b828e; }
+        [data-theme="dark"] ::-webkit-scrollbar { width: 10px; height: 10px; }
+        [data-theme="dark"] ::-webkit-scrollbar-track { background: #171a20; }
+        [data-theme="dark"] ::-webkit-scrollbar-thumb { background: #3a4049; border-radius: 5px; }
+        @media (max-width: 900px) {
+            [data-theme="dark"] .home-btn,
+            [data-theme="dark"] .asset-btn { background: #20242c; border-color: #343a45 !important; }
+            [data-theme="dark"] .asset-btn.active { background: #1d2b3d; border-left-color: #4a9eff !important; }
+        }
+"""
+
+CFTC_THEME_JS = """    <script>
+        /* ============ 主题联动：?theme= 参数 / 主看板 postMessage / 本地偏好 ============ */
+        (function () {
+            function normalize(value) {
+                return value === 'dark' ? 'dark' : (value === 'light' ? 'light' : null);
+            }
+            function fromQuery() {
+                try { return normalize(new URLSearchParams(window.location.search).get('theme')); }
+                catch (e) { return null; }
+            }
+            function fromHash() {
+                var m = /(?:^|[#&])theme=(dark|light)/.exec(window.location.hash || '');
+                return m ? m[1] : null;
+            }
+            function fromStorage() {
+                try { return normalize(window.localStorage.getItem('theme')); } catch (e) { return null; }
+            }
+
+            window.cftcSetTheme = function (value) {
+                var theme = normalize(value) || 'light';
+                document.documentElement.setAttribute('data-theme', theme);
+                document.documentElement.style.colorScheme = theme;
+                try { window.localStorage.setItem('theme', theme); } catch (e) {}
+                if (typeof window.onCftcThemeChange === 'function') {
+                    try { window.onCftcThemeChange(theme); } catch (e) {}
+                }
+            };
+
+            /* 图表配色：主看板切换主题时 ECharts 同步换色 */
+            window.cftcThemePalette = function () {
+                if (document.documentElement.getAttribute('data-theme') === 'dark') {
+                    return {
+                        tooltipBg: 'rgba(27, 30, 36, 0.96)', tooltipBorder: '#3a4049', tooltipText: '#e8eaee',
+                        tooltipDivider: '#2c313a', crossColor: '#7b828e', splitLine: '#2c313a',
+                        axisLine: '#3a4049', axisLabel: '#a9b1bd', legendText: '#a9b1bd',
+                        zoomFiller: 'rgba(74, 158, 255, 0.22)', zoomBorder: '#3a4049',
+                        zoomHandle: '#4a9eff', zoomText: '#a9b1bd'
+                    };
+                }
+                return {
+                    tooltipBg: 'rgba(255, 255, 255, 0.95)', tooltipBorder: '#ccc', tooltipText: '#333',
+                    tooltipDivider: '#eee', crossColor: '#999', splitLine: '#eee',
+                    axisLine: '#ccc', axisLabel: '#666', legendText: '#333',
+                    zoomFiller: 'rgba(24, 144, 255, 0.18)', zoomBorder: '#ddd',
+                    zoomHandle: '#1890ff', zoomText: '#666'
+                };
+            };
+
+            window.onCftcThemeChange = function () {
+                if (typeof window.refreshCftcChartTheme === 'function') {
+                    try { window.refreshCftcChartTheme(); } catch (e) {}
+                }
+            };
+
+            window.cftcSetTheme(fromQuery() || fromHash() || fromStorage() || 'light');
+            window.addEventListener('message', function (ev) {
+                var data = ev && ev.data;
+                if (data === null || data === undefined) return;
+                if (typeof data === 'string') { window.cftcSetTheme(data); return; }
+                if (data.type && data.type !== 'cftc-theme') return;
+                window.cftcSetTheme(data.theme);
+            });
+            // 同源其它页面（主看板 / 报告页）写入 localStorage 时同步
+            window.addEventListener('storage', function (ev) {
+                if (!ev || ev.key !== 'theme') return;
+                window.cftcSetTheme(ev.newValue);
+            });
+        })();
+    </script>
+"""
+
 # 针对不同资产配置最优的数据源映射策略
 ASSET_CONFIG = {
     # 宏观利率 (真实收益率 %，配置 ETF 降级保护)
@@ -359,6 +489,7 @@ def generate_dashboard(df):
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>CFTC 全维度智能量价面板</title>
+{CFTC_THEME_JS}
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <style>
         body {{ display: flex; height: 100vh; margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: #f0f2f5; }}
@@ -627,6 +758,7 @@ def generate_dashboard(df):
             #chart-container {{ height: 62vh; min-height: 340px; }}
             .summary-table {{ min-width: 560px; }}
         }}
+{CFTC_THEME_CSS}
     </style>
 </head>
 <body>
@@ -725,6 +857,7 @@ def generate_dashboard(df):
         const rawData = {json.dumps(full_data)};
         const assetList = Object.keys(rawData);
         let myChart = null;
+        let currentAssetName = null;
 
         // ★ 报告日期列表（由 Python 侧注入）
         const reportDates = {json.dumps(report_dates)};
@@ -795,7 +928,8 @@ def generate_dashboard(df):
                     cell.classList.add('has-report');
                     cell.title = "查看 " + dateStr + " 的 CFTC 持仓报告";
                     cell.onclick = () => {{
-                        const url = REPORT_URL_PREFIX + REPORT_FILE_STEM + dateStr + REPORT_FILE_EXT;
+                        const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+                        const url = REPORT_URL_PREFIX + REPORT_FILE_STEM + dateStr + REPORT_FILE_EXT + '?theme=' + encodeURIComponent(theme);
                         window.location.href = url;
                     }};
                 }} else {{
@@ -960,6 +1094,7 @@ def generate_dashboard(df):
             document.getElementById('chart-container').style.display = 'block';
 
             document.getElementById('currentAsset').innerText = name + " - 量价对冲分析";
+            currentAssetName = name;
 
             const data = rawData[name];
             const cfg = data.config;
@@ -1004,16 +1139,17 @@ def generate_dashboard(df):
 
             const hasPrice = data.prices.some(p => p !== null);
 
+            const P = window.cftcThemePalette();
             const option = {{
                 tooltip: {{ 
                     trigger: 'axis', 
-                    axisPointer: {{ type: 'cross', crossStyle: {{ color: '#999' }} }},
-                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                    borderColor: '#ccc',
+                    axisPointer: {{ type: 'cross', crossStyle: {{ color: P.crossColor }} }},
+                    backgroundColor: P.tooltipBg,
+                    borderColor: P.tooltipBorder,
                     borderWidth: 1,
-                    textStyle: {{ color: '#333' }},
+                    textStyle: {{ color: P.tooltipText }},
                     formatter: function (params) {{
-                        let html = '<div style="font-weight:bold;margin-bottom:8px;border-bottom:1px solid #eee;padding-bottom:5px;">' + params[0].name + '</div>';
+                        let html = '<div style="font-weight:bold;margin-bottom:8px;border-bottom:1px solid ' + P.tooltipDivider + ';padding-bottom:5px;">' + params[0].name + '</div>';
                         params.forEach(param => {{
                             let val = param.value;
                             if (param.seriesIndex === 3 && val != null) {{
@@ -1038,21 +1174,26 @@ def generate_dashboard(df):
                         return html;
                     }}
                 }},
-                legend: {{ data: ['多头 (Long)', '空头 (Short)', '净持仓 (Net)', priceAxisName], top: 5 }},
+                legend: {{ data: ['多头 (Long)', '空头 (Short)', '净持仓 (Net)', priceAxisName], top: 5, textStyle: {{ color: P.legendText }} }},
                 grid: {{ left: '4%', right: '5%', bottom: '10%', top: '15%', containLabel: true }},
                 dataZoom: [
-                    {{ type: 'slider', start: 0, end: 100, bottom: 0, height: 25 }}, 
+                    {{ type: 'slider', start: 0, end: 100, bottom: 0, height: 25, backgroundColor: 'transparent',
+                      fillerColor: P.zoomFiller, borderColor: P.zoomBorder, handleStyle: {{ color: P.zoomHandle }},
+                      textStyle: {{ color: P.zoomText }} }}, 
                     {{ type: 'inside' }}
                 ],
-                xAxis: {{ type: 'category', data: data.dates, boundaryGap: true, axisTick: {{ alignWithLabel: true }} }},
+                xAxis: {{ type: 'category', data: data.dates, boundaryGap: true, axisTick: {{ alignWithLabel: true }},
+                    axisLine: {{ lineStyle: {{ color: P.axisLine }} }}, axisLabel: {{ color: P.axisLabel }} }},
                 yAxis: [
                     {{ 
                         type: 'value', 
                         name: '机构持仓量 (手)', 
                         position: 'left',
                         alignTicks: true,
-                        splitLine: {{ lineStyle: {{ type: 'dashed', color: '#eee' }} }},
-                        axisLabel: {{ formatter: (value) => value.toLocaleString() }}
+                        splitLine: {{ lineStyle: {{ type: 'dashed', color: P.splitLine }} }},
+                        axisLine: {{ lineStyle: {{ color: P.axisLine }} }},
+                        nameTextStyle: {{ color: P.axisLabel }},
+                        axisLabel: {{ color: P.axisLabel, formatter: (value) => value.toLocaleString() }}
                     }},
                     {{ 
                         type: 'value', 
@@ -1060,6 +1201,9 @@ def generate_dashboard(df):
                         position: 'right',
                         alignTicks: true,
                         splitLine: {{ show: false }},
+                        axisLine: {{ lineStyle: {{ color: P.axisLine }} }},
+                        nameTextStyle: {{ color: P.axisLabel }},
+                        axisLabel: {{ color: P.axisLabel }},
                         scale: true 
                     }}
                 ],
@@ -1091,14 +1235,14 @@ def generate_dashboard(df):
                     itemWidth: 14,
                     itemHeight: 8,
                     itemGap: 8,
-                    textStyle: {{ fontSize: 11 }}
+                    textStyle: {{ color: P.legendText, fontSize: 11 }}
                 }});
                 option.tooltip.confine = true;
-                option.xAxis.axisLabel = {{ fontSize: 10, hideOverlap: true }};
-                option.yAxis[0].nameTextStyle = {{ fontSize: 10 }};
-                option.yAxis[0].axisLabel = {{ fontSize: 10 }};
-                option.yAxis[1].nameTextStyle = {{ fontSize: 10 }};
-                option.yAxis[1].axisLabel = {{ fontSize: 10 }};
+                option.xAxis.axisLabel = {{ color: P.axisLabel, fontSize: 10, hideOverlap: true }};
+                option.yAxis[0].nameTextStyle = {{ color: P.axisLabel, fontSize: 10 }};
+                option.yAxis[0].axisLabel = {{ color: P.axisLabel, fontSize: 10 }};
+                option.yAxis[1].nameTextStyle = {{ color: P.axisLabel, fontSize: 10 }};
+                option.yAxis[1].axisLabel = {{ color: P.axisLabel, fontSize: 10 }};
                 option.dataZoom[0].height = 18;
                 option.dataZoom[0].bottom = 2;
             }}
@@ -1109,6 +1253,15 @@ def generate_dashboard(df):
         }}
 
         document.getElementById('assetSearch').oninput = (e) => renderAssetList(e.target.value);
+
+        // ★ 主题切换后重绘图表（由主看板 postMessage 触发）
+        window.refreshCftcChartTheme = function () {{
+            const container = document.getElementById('chart-container');
+            if (currentAssetName && rawData[currentAssetName] &&
+                container && container.style.display !== 'none') {{
+                selectAsset(currentAssetName, document.querySelector('.asset-btn.active'));
+            }}
+        }};
 
         // ============ 初始化 ============
         renderAssetList();

@@ -4,6 +4,67 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CFTC 持仓报告 - 2026-05-05</title>
+    <script>
+        /* 主题联动：?theme= 参数 / 主看板 postMessage / localStorage / storage 事件 */
+        (function () {
+            function normalize(v) { return v === 'dark' ? 'dark' : (v === 'light' ? 'light' : null); }
+            function fromQuery() {
+                try { return normalize(new URLSearchParams(window.location.search).get('theme')); }
+                catch (e) { return null; }
+            }
+            function fromHash() {
+                var m = /(?:^|[#&])theme=(dark|light)/.exec(window.location.hash || '');
+                return m ? m[1] : null;
+            }
+            function fromStorage() {
+                try { return normalize(window.localStorage.getItem('theme')); } catch (e) { return null; }
+            }
+
+            var current = fromQuery() || fromHash() || fromStorage() || 'light';
+
+            // ★ 返回分析面板时带上当前主题，避免来回切换丢失
+            function syncBackLink() {
+                var back = document.querySelector('a.back-btn');
+                if (!back) return;
+                var href = (back.getAttribute('href') || '../cftc_dashboard.html').split('?')[0].split('#')[0];
+                back.setAttribute('href', href + '?theme=' + encodeURIComponent(current));
+            }
+
+            function applyTheme(value) {
+                var theme = normalize(value);
+                if (!theme) return;
+                if (theme !== current) {
+                    current = theme;
+                    document.documentElement.setAttribute('data-theme', theme);
+                    document.documentElement.style.colorScheme = theme;
+                    try { window.localStorage.setItem('theme', theme); } catch (e) {}
+                }
+                syncBackLink();
+            }
+
+            window.cftcSetTheme = applyTheme;
+            document.documentElement.setAttribute('data-theme', current);
+            document.documentElement.style.colorScheme = current;
+            try { window.localStorage.setItem('theme', current); } catch (e) {}
+
+            // 内嵌在 CFTC 面板 iframe 中时：接收父页面的主题切换通知
+            window.addEventListener('message', function (ev) {
+                var data = ev && ev.data;
+                if (data === null || data === undefined) return;
+                if (typeof data === 'string') { applyTheme(data); return; }
+                if (data.type && data.type !== 'cftc-theme') return;
+                applyTheme(data.theme);
+            });
+
+            // 同源其它页面（主看板 / 面板）写入 localStorage 时同步
+            window.addEventListener('storage', function (ev) {
+                if (!ev || ev.key !== 'theme') return;
+                applyTheme(ev.newValue);
+            });
+
+            document.addEventListener('DOMContentLoaded', syncBackLink);
+        })();
+    </script>
     <style>
 :root {
     --blue: #4472C4; --blue-light: #D6E4F0; --orange: #C55A11;
@@ -56,6 +117,41 @@ tbody tr:hover { background: #EBF0F7; }
 .notes ul { margin: 6px 0 0 18px; } .notes li { margin-bottom: 3px; }
 
 @media print { body { padding: 10px; font-size: 11px; } }
+
+/* ============ 🌙 深色主题（跟随主看板切换） ============ */
+[data-theme="dark"] {
+    color-scheme: dark;
+    --blue: #4a9eff; --blue-light: #1d2b3d; --orange: #ff9a4d;
+    --green-bg: #16301c; --green-txt: #56d364;
+    --red-bg: #3a1d1f; --red-txt: #ff7b72;
+    --gray-border: #2c313a; --row-alt: #1b1e24;
+}
+[data-theme="dark"] body { background: #14161a; color: #d7dae0; }
+[data-theme="dark"] header .meta { color: #8b93a1; }
+[data-theme="dark"] thead th { background: #223a58; border-color: #33557d; }
+[data-theme="dark"] thead th.group-header { background: #1b2f49; }
+[data-theme="dark"] .back-btn { background: #2b5488; }
+[data-theme="dark"] .back-btn:hover { background: #35618f; }
+[data-theme="dark"] tbody td:first-child { background: #1b1e24; }
+[data-theme="dark"] tbody tr:hover { background: #232a36; }
+[data-theme="dark"] .section-row td { color: #7cc4ff; }
+[data-theme="dark"] .tag-bull { background: #16301c; color: #56d364; }
+[data-theme="dark"] .tag-bear { background: #3a1d1f; color: #ff7b72; }
+[data-theme="dark"] .tag-mixed { background: #33290f; color: #ffc069; }
+[data-theme="dark"] .tag-crowded { background: #3a2a17; color: #ff9a4d; }
+[data-theme="dark"] .tag-vcrowded { background: #4a2a10; color: #ffb37a; }
+[data-theme="dark"] .tag-extreme { background: #c1440e; color: #fff; }
+[data-theme="dark"] .divergence { background: #3d3316 !important; border-color: #a8842a !important; }
+[data-theme="dark"] .source { color: #7b828e; }
+[data-theme="dark"] .notes { background: #1b1e24; color: #a9b1bd; }
+[data-theme="dark"] ::-webkit-scrollbar { width: 10px; height: 10px; }
+[data-theme="dark"] ::-webkit-scrollbar-track { background: #171a20; }
+[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #3a4049; border-radius: 5px; }
+@media print {
+    [data-theme="dark"] body { background: #fff; color: #333; }
+    [data-theme="dark"] tbody td:first-child { background: #FAFAFA; }
+    [data-theme="dark"] .notes { background: #F8F9FA; color: #666; }
+}
 </style>
 </head>
 <body>

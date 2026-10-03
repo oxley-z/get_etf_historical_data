@@ -7011,6 +7011,22 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
         var fundNames = {json.dumps(fund_names_json, ensure_ascii=False)};
         var fundParsedDates = {{}};
 
+        // ★ CFTC 内嵌面板与主看板主题联动（?theme= 参数 + postMessage 双保险）
+        function cftcThemedSrc() {{
+            const frame = document.getElementById('cftcFrame');
+            if (!frame) return '';
+            const base = (frame.getAttribute('data-src') || '').split('?')[0];
+            const theme = document.documentElement.getAttribute('data-theme') || 'light';
+            return base + '?theme=' + encodeURIComponent(theme);
+        }}
+        function syncCftcTheme(theme) {{
+            const frame = document.getElementById('cftcFrame');
+            if (!frame || frame.dataset.loaded !== '1' || !frame.contentWindow) return;
+            try {{
+                frame.contentWindow.postMessage({{ type: 'cftc-theme', theme: theme || 'light' }}, '*');
+            }} catch (e) {{}}
+        }}
+
         // Tab 切换
         document.querySelectorAll('.nav-tab-btn').forEach(btn => {{
             btn.addEventListener('click', function() {{
@@ -7029,8 +7045,10 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                         if (loadingTip) loadingTip.style.display = 'flex';
                         frame.addEventListener('load', function() {{
                             if (loadingTip) loadingTip.style.display = 'none';
+                            // 双保险：加载完成后再同步一次主题（防止 query 参数被浏览器丢弃）
+                            syncCftcTheme(document.documentElement.getAttribute('data-theme'));
                         }}, {{ once: true }});
-                        frame.src = frame.getAttribute('data-src');
+                        frame.src = cftcThemedSrc();
                     }} else if (loadingTip) {{
                         loadingTip.style.display = 'none';
                     }}
@@ -7051,6 +7069,8 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                 localStorage.setItem('theme', next);
                 toggle.textContent = next === 'dark' ? '☀️ 亮色' : '🌓 暗色';
                 window._crosshairLineColor = null;
+                // ★ 同步内嵌的 CFTC 面板主题
+                syncCftcTheme(next);
             }});
         }})();
 
