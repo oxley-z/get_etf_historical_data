@@ -4061,6 +4061,7 @@ def generate_html_report(results, start_date, end_date, today_str, metrics, inde
                 {"name": "美股编年史", "url": "https://historyofmarket.com/", "desc": "美股百年历史数据与市场统计"},
                 {"name": "Yahoo 财经香港", "url": "https://hk.finance.yahoo.com/", "desc": "港股/美股实时行情与财经资讯"},
                 {"name": "WISE HOLD", "url": "https://www.wise-hold.com/", "desc": "追踪机构持仓与政商名人投资动向"},
+                {"name": "MarketGrep", "url": "https://marketgrep.com/", "desc": "今日市场分析"},
             ]
         },
     ]
